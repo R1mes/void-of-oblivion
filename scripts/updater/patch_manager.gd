@@ -11,7 +11,8 @@ signal download_progress(downloaded_bytes: int, total_bytes: int, percent: float
 signal update_installed(version: String)
 signal update_failed(error_message: String)
 
-const CURRENT_VERSION: String = "1.3.3"
+var CURRENT_VERSION: String = "1.3.3"
+var current_version: String = "1.3.3"
 var patches_dir: String = "user://patches/"
 var temp_patch_path: String = "user://patch_temp.pck"
 var installed_manifest_path: String = "user://installed_patches.json"
@@ -46,13 +47,31 @@ func load_existing_patches() -> void:
 	f.close()
 
 	var parsed = JSON.parse_string(text)
-	if parsed is Dictionary and parsed.has("installed_pck"):
-		var pck_file: String = str(parsed["installed_pck"])
-		var full_path := patches_dir + pck_file
-		if FileAccess.file_exists(full_path):
-			# В Godot 4.6 load_resource_pack(path, replace_files)
-			var success := ProjectSettings.load_resource_pack(full_path, true)
-			print("[PatchManager] Mounted existing patch PCK: %s (Success: %s)" % [full_path, success])
+	if parsed is Dictionary:
+		if parsed.has("installed_version"):
+			current_version = str(parsed["installed_version"])
+			CURRENT_VERSION = current_version
+		if parsed.has("installed_pck"):
+			var pck_file: String = str(parsed["installed_pck"])
+			var full_path := patches_dir + pck_file
+			if FileAccess.file_exists(full_path):
+				# В Godot 4.6 load_resource_pack(path, replace_files)
+				var success := ProjectSettings.load_resource_pack(full_path, true)
+				print("[PatchManager] Mounted existing patch PCK: %s (Success: %s, CurrentVersion: %s)" % [full_path, success, current_version])
+
+func is_version_already_installed(ver: String) -> bool:
+	if ver.is_empty():
+		return false
+	if current_version == ver or CURRENT_VERSION == ver:
+		return true
+	if FileAccess.file_exists(installed_manifest_path):
+		var f := FileAccess.open(installed_manifest_path, FileAccess.READ)
+		if f:
+			var parsed = JSON.parse_string(f.get_as_text())
+			f.close()
+			if parsed is Dictionary and str(parsed.get("installed_version", "")) == ver:
+				return true
+	return false
 
 ## Проверка наличия новой версии по URL манифеста
 func check_for_updates(manifest_url: String = FirebaseConfig.DEFAULT_MANIFEST_URL) -> void:
@@ -71,7 +90,7 @@ func check_for_updates(manifest_url: String = FirebaseConfig.DEFAULT_MANIFEST_UR
 			var patch_dict: Dictionary = parsed["patch"]
 			var remote_version: String = str(parsed.get("latest_version", ""))
 			
-			if remote_version != "" and remote_version != CURRENT_VERSION:
+			if remote_version != "" and not is_version_already_installed(remote_version):
 				latest_patch_info = parsed
 				var is_mandatory: bool = bool(parsed.get("mandatory", false))
 				if is_mandatory and not is_downloading:
@@ -160,6 +179,8 @@ func download_and_install_patch(patch_info: Dictionary) -> void:
 		var mount_ok := ProjectSettings.load_resource_pack(final_pck_path, true)
 		print("[PatchManager] Patch %s mounted successfully: %s" % [final_pck_path, mount_ok])
 
+		current_version = target_version
+		CURRENT_VERSION = target_version
 		update_installed.emit(target_version)
 	)
 

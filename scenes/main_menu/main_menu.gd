@@ -7058,11 +7058,35 @@ func _on_server_banners_updated(banners_list: Array[Dictionary]) -> void:
 
 func _on_background_update_check_finished(has_update: bool, update_info: Dictionary) -> void:
 	if has_update and not update_info.is_empty():
+		var remote_ver: String = str(update_info.get("latest_version", ""))
+		if _is_patch_already_applied(remote_ver):
+			print("[MainMenu] Patch v%s is already applied. Skipping dialog." % remote_ver)
+			return
+
 		var is_mandatory: bool = bool(update_info.get("mandatory", false))
 		if is_mandatory:
-			notification_label.text = "⚡ Идёт автозагрузка обязательного обновления v%s..." % str(update_info.get("latest_version", ""))
+			notification_label.text = "⚡ Идёт автозагрузка обязательного обновления v%s..." % remote_ver
 		else:
 			_show_update_available_dialog(update_info)
+
+func _is_patch_already_applied(remote_ver: String) -> bool:
+	if remote_ver.is_empty():
+		return false
+	if has_node("/root/PatchManager"):
+		var pm = get_node("/root/PatchManager")
+		if pm and pm.has_method("is_version_already_installed"):
+			if pm.is_version_already_installed(remote_ver):
+				return true
+	var paths := ["user://installed_patches.json", "res://user_data/installed_patches.json"]
+	for p in paths:
+		if FileAccess.file_exists(p):
+			var f := FileAccess.open(p, FileAccess.READ)
+			if f:
+				var parsed = JSON.parse_string(f.get_as_text())
+				f.close()
+				if parsed is Dictionary and str(parsed.get("installed_version", "")) == remote_ver:
+					return true
+	return false
 
 func _on_check_updates_pressed() -> void:
 	if not has_node("/root/PatchManager"):
@@ -7072,7 +7096,7 @@ func _on_check_updates_pressed() -> void:
 	var pm = get_node("/root/PatchManager")
 	notification_label.text = "🔍 Проверка наличия обновлений..."
 	pm.update_check_finished.connect(func(has_up: bool, info: Dictionary):
-		if not has_up:
+		if not has_up or (info.has("latest_version") and _is_patch_already_applied(str(info["latest_version"]))):
 			notification_label.text = "✓ У вас установлена самая последняя версия!"
 			_show_info_dialog("Обновления", "У вас установлена последняя версия игры: v%s" % pm.CURRENT_VERSION)
 	, CONNECT_ONE_SHOT)
@@ -7125,6 +7149,7 @@ func _show_update_available_dialog(update_info: Dictionary) -> void:
 	var changelog_box := RichTextLabel.new()
 	changelog_box.bbcode_enabled = true
 	var cl_text: String = str(update_info.get("changelog", "Улучшения производительности и новые герои."))
+	cl_text = cl_text.replace("\\n", "\n")
 	changelog_box.text = "[color=#88ccff]Список изменений:[/color]\n" + cl_text
 	changelog_box.custom_minimum_size = Vector2(0, 140)
 	vbox.add_child(changelog_box)
