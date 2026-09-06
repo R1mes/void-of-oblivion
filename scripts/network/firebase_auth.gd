@@ -241,13 +241,8 @@ static func nickname_to_email(nick: String) -> String:
 		safe = "player_" + str(int(Time.get_unix_time_from_system()))
 	return safe + "@void.game"
 
-## Привязка существующего анонимного аккаунта к нику и паролю (accounts:update)
+## Привязка существующего анонимного аккаунта к нику и паролю
 func link_anonymous_account(nick: String, password: String, callback: Callable = Callable()) -> void:
-	if not is_authenticated():
-		var err := "Нет активной сессии для привязки"
-		auth_error.emit(err)
-		if callback.is_valid(): callback.call(false, err)
-		return
 	if not FirebaseConfig.is_configured():
 		nickname = nick
 		is_anonymous = false
@@ -256,53 +251,18 @@ func link_anonymous_account(nick: String, password: String, callback: Callable =
 		if callback.is_valid(): callback.call(true, "OK (offline)")
 		return
 
-	var user_email := nickname_to_email(nick)
-	var url := FirebaseConfig.AUTH_UPDATE_URL + FirebaseConfig.API_KEY
-	var body := JSON.stringify({
-		"idToken": id_token,
-		"email": user_email,
-		"password": password,
-		"displayName": nick,
-		"returnSecureToken": true
-	})
-
-	var http := HTTPRequest.new()
-	add_child(http)
-
-	http.request_completed.connect(func(result: int, response_code: int, headers: PackedStringArray, res_body: PackedByteArray):
-		http.queue_free()
-		var json_str := res_body.get_string_from_utf8()
-		var parsed = JSON.parse_string(json_str)
-
-		if response_code >= 200 and response_code < 300 and parsed is Dictionary:
-			id_token = str(parsed.get("idToken", id_token))
-			refresh_token = str(parsed.get("refreshToken", refresh_token))
-			local_id = str(parsed.get("localId", local_id))
-			email = str(parsed.get("email", user_email))
-			nickname = nick
-			is_anonymous = false
-			token_timestamp = int(Time.get_unix_time_from_system())
-			save_session()
-			auth_state_changed.emit(true, local_id)
+	# Прямой вызов accounts:update для прикрепления email к существующему анонимному UID блокируется Firebase Auth
+	# («OPERATION_NOT_ALLOWED : Please verify the new email before changing email»).
+	# Поэтому мы регистрируем постоянный аккаунт через accounts:signUp (register_with_nickname).
+	# После успешной регистрации локальный прогресс из TeamConfig автоматически выгружается в облако (SyncManager.sync_to_cloud).
+	register_with_nickname(nick, password, func(ok: bool, msg: String):
+		if ok:
 			if callback.is_valid():
-				callback.call(true, "Успешно привязано!")
+				callback.call(true, "Аккаунт успешно привязан!")
 		else:
-			var err_msg := "Ошибка привязки аккаунта"
-			if parsed is Dictionary and parsed.has("error"):
-				var err_dict = parsed["error"]
-				if err_dict is Dictionary:
-					err_msg = str(err_dict.get("message", err_msg))
-			if "EMAIL_EXISTS" in err_msg:
-				err_msg = "Этот никнейм уже занят другим игроком!"
-			elif "WEAK_PASSWORD" in err_msg:
-				err_msg = "Пароль слишком простой (минимум 6 символов)!"
-			auth_error.emit(err_msg)
 			if callback.is_valid():
-				callback.call(false, err_msg)
+				callback.call(false, msg)
 	)
-
-	var headers := PackedStringArray(["Content-Type: application/json"])
-	http.request(url, headers, HTTPClient.METHOD_POST, body)
 
 ## Регистрация нового аккаунта по нику и паролю (accounts:signUp)
 func register_with_nickname(nick: String, password: String, callback: Callable = Callable()) -> void:

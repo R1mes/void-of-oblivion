@@ -66,7 +66,7 @@ def main():
         f.write(signature_bytes)
 
     # Optional mandatory flag
-    is_mandatory = True
+    is_mandatory = False
     if len(sys.argv) > 5:
         is_mandatory = sys.argv[5].lower() in ("true", "1", "yes")
 
