@@ -65,9 +65,14 @@ def main():
     with open(sig_path, "wb") as f:
         f.write(signature_bytes)
 
+    # Optional mandatory flag
+    is_mandatory = True
+    if len(sys.argv) > 5:
+        is_mandatory = sys.argv[5].lower() in ("true", "1", "yes")
+
     manifest = {
         "latest_version": version,
-        "mandatory": False,
+        "mandatory": is_mandatory,
         "changelog": changelog,
         "patch": {
             "version": version,

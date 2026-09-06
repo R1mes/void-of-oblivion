@@ -11,7 +11,7 @@ signal download_progress(downloaded_bytes: int, total_bytes: int, percent: float
 signal update_installed(version: String)
 signal update_failed(error_message: String)
 
-const CURRENT_VERSION: String = "1.3.0"
+const CURRENT_VERSION: String = "1.3.2"
 var patches_dir: String = "user://patches/"
 var temp_patch_path: String = "user://patch_temp.pck"
 var installed_manifest_path: String = "user://installed_patches.json"
@@ -73,6 +73,10 @@ func check_for_updates(manifest_url: String = FirebaseConfig.DEFAULT_MANIFEST_UR
 			
 			if remote_version != "" and remote_version != CURRENT_VERSION:
 				latest_patch_info = parsed
+				var is_mandatory: bool = bool(parsed.get("mandatory", false))
+				if is_mandatory and not is_downloading:
+					print("[PatchManager] Mandatory update v%s detected! Starting auto-download..." % remote_version)
+					download_and_install_patch(parsed)
 				update_check_finished.emit(true, parsed)
 				return
 

@@ -7058,7 +7058,11 @@ func _on_server_banners_updated(banners_list: Array[Dictionary]) -> void:
 
 func _on_background_update_check_finished(has_update: bool, update_info: Dictionary) -> void:
 	if has_update and not update_info.is_empty():
-		_show_update_available_dialog(update_info)
+		var is_mandatory: bool = bool(update_info.get("mandatory", false))
+		if is_mandatory:
+			notification_label.text = "⚡ Идёт автозагрузка обязательного обновления v%s..." % str(update_info.get("latest_version", ""))
+		else:
+			_show_update_available_dialog(update_info)
 
 func _on_check_updates_pressed() -> void:
 	if not has_node("/root/PatchManager"):
@@ -7075,17 +7079,28 @@ func _on_check_updates_pressed() -> void:
 	pm.check_for_updates()
 
 func _show_update_available_dialog(update_info: Dictionary) -> void:
+	if get_node_or_null("UpdateCanvasLayer") != null:
+		return
+
+	var canvas_layer := CanvasLayer.new()
+	canvas_layer.name = "UpdateCanvasLayer"
+	canvas_layer.layer = 110
+	add_child(canvas_layer)
+
 	var overlay := ColorRect.new()
 	overlay.color = Color(0, 0, 0, 0.75)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(overlay)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	canvas_layer.add_child(overlay)
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
 	overlay.add_child(center)
 
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(550, 360)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.12, 0.14, 0.20, 0.98)
 	sb.border_color = Color(0.4, 0.7, 1.0)
@@ -7134,7 +7149,7 @@ func _show_update_available_dialog(update_info: Dictionary) -> void:
 	var btn_later := Button.new()
 	btn_later.text = "Позже"
 	btn_later.custom_minimum_size = Vector2(130, 46)
-	btn_later.pressed.connect(func(): overlay.queue_free())
+	btn_later.pressed.connect(func(): canvas_layer.queue_free())
 	btn_box.add_child(btn_later)
 
 	btn_install.pressed.connect(func():
@@ -7145,23 +7160,44 @@ func _show_update_available_dialog(update_info: Dictionary) -> void:
 	)
 
 func _on_patch_installed(version: String) -> void:
-	_show_info_dialog("Обновление установлено", "Патч v%s успешно проверен и смонтирован в игру без перезапуска!" % version)
+	notification_label.text = "✅ Патч v%s успешно применён! Перезапуск интерфейса..." % version
+	var reg_layer = get_node_or_null("RegistrationCanvasLayer")
+	if reg_layer:
+		reg_layer.queue_free()
+	var upd_layer = get_node_or_null("UpdateCanvasLayer")
+	if upd_layer:
+		upd_layer.queue_free()
+	_show_info_dialog("Обновление установлено", "Патч v%s успешно проверен и смонтирован! Перезапуск меню..." % version)
+	get_tree().create_timer(1.2).timeout.connect(func():
+		get_tree().reload_current_scene()
+	)
 
 func _on_patch_failed(err_msg: String) -> void:
 	_show_info_dialog("Ошибка обновления", "Безопасность: " + err_msg)
 
 func _show_promo_code_dialog() -> void:
+	if get_node_or_null("PromoCanvasLayer") != null:
+		return
+
+	var canvas_layer := CanvasLayer.new()
+	canvas_layer.name = "PromoCanvasLayer"
+	canvas_layer.layer = 115
+	add_child(canvas_layer)
+
 	var overlay := ColorRect.new()
 	overlay.color = Color(0, 0, 0, 0.75)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(overlay)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	canvas_layer.add_child(overlay)
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
 	overlay.add_child(center)
 
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(500, 280)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.10, 0.12, 0.18, 0.98)
 	sb.border_color = Color(0.85, 0.7, 0.25)
@@ -7207,7 +7243,7 @@ func _show_promo_code_dialog() -> void:
 	var btn_cancel := Button.new()
 	btn_cancel.text = "Закрыть"
 	btn_cancel.custom_minimum_size = Vector2(120, 44)
-	btn_cancel.pressed.connect(func(): overlay.queue_free())
+	btn_cancel.pressed.connect(func(): canvas_layer.queue_free())
 	btn_row.add_child(btn_cancel)
 
 	btn_redeem.pressed.connect(func():
@@ -7248,17 +7284,24 @@ func _show_promo_code_dialog() -> void:
 	)
 
 func _show_info_dialog(title_txt: String, msg_txt: String) -> void:
+	var canvas_layer := CanvasLayer.new()
+	canvas_layer.layer = 130
+	add_child(canvas_layer)
+
 	var overlay := ColorRect.new()
 	overlay.color = Color(0, 0, 0, 0.65)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(overlay)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	canvas_layer.add_child(overlay)
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
 	overlay.add_child(center)
 
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(450, 200)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.10, 0.12, 0.18, 0.98)
 	sb.border_color = Color(0.4, 0.6, 0.9)
@@ -7289,7 +7332,7 @@ func _show_info_dialog(title_txt: String, msg_txt: String) -> void:
 	btn_ok.text = "OK"
 	btn_ok.custom_minimum_size = Vector2(100, 38)
 	btn_ok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	btn_ok.pressed.connect(func(): overlay.queue_free())
+	btn_ok.pressed.connect(func(): canvas_layer.queue_free())
 	vbox.add_child(btn_ok)
 
 ## Проверка статуса регистрации/привязки аккаунта игрока
@@ -7301,6 +7344,12 @@ func _check_account_registration() -> void:
 		return
 
 	var check_func := func():
+		# Не открываем окно, если в фоне скачивается патч
+		if has_node("/root/PatchManager"):
+			var pm = get_node("/root/PatchManager")
+			if pm and pm.is_downloading:
+				return
+
 		var auth = nm.auth
 		if auth == null:
 			return
@@ -7312,6 +7361,10 @@ func _check_account_registration() -> void:
 		else:
 			# Если ещё не авторизован, ждём первого сигнала auth_state_changed
 			auth.auth_state_changed.connect(func(logged_in: bool, _uid: String):
+				if has_node("/root/PatchManager"):
+					var pm = get_node("/root/PatchManager")
+					if pm and pm.is_downloading:
+						return
 				if logged_in and (auth.is_anonymous or auth.nickname.is_empty()):
 					var has_prog := TeamConfig.has_save_file() or TeamConfig.unlocked_characters.size() > 1
 					_show_registration_dialog(has_prog)
@@ -7322,22 +7375,29 @@ func _check_account_registration() -> void:
 
 ## Модальное окно обязательной регистрации / привязки аккаунта
 func _show_registration_dialog(is_linking_initial: bool) -> void:
-	if get_node_or_null("RegistrationOverlay") != null:
+	if get_node_or_null("RegistrationCanvasLayer") != null:
 		return
+
+	var canvas_layer := CanvasLayer.new()
+	canvas_layer.name = "RegistrationCanvasLayer"
+	canvas_layer.layer = 120
+	add_child(canvas_layer)
 
 	var overlay := ColorRect.new()
 	overlay.name = "RegistrationOverlay"
 	overlay.color = Color(0.02, 0.03, 0.06, 0.88)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.z_index = 100
-	add_child(overlay)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	canvas_layer.add_child(overlay)
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
 	overlay.add_child(center)
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(500, 430)
+	panel.custom_minimum_size = Vector2(520, 480)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.08, 0.10, 0.16, 0.98)
 	sb.border_color = Color(0.3, 0.7, 1.0, 0.9)
@@ -7348,7 +7408,7 @@ func _show_registration_dialog(is_linking_initial: bool) -> void:
 	center.add_child(panel)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 14)
+	vbox.add_theme_constant_override("separation", 12)
 	panel.add_child(vbox)
 
 	var title_lbl := Label.new()
@@ -7413,6 +7473,17 @@ func _show_registration_dialog(is_linking_initial: bool) -> void:
 	btn_toggle_mode.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0))
 	vbox.add_child(btn_toggle_mode)
 
+	# Кнопка «Пропустить и играть как гость»
+	var btn_skip := Button.new()
+	btn_skip.text = "✖ Пропустить и играть как гость (напомнить позже)"
+	btn_skip.flat = true
+	btn_skip.add_theme_font_size_override("font_size", 12)
+	btn_skip.add_theme_color_override("font_color", Color(0.65, 0.65, 0.75))
+	btn_skip.pressed.connect(func():
+		canvas_layer.queue_free()
+	)
+	vbox.add_child(btn_skip)
+
 	# Состояние режима: "link" (привязка), "register" (новый), "login" (вход)
 	var current_mode := ["link" if is_linking_initial else "register"]
 
@@ -7464,7 +7535,7 @@ func _show_registration_dialog(is_linking_initial: bool) -> void:
 
 		var nm = get_node_or_null("/root/NetworkManager")
 		if nm == null or nm.auth == null:
-			overlay.queue_free()
+			canvas_layer.queue_free()
 			return
 
 		var auth = nm.auth
@@ -7477,7 +7548,7 @@ func _show_registration_dialog(is_linking_initial: bool) -> void:
 					if nm.sync:
 						nm.sync.sync_to_cloud()
 					notification_label.text = "✅ Аккаунт привязан к «%s»!" % nick
-					get_tree().create_timer(1.0).timeout.connect(func(): overlay.queue_free())
+					get_tree().create_timer(1.0).timeout.connect(func(): canvas_layer.queue_free())
 				else:
 					btn_submit.disabled = false
 					status_lbl.text = "❌ " + msg
@@ -7492,7 +7563,7 @@ func _show_registration_dialog(is_linking_initial: bool) -> void:
 						nm.sync.has_initial_sync_completed = true
 						nm.sync.sync_to_cloud()
 					notification_label.text = "🎉 Добро пожаловать, «%s»!" % nick
-					get_tree().create_timer(1.0).timeout.connect(func(): overlay.queue_free())
+					get_tree().create_timer(1.0).timeout.connect(func(): canvas_layer.queue_free())
 				else:
 					btn_submit.disabled = false
 					status_lbl.text = "❌ " + msg
@@ -7508,7 +7579,7 @@ func _show_registration_dialog(is_linking_initial: bool) -> void:
 						nm.sync.sync_from_cloud()
 					notification_label.text = "✅ Вход выполнен: «%s»!" % nick
 					get_tree().create_timer(1.0).timeout.connect(func():
-						overlay.queue_free()
+						canvas_layer.queue_free()
 						_refresh_hub_overview()
 						_refresh_gacha_ui()
 					)

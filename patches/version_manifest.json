@@ -1,13 +1,13 @@
 {
-  "latest_version": "1.3.1",
-  "mandatory": false,
-  "changelog": "Void of Oblivion 1.3.1:\\n- Адаптирован масштаб карточек в бою и оптимизирована шкала действий\\n- Исправлена кликабельность верхних кнопок боя в полноэкранном режиме\\n- Добавлена система регистрации и привязки аккаунта по нику и паролю\\n- Исправлено отображение звёздочек и символов",
+  "latest_version": "1.3.2",
+  "mandatory": true,
+  "changelog": "Void of Oblivion 1.3.2 (Hotfix):\\n- Исправлена кликабельность модального окна регистрации/привязки аккаунта\\n- Добавлена кнопка пропуска регистрации для игры в гостевом режиме\\n- Внедрено фоновое Zero-Click автообновление для обязательных патчей",
   "patch": {
-    "version": "1.3.1",
-    "filename": "patch_v1.3.1.pck",
-    "download_url": "https://github.com/R1mes/void-of-oblivion/releases/download/v1.3.1/patch_v1.3.1.pck",
-    "size_bytes": 13908832,
-    "sha256": "931b044654fc2c3eada8b86601d2169223ee4c7e796cffd553d63f1a4ba51f5d",
-    "signature_base64": "T3iTyvO33LJT2aLA9TUi5pkH1VC0OWq1T4PRpiZv+wz7rRDWNXu0VHdtTlypz75E0zyy4Jokqilej4A5RFxH+QhxyjnxOt3z9czSrQpl82xxw6LhddXf+woyRj6I9QCckr6JP/7KKnOq8bZu6jWexGviJzSkZ4FykmgGHOicg1l2HEEbgBL686CixVF+j0rCd6cxqvMRm6CbOJe5ZQaMPWE0TDWRIsS9aK/lky3DqmMMzWAwCaqsoCWf1KBL1KdSybdRaHwaxLtap3NHiYR7QfUIfuuumcaMTyEWJ68c8TvURHeDeMrQf6oJDkrhX5sTA9TwpYFED1ciRmfKJj1Aag=="
+    "version": "1.3.2",
+    "filename": "patch_v1.3.2.pck",
+    "download_url": "https://github.com/R1mes/void-of-oblivion/releases/download/v1.3.2/patch_v1.3.2.pck",
+    "size_bytes": 13912572,
+    "sha256": "992db8b25d50bf1d1b00ce66155f52ae0ce4df2145a49ed3d3c2b705e2605aa7",
+    "signature_base64": "FMrqgt+OMw5KT2rasQojRDvOct92zy7eZLeKSvt2LKaW2fKlbVhjFcQqNsCx34c1F8PxG9hz4l2LaNE1QqpztWQHfa0TquTo2Gz0TgQIHaj4mbJgj8UVaPYjHbqNfw+HaL+3Y3H3pIh3u6hs8B4xdSV+ZrfcGFzBdDp6qmFoTbPEBYL6+Vf2OwE0IyTbR8nc9gEMeFKqJ/hKopKR6DlAuhjoaGM1DH77walEssjWOH5IaiYVs2xoeN5TPYYxgffTG0vJhNK/DGZqRQzKmqyzyJL3OptR6ffAm/Bz+1pVowMWu+AnpU+r14I3k7psfZwzH4kKN5ClzSRalh45tsQdEg=="
   }
 }
