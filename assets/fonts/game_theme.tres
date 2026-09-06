@@ -1,0 +1,35 @@
+[gd_resource type="Theme" format=3]
+
+[ext_resource type="FontFile" path="res://assets/fonts/NotoColorEmoji.ttf" id="1_3uyqq"]
+[ext_resource type="FontFile" path="res://assets/fonts/NotoSans-Regular.ttf" id="1_a2nwx"]
+[ext_resource type="FontFile" path="res://assets/fonts/NotoSansSymbols.ttf" id="2_a8v7p"]
+[ext_resource type="FontFile" path="res://assets/fonts/NotoSansSymbols2.ttf" id="3_g1r4r"]
+[ext_resource type="FontFile" path="res://assets/fonts/NotoSansMath-Regular.ttf" id="5_bamdy"]
+[ext_resource type="FontFile" path="res://assets/fonts/NotoSans-Bold.ttf" id="5_dik8e"]
+
+[sub_resource type="FontVariation" id="FontVariation_vteo3"]
+fallbacks = Array[Font]([ExtResource("1_3uyqq"), ExtResource("2_a8v7p"), ExtResource("5_bamdy")])
+base_font = ExtResource("1_a2nwx")
+
+[sub_resource type="FontVariation" id="FontVariation_hp5cs"]
+fallbacks = Array[Font]([ExtResource("1_3uyqq"), ExtResource("2_a8v7p"), ExtResource("5_bamdy")])
+base_font = ExtResource("5_dik8e")
+
+[resource]
+default_font = SubResource("FontVariation_vteo3")
+default_font_size = 16
+Button/fonts/font = SubResource("FontVariation_vteo3")
+CheckBox/fonts/font = SubResource("FontVariation_vteo3")
+CheckButton/fonts/font = SubResource("FontVariation_vteo3")
+ItemList/fonts/font = SubResource("FontVariation_vteo3")
+Label/fonts/font = SubResource("FontVariation_vteo3")
+LineEdit/fonts/font = SubResource("FontVariation_vteo3")
+MenuButton/fonts/font = SubResource("FontVariation_vteo3")
+OptionButton/fonts/font = SubResource("FontVariation_vteo3")
+PopupMenu/fonts/font = SubResource("FontVariation_vteo3")
+RichTextLabel/fonts/bold_font = SubResource("FontVariation_hp5cs")
+RichTextLabel/fonts/normal_font = SubResource("FontVariation_vteo3")
+TabBar/fonts/font = SubResource("FontVariation_vteo3")
+TextEdit/fonts/font = SubResource("FontVariation_vteo3")
+TooltipLabel/fonts/font = SubResource("FontVariation_vteo3")
+Tree/fonts/font = SubResource("FontVariation_vteo3")

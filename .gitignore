@@ -1,0 +1,22 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+temp_tests/
+
+# Security: Private cryptographic keys (NEVER commit to GitHub!)
+security/*.key
+security/patch_private_key.key
+
+# Build output and heavy binaries
+build/
+*.exe
+*.pck
+*.sig
+
+# Logs
+godot.log
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

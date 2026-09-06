@@ -1,0 +1,61 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Void of Oblivion"
+run/main_scene="uid://ht6nv2wd4cf2"
+config/features=PackedStringArray("4.6", "Mobile")
+config/icon="res://icon.svg"
+
+[debug]
+
+settings/stdout/verbose_stdout=false
+file_logging/enable_file_logging=false
+file_logging/enable_file_logging.pc=false
+
+[autoload]
+
+PatchManager="*res://scripts/updater/patch_manager.gd"
+TeamConfig="*res://scripts/autoload/team_config.gd"
+NetworkManager="*res://scripts/network/network_manager.gd"
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/size/window_width_override=1600
+window/size/window_height_override=900
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/stretch/scale=1.0
+window/stretch/scale_mode="fractional"
+window/dpi/allow_hidpi=true
+window/vsync/vsync_mode=1
+
+[gui]
+
+theme/custom="res://assets/fonts/game_theme.tres"
+theme/default_font_antialiasing=1
+theme/default_font_hinting=2
+theme/default_font_subpixel_positioning=2
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+anti_aliasing/quality/msaa_2d=2
+textures/canvas_textures/default_texture_filter=2
+textures/vram_compression/import_etc2_astc=true
+textures/vram_compression/import_s3tc_bptc=true

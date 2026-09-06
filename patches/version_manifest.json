@@ -1,0 +1,13 @@
+{
+  "latest_version": "1.3.0",
+  "mandatory": false,
+  "changelog": "Void of Oblivion версия 1.3.0: полная серверная инфраструктура и система обновлений.",
+  "patch": {
+    "version": "1.3.0",
+    "filename": "",
+    "download_url": "",
+    "size_bytes": 0,
+    "sha256": "",
+    "signature_base64": ""
+  }
+}

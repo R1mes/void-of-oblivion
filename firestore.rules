@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Вспомогательные функции
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 1. Профиль игрока и его данные
+    match /users/{userId} {
+      // Игрок может читать и писать только свой собственный профиль
+      allow read: if isOwner(userId);
+      
+      // Базовая валидация при сохранении прогресса
+      allow write: if isOwner(userId) &&
+        // Валюта не может быть отрицательной
+        (!request.resource.data.keys().hasAll(['shine']) || request.resource.data.shine >= 0) &&
+        (!request.resource.data.keys().hasAll(['coins']) || request.resource.data.coins >= 0) &&
+        (!request.resource.data.keys().hasAll(['relic_shards']) || request.resource.data.relic_shards >= 0);
+
+      // Подколлекция активированных промокодов пользователя
+      match /redeemed_codes/{codeId} {
+        allow read: if isOwner(userId);
+        
+        // Разрешено создать запись ТОЛЬКО ОДИН РАЗ (нельзя повторно использовать один и тот же промокод)
+        allow create: if isOwner(userId) &&
+          // Документ промокода должен существовать в публичном реестре
+          exists(/databases/$(database)/documents/promo_codes/$(codeId)) &&
+          // Промокод должен быть активным
+          get(/databases/$(database)/documents/promo_codes/$(codeId)).data.active == true &&
+          // Срок действия промокода не должен истечь (если указан expires_at)
+          (!get(/databases/$(database)/documents/promo_codes/$(codeId)).data.keys().hasAll(['expires_at']) ||
+           request.time < get(/databases/$(database)/documents/promo_codes/$(codeId)).data.expires_at);
+
+        // Запрещаем редактирование или удаление истории промокодов клиентом
+        allow update, delete: if false;
+      }
+
+      // Сохраненные билды и пресеты
+      match /presets/{presetId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // 2. Глобальные промокоды (публично читаемые, неизменяемые клиентом)
+    match /promo_codes/{codeId} {
+      // Любой авторизованный игрок может прочитать условия промокода
+      allow read: if isAuthenticated();
+      // Изменение доступно только администратору через консоль Firebase
+      allow write: if false;
+    }
+
+    // 3. Конфигурация игры и активные баннеры (только чтение)
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
