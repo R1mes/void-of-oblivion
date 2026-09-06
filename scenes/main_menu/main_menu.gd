@@ -640,6 +640,7 @@ func _ready() -> void:
 
 	# --- Сетевая инициализация и проверка обновлений ---
 	_setup_network_and_updater_integration()
+	_check_account_registration()
 		
 func _build_ui() -> void:
 	# 1. Главное меню
@@ -7290,3 +7291,230 @@ func _show_info_dialog(title_txt: String, msg_txt: String) -> void:
 	btn_ok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn_ok.pressed.connect(func(): overlay.queue_free())
 	vbox.add_child(btn_ok)
+
+## Проверка статуса регистрации/привязки аккаунта игрока
+func _check_account_registration() -> void:
+	if not has_node("/root/NetworkManager"):
+		return
+	var nm = get_node("/root/NetworkManager")
+	if nm == null or nm.auth == null:
+		return
+
+	var check_func := func():
+		var auth = nm.auth
+		if auth == null:
+			return
+		# Если игрок анонимный или никнейм не задан — открываем регистрацию
+		if auth.is_authenticated():
+			if auth.is_anonymous or auth.nickname.is_empty():
+				var has_progress := TeamConfig.has_save_file() or TeamConfig.unlocked_characters.size() > 1
+				_show_registration_dialog(has_progress)
+		else:
+			# Если ещё не авторизован, ждём первого сигнала auth_state_changed
+			auth.auth_state_changed.connect(func(logged_in: bool, _uid: String):
+				if logged_in and (auth.is_anonymous or auth.nickname.is_empty()):
+					var has_prog := TeamConfig.has_save_file() or TeamConfig.unlocked_characters.size() > 1
+					_show_registration_dialog(has_prog)
+			, CONNECT_ONE_SHOT)
+
+	# Вызываем с небольшой задержкой (после загрузки интерфейса)
+	get_tree().create_timer(0.4).timeout.connect(check_func)
+
+## Модальное окно обязательной регистрации / привязки аккаунта
+func _show_registration_dialog(is_linking_initial: bool) -> void:
+	if get_node_or_null("RegistrationOverlay") != null:
+		return
+
+	var overlay := ColorRect.new()
+	overlay.name = "RegistrationOverlay"
+	overlay.color = Color(0.02, 0.03, 0.06, 0.88)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 100
+	add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(500, 430)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.10, 0.16, 0.98)
+	sb.border_color = Color(0.3, 0.7, 1.0, 0.9)
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(16)
+	sb.set_content_margin_all(24)
+	panel.add_theme_stylebox_override("panel", sb)
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 14)
+	panel.add_child(vbox)
+
+	var title_lbl := Label.new()
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_font_size_override("font_size", 22)
+	title_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	vbox.add_child(title_lbl)
+
+	var subtitle_lbl := Label.new()
+	subtitle_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	subtitle_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle_lbl.add_theme_font_size_override("font_size", 14)
+	subtitle_lbl.add_theme_color_override("font_color", Color(0.75, 0.85, 0.95))
+	vbox.add_child(subtitle_lbl)
+
+	# Поле ввода Никнейма
+	var lbl_nick := Label.new()
+	lbl_nick.text = "Игровой никнейм:"
+	lbl_nick.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(lbl_nick)
+
+	var nick_edit := LineEdit.new()
+	nick_edit.placeholder_text = "Например: Rimes"
+	nick_edit.custom_minimum_size = Vector2(0, 42)
+	nick_edit.add_theme_font_size_override("font_size", 16)
+	vbox.add_child(nick_edit)
+
+	# Поле ввода Пароля
+	var lbl_pass := Label.new()
+	lbl_pass.text = "Пароль (минимум 6 символов):"
+	lbl_pass.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(lbl_pass)
+
+	var pass_edit := LineEdit.new()
+	pass_edit.placeholder_text = "••••••••"
+	pass_edit.secret = true
+	pass_edit.custom_minimum_size = Vector2(0, 42)
+	pass_edit.add_theme_font_size_override("font_size", 16)
+	vbox.add_child(pass_edit)
+
+	# Статус / Сообщение об ошибке
+	var status_lbl := Label.new()
+	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_lbl.add_theme_font_size_override("font_size", 13)
+	vbox.add_child(status_lbl)
+
+	# Кнопка подтверждения
+	var btn_submit := Button.new()
+	btn_submit.custom_minimum_size = Vector2(0, 46)
+	btn_submit.add_theme_font_size_override("font_size", 16)
+	var submit_sb := StyleBoxFlat.new()
+	submit_sb.bg_color = Color(0.18, 0.45, 0.85, 1.0)
+	submit_sb.set_corner_radius_all(8)
+	btn_submit.add_theme_stylebox_override("normal", submit_sb)
+	vbox.add_child(btn_submit)
+
+	# Переключатель режима (Регистрация / Вход)
+	var btn_toggle_mode := Button.new()
+	btn_toggle_mode.flat = true
+	btn_toggle_mode.add_theme_font_size_override("font_size", 13)
+	btn_toggle_mode.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0))
+	vbox.add_child(btn_toggle_mode)
+
+	# Состояние режима: "link" (привязка), "register" (новый), "login" (вход)
+	var current_mode := ["link" if is_linking_initial else "register"]
+
+	var update_mode_ui := func():
+		status_lbl.text = ""
+		btn_submit.disabled = false
+		if current_mode[0] == "link":
+			title_lbl.text = "🛡 ПРИВЯЗКА АККАУНТА"
+			subtitle_lbl.text = "У вас уже есть игровой прогресс! Привяжите ник и пароль к вашему текущему аккаунту, чтобы не потерять персонажей."
+			btn_submit.text = "🔗 Привязать ник и пароль"
+			btn_toggle_mode.text = "Уже привязывали ранее? Войти в аккаунт ➔"
+		elif current_mode[0] == "register":
+			title_lbl.text = "⚔ РЕГИСТРАЦИЯ"
+			subtitle_lbl.text = "Создайте аккаунт, чтобы начать путешествие и сохранять прогресс в облаке."
+			btn_submit.text = "✨ Зарегистрироваться"
+			btn_toggle_mode.text = "Уже есть аккаунт? Войти ➔"
+		else: # login
+			title_lbl.text = "🔑 ВХОД В АККАУНТ"
+			subtitle_lbl.text = "Введите ваш никнейм и пароль для загрузки профиля и персонажей."
+			btn_submit.text = "➔ Войти"
+			btn_toggle_mode.text = "Создать новый аккаунт / Привязать ➔"
+
+	update_mode_ui.call()
+
+	btn_toggle_mode.pressed.connect(func():
+		if current_mode[0] == "login":
+			current_mode[0] = "link" if is_linking_initial else "register"
+		else:
+			current_mode[0] = "login"
+		update_mode_ui.call()
+	)
+
+	btn_submit.pressed.connect(func():
+		var nick := nick_edit.text.strip_edges()
+		var password_text := pass_edit.text.strip_edges()
+
+		if nick.length() < 2:
+			status_lbl.text = "❌ Никнейм должен содержать минимум 2 символа!"
+			status_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+			return
+		if password_text.length() < 6:
+			status_lbl.text = "❌ Пароль должен содержать минимум 6 символов!"
+			status_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+			return
+
+		btn_submit.disabled = true
+		status_lbl.text = "⏳ Обработка..."
+		status_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+
+		var nm = get_node_or_null("/root/NetworkManager")
+		if nm == null or nm.auth == null:
+			overlay.queue_free()
+			return
+
+		var auth = nm.auth
+
+		if current_mode[0] == "link":
+			auth.link_anonymous_account(nick, password_text, func(ok: bool, msg: String):
+				if ok:
+					status_lbl.text = "✓ " + msg
+					status_lbl.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))
+					if nm.sync:
+						nm.sync.sync_to_cloud()
+					notification_label.text = "✅ Аккаунт привязан к «%s»!" % nick
+					get_tree().create_timer(1.0).timeout.connect(func(): overlay.queue_free())
+				else:
+					btn_submit.disabled = false
+					status_lbl.text = "❌ " + msg
+					status_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+			)
+		elif current_mode[0] == "register":
+			auth.register_with_nickname(nick, password_text, func(ok: bool, msg: String):
+				if ok:
+					status_lbl.text = "✓ " + msg
+					status_lbl.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))
+					if nm.sync:
+						nm.sync.has_initial_sync_completed = true
+						nm.sync.sync_to_cloud()
+					notification_label.text = "🎉 Добро пожаловать, «%s»!" % nick
+					get_tree().create_timer(1.0).timeout.connect(func(): overlay.queue_free())
+				else:
+					btn_submit.disabled = false
+					status_lbl.text = "❌ " + msg
+					status_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+			)
+		else: # login
+			auth.login_with_nickname(nick, password_text, func(ok: bool, msg: String):
+				if ok:
+					status_lbl.text = "✓ " + msg
+					status_lbl.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))
+					if nm.sync:
+						nm.sync.has_initial_sync_completed = false
+						nm.sync.sync_from_cloud()
+					notification_label.text = "✅ Вход выполнен: «%s»!" % nick
+					get_tree().create_timer(1.0).timeout.connect(func():
+						overlay.queue_free()
+						_refresh_hub_overview()
+						_refresh_gacha_ui()
+					)
+				else:
+					btn_submit.disabled = false
+					status_lbl.text = "❌ " + msg
+					status_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+			)
+	)

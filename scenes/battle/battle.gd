@@ -3,7 +3,7 @@ extends Control
 @onready var battle_manager: BattleManager = %BattleManager
 @onready var allies_container: HBoxContainer = %AlliesContainer
 @onready var enemies_container: HBoxContainer = %EnemiesContainer
-@onready var action_bar: HBoxContainer = %ActionBar
+@onready var action_bar: Control = %ActionBar
 @onready var skill_points_label: Label = %SkillPointsLabel
 @onready var energy_bar: ProgressBar = %EnergyBar
 @onready var energy_label: Label = %EnergyLabel
@@ -71,9 +71,9 @@ var _admin_target_option: OptionButton
 var _admin_inspect_text: RichTextLabel
 var _admin_god_mode_btn: Button
 
-# Новые увеличенные размеры карточек участников
-const ALLY_PANEL_SIZE := Vector2(270, 420)
-const ENEMY_PANEL_SIZE := Vector2(240, 380)
+# Адаптивные компактные размеры карточек участников
+const ALLY_PANEL_SIZE := Vector2(210, 285)
+const ENEMY_PANEL_SIZE := Vector2(200, 265)
 
 var _unit_panels: Dictionary = {}
 var _selecting_target: bool = false
@@ -158,6 +158,11 @@ func _ready() -> void:
 	
 	_init_console_hud()
 	_init_admin_panel()
+
+	var top_bar := btn_skills_help.get_parent() as Control
+	if top_bar:
+		top_bar.z_index = 20
+		move_child(top_bar, -1)
 
 	
 # Обработчик сигнала автоприцеливания при активации ульты Миленой
@@ -352,12 +357,11 @@ func _build_unit_displays() -> void:
 
 func _create_unit_panel(unit: CombatUnit, is_ally: bool) -> PanelContainer:
 	var panel := PanelContainer.new()
-	# ИСПРАВЛЕНО: Устанавливаем новые увеличенные размеры карточек
 	panel.custom_minimum_size = ALLY_PANEL_SIZE if is_ally else ENEMY_PANEL_SIZE
 	panel.set_meta("unit", unit)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10) 
+	vbox.add_theme_constant_override("separation", 6) 
 	panel.add_child(vbox)
 
 	var name_lbl := Label.new()
@@ -370,14 +374,14 @@ func _create_unit_panel(unit: CombatUnit, is_ally: bool) -> PanelContainer:
 		elite_tag,
 	]
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_lbl.add_theme_font_size_override("font_size", 18)
+	name_lbl.add_theme_font_size_override("font_size", 14)
 	name_lbl.add_theme_color_override("font_color", CombatConstants.get_element_color(unit.element))
 	vbox.add_child(name_lbl)
 
-	# НОВАЯ МЕХАНИКА: Обертка для наложения рамок и ХП-баров
+	# Обертка для наложения рамок и ХП-баров
 	var bar_wrapper := Control.new()
 	bar_wrapper.name = "BarWrapper"
-	bar_wrapper.custom_minimum_size = Vector2(0, 28) 
+	bar_wrapper.custom_minimum_size = Vector2(0, 20) 
 	vbox.add_child(bar_wrapper)
 
 	if is_ally:
@@ -387,10 +391,10 @@ func _create_unit_panel(unit: CombatUnit, is_ally: bool) -> PanelContainer:
 		shield_bar.modulate = Color(1.6, 1.6, 1.6, 1.0) 
 		
 		shield_bar.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		shield_bar.offset_left = -4
-		shield_bar.offset_right = 4
-		shield_bar.offset_top = -4
-		shield_bar.offset_bottom = 4
+		shield_bar.offset_left = -3
+		shield_bar.offset_right = 3
+		shield_bar.offset_top = -3
+		shield_bar.offset_bottom = 3
 		bar_wrapper.add_child(shield_bar)
 
 	var hp_bar := ProgressBar.new()
@@ -409,13 +413,13 @@ func _create_unit_panel(unit: CombatUnit, is_ally: bool) -> PanelContainer:
 	hp_lbl.name = "HPLabel"
 	hp_lbl.text = "%d / %d" % [int(unit.stats.hp), int(unit.stats.max_hp)]
 	hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hp_lbl.add_theme_font_size_override("font_size", 16) 
+	hp_lbl.add_theme_font_size_override("font_size", 13) 
 	vbox.add_child(hp_lbl)
 
 	if not is_ally and unit.max_toughness > 0:
 		var tgh_bar := ProgressBar.new()
 		tgh_bar.name = "TghBar"
-		tgh_bar.custom_minimum_size = Vector2(0, 22) 
+		tgh_bar.custom_minimum_size = Vector2(0, 16) 
 		tgh_bar.max_value = unit.max_toughness
 		tgh_bar.value = unit.toughness
 		tgh_bar.modulate = Color(0.6, 0.8, 1.0)
@@ -425,20 +429,20 @@ func _create_unit_panel(unit: CombatUnit, is_ally: bool) -> PanelContainer:
 		tgh_lbl.name = "TghLabel"
 		tgh_lbl.text = "Стойкость"
 		tgh_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		tgh_lbl.add_theme_font_size_override("font_size", 14) 
+		tgh_lbl.add_theme_font_size_override("font_size", 12) 
 		vbox.add_child(tgh_lbl)
 
 	var status_lbl := Label.new()
 	status_lbl.name = "StatusLabel"
 	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_lbl.add_theme_font_size_override("font_size", 15) 
+	status_lbl.add_theme_font_size_override("font_size", 12) 
 	vbox.add_child(status_lbl)
 
 	if is_ally:
 		var en_bar := ProgressBar.new()
 		en_bar.name = "EnergyBarOnCard"
-		en_bar.custom_minimum_size = Vector2(0, 16)
+		en_bar.custom_minimum_size = Vector2(0, 12)
 		en_bar.max_value = unit.max_energy
 		en_bar.value = unit.energy
 		en_bar.show_percentage = false
@@ -448,27 +452,27 @@ func _create_unit_panel(unit: CombatUnit, is_ally: bool) -> PanelContainer:
 		var ult_btn := Button.new()
 		ult_btn.name = "UltButtonOnCard"
 		ult_btn.text = "★ СВЕРХСП."
-		ult_btn.custom_minimum_size = Vector2(0, 64)
-		ult_btn.add_theme_font_size_override("font_size", 16)
+		ult_btn.custom_minimum_size = Vector2(0, 36)
+		ult_btn.add_theme_font_size_override("font_size", 13)
 		ult_btn.pressed.connect(_on_card_ult_pressed.bind(unit))
 		vbox.add_child(ult_btn)
 
-	# ИСПРАВЛЕНО: Располагаем Инфо и Цель на двух разных строках вертикально для экономии места
 	var info_btn := Button.new()
 	info_btn.name = "InfoButton"
 	info_btn.text = "ℹ Инфо"
-	info_btn.custom_minimum_size = Vector2(180, 36) 
+	info_btn.custom_minimum_size = Vector2(140, 28) 
+	info_btn.add_theme_font_size_override("font_size", 12)
 	info_btn.pressed.connect(_open_inspect.bind(unit))
 	vbox.add_child(info_btn)
 
 	var target_btn := Button.new()
 	target_btn.name = "TargetButton"
 	target_btn.text = "🎯 Выбрать целью"
-	target_btn.custom_minimum_size = Vector2(180, 42) # Крупная кнопка
+	target_btn.custom_minimum_size = Vector2(140, 32)
 	target_btn.visible = false
 	target_btn.pressed.connect(_on_target_pressed.bind(unit, is_ally))
-	target_btn.add_theme_font_size_override("font_size", 16) # Крупный шрифт
-	target_btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3)) # Золотистый цвет
+	target_btn.add_theme_font_size_override("font_size", 13)
+	target_btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	vbox.add_child(target_btn)
 
 	_unit_panels[unit] = panel
@@ -1606,8 +1610,11 @@ func _refresh_action_bar() -> void:
 
 	var order := battle_manager.get_action_preview()
 	var accumulated_av_simulation: float = 0.0
+	var shown_count: int = 0
 	
 	for i in order.size():
+		if shown_count >= 7:
+			break
 		var unit: CombatUnit = order[i]
 		if unit == null or not units_av_temp.has(unit):
 			continue
@@ -1623,29 +1630,29 @@ func _refresh_action_bar() -> void:
 		units_av_temp[unit] = unit.base_action_value
 
 		var icon := ColorRect.new()
-		# Делаем ячейки шкалы чуть шире, чтобы текст умещался
-		icon.custom_minimum_size = Vector2(70, 70) 
+		# Компактный размер маркера вертикальной шкалы
+		icon.custom_minimum_size = Vector2(48, 48) 
 		icon.color = _unit_color(unit)
 		icon.tooltip_text = unit.display_name
 
 		var vbox := VBoxContainer.new()
 		vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-		vbox.add_theme_constant_override("separation", 2)
+		vbox.add_theme_constant_override("separation", 1)
 		icon.add_child(vbox)
 
 		# Первая буква имени
 		var lbl_name := Label.new()
 		lbl_name.text = unit.display_name.substr(0, 1)
 		lbl_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl_name.add_theme_font_size_override("font_size", 20)
+		lbl_name.add_theme_font_size_override("font_size", 16)
 		vbox.add_child(lbl_name)
 
 		# Оставшийся ИД до хода
 		var lbl_av := Label.new()
 		lbl_av.text = str(int(accumulated_av_simulation))
 		lbl_av.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl_av.add_theme_font_size_override("font_size", 13)
+		lbl_av.add_theme_font_size_override("font_size", 11)
 		lbl_av.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
 		vbox.add_child(lbl_av)
 
@@ -1653,6 +1660,7 @@ func _refresh_action_bar() -> void:
 			icon.modulate = Color(1.2, 1.2, 1.0)
 
 		action_bar.add_child(icon)
+		shown_count += 1
 
 func _unit_color(unit: CombatUnit) -> Color:
 	if unit.is_ally:

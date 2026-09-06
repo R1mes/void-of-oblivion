@@ -12,6 +12,7 @@ const PROJECT_ID: String = "void-of-oblivion"
 # REST Эндпоинты Firebase
 const AUTH_SIGNUP_URL: String = "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key="
 const AUTH_SIGNIN_URL: String = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key="
+const AUTH_UPDATE_URL: String = "https://identitytoolkit.googleapis.com/v1/accounts:update?key="
 const AUTH_REFRESH_URL: String = "https://securetoken.googleapis.com/v1/token?key="
 const FIRESTORE_BASE_URL: String = "https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents"
 

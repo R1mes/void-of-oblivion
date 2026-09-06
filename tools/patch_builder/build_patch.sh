@@ -28,10 +28,16 @@ echo "Выходной файл: $PCK_PATH"
 echo "=================================================="
 
 # Экспорт пакета ресурсов
-"$GODOT_BIN" --headless --export-pack "Web" "$PCK_PATH"
+"$GODOT_BIN" --headless --export-pack "Windows Desktop" "$PCK_PATH"
+
+CHANGELOG=${3:-"Void of Oblivion 1.3.1:\n- Адаптирован масштаб карточек в бою и оптимизирована шкала действий\n- Исправлена кликабельность верхних кнопок боя в полноэкранном режиме\n- Добавлена система регистрации и привязки аккаунта по нику и паролю\n- Исправлено отображение звёздочек и символов"}
 
 echo "Подпись патча приватным ключом RSA-2048..."
-python3 tools/patch_builder/sign_patch.py "$PCK_PATH" "$VERSION" "Автоматическое обновление контента ${VERSION}"
+python3 tools/patch_builder/sign_patch.py "$PCK_PATH" "$VERSION" "$CHANGELOG"
 
-echo "Готово! Файлы для выгрузки на GitHub Releases находятся в ${OUTPUT_DIR}:"
+mkdir -p patches
+cp "${OUTPUT_DIR}/version_manifest.json" patches/version_manifest.json
+cp "$PCK_PATH" "patches/${PCK_NAME}"
+
+echo "Готово! Файлы для выгрузки на GitHub Releases находятся в ${OUTPUT_DIR} и patches/:"
 ls -lh "$OUTPUT_DIR"

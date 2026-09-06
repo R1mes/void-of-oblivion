@@ -55,6 +55,10 @@ func sync_from_cloud() -> void:
 			TeamConfig.gacha_weapon_5star_pity = int(cloud_data.get("gacha_weapon_5star_pity", TeamConfig.gacha_weapon_5star_pity))
 			TeamConfig.gacha_weapon_guaranteed_featured = bool(cloud_data.get("gacha_weapon_guaranteed_featured", TeamConfig.gacha_weapon_guaranteed_featured))
 
+			if cloud_data.has("nickname") and not str(cloud_data["nickname"]).is_empty():
+				auth.nickname = str(cloud_data["nickname"])
+				auth.save_session()
+
 			# Персонажи и конусы
 			var c_list = cloud_data.get("unlocked_characters", [])
 			if c_list is Array and not c_list.is_empty():
@@ -130,6 +134,7 @@ func sync_to_cloud() -> void:
 		"gacha_guaranteed_featured": TeamConfig.gacha_guaranteed_featured,
 		"gacha_weapon_5star_pity": TeamConfig.gacha_weapon_5star_pity,
 		"gacha_weapon_guaranteed_featured": TeamConfig.gacha_weapon_guaranteed_featured,
+		"nickname": auth.nickname,
 		"updated_at": int(Time.get_unix_time_from_system())
 	}
 

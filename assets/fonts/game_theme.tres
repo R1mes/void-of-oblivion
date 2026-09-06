@@ -8,11 +8,11 @@
 [ext_resource type="FontFile" path="res://assets/fonts/NotoSans-Bold.ttf" id="5_dik8e"]
 
 [sub_resource type="FontVariation" id="FontVariation_vteo3"]
-fallbacks = Array[Font]([ExtResource("1_3uyqq"), ExtResource("2_a8v7p"), ExtResource("5_bamdy")])
+fallbacks = Array[Font]([ExtResource("1_3uyqq"), ExtResource("2_a8v7p"), ExtResource("3_g1r4r"), ExtResource("5_bamdy")])
 base_font = ExtResource("1_a2nwx")
 
 [sub_resource type="FontVariation" id="FontVariation_hp5cs"]
-fallbacks = Array[Font]([ExtResource("1_3uyqq"), ExtResource("2_a8v7p"), ExtResource("5_bamdy")])
+fallbacks = Array[Font]([ExtResource("1_3uyqq"), ExtResource("2_a8v7p"), ExtResource("3_g1r4r"), ExtResource("5_bamdy")])
 base_font = ExtResource("5_dik8e")
 
 [resource]

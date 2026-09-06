@@ -26,6 +26,7 @@ unique_name_in_owner = true
 script = ExtResource("2")
 
 [node name="TopBar" type="HBoxContainer" parent="." unique_id=1338056605]
+z_index = 20
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
@@ -72,27 +73,28 @@ text = "📖 Способности"
 
 [node name="ActionBarPanel" type="PanelContainer" parent="." unique_id=5391413]
 layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -380.0
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_left = 16.0
 offset_top = 80.0
-offset_right = -16.0
-offset_bottom = 160.0
-grow_horizontal = 0
+offset_right = 88.0
+offset_bottom = -120.0
+grow_vertical = 2
 
 [node name="ActionBarVBox" type="VBoxContainer" parent="ActionBarPanel" unique_id=433378173]
 layout_mode = 2
+theme_override_constants/separation = 4
 
 [node name="ActionBarTitle" type="Label" parent="ActionBarPanel/ActionBarVBox" unique_id=611109654]
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
-text = "Шкала Действий →"
+theme_override_font_sizes/font_size = 12
+text = "Ходы ↓"
+horizontal_alignment = 1
 
-[node name="ActionBar" type="HBoxContainer" parent="ActionBarPanel/ActionBarVBox" unique_id=923131839]
+[node name="ActionBar" type="VBoxContainer" parent="ActionBarPanel/ActionBarVBox" unique_id=923131839]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 4
 
 [node name="SkillsPanel" type="PanelContainer" parent="." unique_id=1943784094]
 unique_name_in_owner = true
@@ -139,12 +141,13 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -540.0
-offset_top = -170.0
+offset_top = -250.0
 offset_right = 540.0
-offset_bottom = 170.0
+offset_bottom = 250.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 48
+mouse_filter = 2
+theme_override_constants/separation = 20
 alignment = 1
 
 [node name="EnemiesLabel" type="Label" parent="Battlefield" unique_id=27871067]

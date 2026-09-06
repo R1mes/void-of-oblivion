@@ -11,6 +11,7 @@ var id_token: String = ""
 var refresh_token: String = ""
 var local_id: String = "" # UID пользователя в Firebase
 var email: String = ""
+var nickname: String = ""
 var is_anonymous: bool = false
 var expires_in: int = 3600
 var token_timestamp: int = 0
@@ -79,6 +80,7 @@ func sign_out() -> void:
 	refresh_token = ""
 	local_id = ""
 	email = ""
+	nickname = ""
 	is_anonymous = false
 	if FileAccess.file_exists(TOKEN_CACHE_PATH):
 		DirAccess.remove_absolute(TOKEN_CACHE_PATH)
@@ -125,6 +127,7 @@ func save_session() -> void:
 		"refresh_token": refresh_token,
 		"local_id": local_id,
 		"email": email,
+		"nickname": nickname,
 		"is_anonymous": is_anonymous,
 		"timestamp": token_timestamp,
 		"expires_in": expires_in
@@ -205,6 +208,7 @@ func load_cached_session() -> bool:
 		refresh_token = str(parsed.get("refresh_token", ""))
 		local_id = str(parsed.get("local_id", ""))
 		email = str(parsed.get("email", ""))
+		nickname = str(parsed.get("nickname", ""))
 		is_anonymous = bool(parsed.get("is_anonymous", false))
 		token_timestamp = int(parsed.get("timestamp", 0))
 		expires_in = int(parsed.get("expires_in", 3600))
@@ -217,3 +221,197 @@ func load_cached_session() -> bool:
 				auth_state_changed.emit(true, local_id)
 			return true
 	return false
+
+## Преобразование произвольного никнейма в валидный email для Firebase Auth
+static func nickname_to_email(nick: String) -> String:
+	var clean := nick.strip_edges().to_lower()
+	var safe := ""
+	for i in clean.length():
+		var ch := clean[i]
+		var code := clean.unicode_at(i)
+		if (code >= 97 and code <= 122) or (code >= 48 and code <= 57):
+			safe += ch
+		elif (code >= 1072 and code <= 1103) or code == 1105: # Кириллица а-я, ё
+			safe += "u%d" % code
+		elif ch in [".", "_", "-"]:
+			safe += ch
+		else:
+			safe += "_"
+	if safe.is_empty():
+		safe = "player_" + str(int(Time.get_unix_time_from_system()))
+	return safe + "@void.game"
+
+## Привязка существующего анонимного аккаунта к нику и паролю (accounts:update)
+func link_anonymous_account(nick: String, password: String, callback: Callable = Callable()) -> void:
+	if not is_authenticated():
+		var err := "Нет активной сессии для привязки"
+		auth_error.emit(err)
+		if callback.is_valid(): callback.call(false, err)
+		return
+	if not FirebaseConfig.is_configured():
+		nickname = nick
+		is_anonymous = false
+		save_session()
+		auth_state_changed.emit(true, local_id)
+		if callback.is_valid(): callback.call(true, "OK (offline)")
+		return
+
+	var user_email := nickname_to_email(nick)
+	var url := FirebaseConfig.AUTH_UPDATE_URL + FirebaseConfig.API_KEY
+	var body := JSON.stringify({
+		"idToken": id_token,
+		"email": user_email,
+		"password": password,
+		"displayName": nick,
+		"returnSecureToken": true
+	})
+
+	var http := HTTPRequest.new()
+	add_child(http)
+
+	http.request_completed.connect(func(result: int, response_code: int, headers: PackedStringArray, res_body: PackedByteArray):
+		http.queue_free()
+		var json_str := res_body.get_string_from_utf8()
+		var parsed = JSON.parse_string(json_str)
+
+		if response_code >= 200 and response_code < 300 and parsed is Dictionary:
+			id_token = str(parsed.get("idToken", id_token))
+			refresh_token = str(parsed.get("refreshToken", refresh_token))
+			local_id = str(parsed.get("localId", local_id))
+			email = str(parsed.get("email", user_email))
+			nickname = nick
+			is_anonymous = false
+			token_timestamp = int(Time.get_unix_time_from_system())
+			save_session()
+			auth_state_changed.emit(true, local_id)
+			if callback.is_valid():
+				callback.call(true, "Успешно привязано!")
+		else:
+			var err_msg := "Ошибка привязки аккаунта"
+			if parsed is Dictionary and parsed.has("error"):
+				var err_dict = parsed["error"]
+				if err_dict is Dictionary:
+					err_msg = str(err_dict.get("message", err_msg))
+			if "EMAIL_EXISTS" in err_msg:
+				err_msg = "Этот никнейм уже занят другим игроком!"
+			elif "WEAK_PASSWORD" in err_msg:
+				err_msg = "Пароль слишком простой (минимум 6 символов)!"
+			auth_error.emit(err_msg)
+			if callback.is_valid():
+				callback.call(false, err_msg)
+	)
+
+	var headers := PackedStringArray(["Content-Type: application/json"])
+	http.request(url, headers, HTTPClient.METHOD_POST, body)
+
+## Регистрация нового аккаунта по нику и паролю (accounts:signUp)
+func register_with_nickname(nick: String, password: String, callback: Callable = Callable()) -> void:
+	if not FirebaseConfig.is_configured():
+		local_id = "user_" + str(int(Time.get_unix_time_from_system()))
+		id_token = "mock_token"
+		nickname = nick
+		is_anonymous = false
+		save_session()
+		auth_state_changed.emit(true, local_id)
+		if callback.is_valid(): callback.call(true, "OK (offline)")
+		return
+
+	var user_email := nickname_to_email(nick)
+	var url := FirebaseConfig.AUTH_SIGNUP_URL + FirebaseConfig.API_KEY
+	var body := JSON.stringify({
+		"email": user_email,
+		"password": password,
+		"returnSecureToken": true
+	})
+
+	var http := HTTPRequest.new()
+	add_child(http)
+
+	http.request_completed.connect(func(result: int, response_code: int, headers: PackedStringArray, res_body: PackedByteArray):
+		http.queue_free()
+		var json_str := res_body.get_string_from_utf8()
+		var parsed = JSON.parse_string(json_str)
+
+		if response_code >= 200 and response_code < 300 and parsed is Dictionary:
+			id_token = str(parsed.get("idToken", ""))
+			refresh_token = str(parsed.get("refreshToken", ""))
+			local_id = str(parsed.get("localId", ""))
+			email = str(parsed.get("email", user_email))
+			nickname = nick
+			is_anonymous = false
+			token_timestamp = int(Time.get_unix_time_from_system())
+			save_session()
+			auth_state_changed.emit(true, local_id)
+			if callback.is_valid():
+				callback.call(true, "Регистрация успешна!")
+		else:
+			var err_msg := "Ошибка регистрации"
+			if parsed is Dictionary and parsed.has("error"):
+				var err_dict = parsed["error"]
+				if err_dict is Dictionary:
+					err_msg = str(err_dict.get("message", err_msg))
+			if "EMAIL_EXISTS" in err_msg:
+				err_msg = "Этот никнейм уже занят другим игроком!"
+			elif "WEAK_PASSWORD" in err_msg:
+				err_msg = "Пароль слишком простой (минимум 6 символов)!"
+			auth_error.emit(err_msg)
+			if callback.is_valid():
+				callback.call(false, err_msg)
+	)
+
+	var headers := PackedStringArray(["Content-Type: application/json"])
+	http.request(url, headers, HTTPClient.METHOD_POST, body)
+
+## Вход в аккаунт по нику и паролю (accounts:signInWithPassword)
+func login_with_nickname(nick: String, password: String, callback: Callable = Callable()) -> void:
+	if not FirebaseConfig.is_configured():
+		nickname = nick
+		is_anonymous = false
+		save_session()
+		auth_state_changed.emit(true, local_id)
+		if callback.is_valid(): callback.call(true, "OK (offline)")
+		return
+
+	var user_email := nickname_to_email(nick)
+	var url := FirebaseConfig.AUTH_SIGNIN_URL + FirebaseConfig.API_KEY
+	var body := JSON.stringify({
+		"email": user_email,
+		"password": password,
+		"returnSecureToken": true
+	})
+
+	var http := HTTPRequest.new()
+	add_child(http)
+
+	http.request_completed.connect(func(result: int, response_code: int, headers: PackedStringArray, res_body: PackedByteArray):
+		http.queue_free()
+		var json_str := res_body.get_string_from_utf8()
+		var parsed = JSON.parse_string(json_str)
+
+		if response_code >= 200 and response_code < 300 and parsed is Dictionary:
+			id_token = str(parsed.get("idToken", ""))
+			refresh_token = str(parsed.get("refreshToken", ""))
+			local_id = str(parsed.get("localId", ""))
+			email = str(parsed.get("email", user_email))
+			nickname = nick
+			is_anonymous = false
+			token_timestamp = int(Time.get_unix_time_from_system())
+			save_session()
+			auth_state_changed.emit(true, local_id)
+			if callback.is_valid():
+				callback.call(true, "Вход выполнен успешно!")
+		else:
+			var err_msg := "Ошибка входа"
+			if parsed is Dictionary and parsed.has("error"):
+				var err_dict = parsed["error"]
+				if err_dict is Dictionary:
+					err_msg = str(err_dict.get("message", err_msg))
+			if "EMAIL_NOT_FOUND" in err_msg or "INVALID_LOGIN_CREDENTIALS" in err_msg or "INVALID_PASSWORD" in err_msg:
+				err_msg = "Неверный никнейм или пароль!"
+			auth_error.emit(err_msg)
+			if callback.is_valid():
+				callback.call(false, err_msg)
+	)
+
+	var headers := PackedStringArray(["Content-Type: application/json"])
+	http.request(url, headers, HTTPClient.METHOD_POST, body)
