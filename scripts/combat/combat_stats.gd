@@ -12,6 +12,7 @@ var effect_hit_rate: float = 0.0
 var break_effect: float = 0.0
 var weakness_efficiency: float = 0.0
 var damage_bonus: float = 0.0
+var effect_res: float = 0.0
 
 var _spd_modifiers: Array[float] = []
 var _ehr_modifiers: Array[float] = []
@@ -38,6 +39,7 @@ func duplicate_stats() -> CombatStats:
 	copy.break_effect = break_effect
 	copy.weakness_efficiency = weakness_efficiency
 	copy.damage_bonus = damage_bonus
+	copy.effect_res = effect_res
 	copy._spd_modifiers = _spd_modifiers.duplicate()
 	copy._ehr_modifiers = _ehr_modifiers.duplicate()
 	return copy

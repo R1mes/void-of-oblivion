@@ -32,13 +32,17 @@ const SET_NAMES := {
 	"silhouette": "Прячущийся во тьме силуэт",
 	"accepted_sin": "Принявший грех глава",
 	"bereft_future": "Исследователь отнятого будущего",
+	"damaged_strings": "След из повреждённых строк",
+	"dying_stars_child": "Дитя умирающих звёзд",
 	# Планарные сеты
 	"detroit": "Сияющий Детройт",
 	"lost_edge": "Лаборатория сгинувшего края",
 	"japan_island": "Свободный остров Япония",
 	"krasnodar": "Краснодар – сердце апокалипсиса",
 	"other_side_universe": "Другая сторона вселенной",
-	"irkutsk": "Погрязший в руинах Иркутск"
+	"irkutsk": "Погрязший в руинах Иркутск",
+	"server_depths": "Сервер в глубинах реальности",
+	"inverted_depths": "Потайные глубины Изнанки"
 }
 
 const SET_DESCRIPTIONS := {
@@ -56,13 +60,17 @@ const SET_DESCRIPTIONS := {
 	"silhouette": "2 части: +16% Крит. Урона.\n4 части: Накладывает дебафф Маски Силуэта при критических ударах.",
 	"accepted_sin": "2 части: +12% Макс. ХП.\n4 части: При изменении ХП владельца повышает Крит. шанс на 8% (до 2 раз).",
 	"bereft_future": "2 части: +6% Скорости.\n4 части: Увеличивает Крит. урон всех союзников на 10% после действия владельца.",
+	"damaged_strings": "2 части: Увеличивает Бинарный урон на 15%.\n4 части: После использования Сверхспособности Бинарный урон владельца игнорирует 20% защиты противника на 3 хода.",
+	"dying_stars_child": "2 части: Увеличивает Крит. шанс владельца на 8%.\n4 части: Навыки Q и E владельца восстанавливают 5 ед. Зеро (если активна синергия Антиматерия 1). Если текущее Зеро > 40, увеличивает наносимый владельцем урон на 15%.",
 	# Планарные
 	"detroit": "2 части: +12% Силы Атаки. Если Скорость >= 120, дополнительно +12% СА.",
-	"lost_edge": "2 части: +12% Макс. ХП. Если Макс. ХП >= 5000, повышает СА всех союзников на 8%.",
+	"lost_edge": "2 части: +12% Макс. ХП. Если Скорость >= 120, повышает СА всех союзников на 8%.",
 	"japan_island": "2 части: +15% Защиты. Если ШПЭ >= 50%, дополнительно +15% Защиты.",
 	"krasnodar": "2 части: +8% Крит. шанса. Повышает урон Сверхспособности и Бонус-атак на 15% если Крит. шанс >= 50%.",
-	"other_side_universe": "2 части: +12% Крит. шанса. При убийстве врага дает +4% Крит. шанса до конца боя.",
-	"irkutsk": "2 части: +16% Эффекта Пробития. Если Скорость >= 145, дополнительно +20% Эффекта Пробития."
+	"other_side_universe": "2 части: +12% Крит. шанса. Если Крит. шанс >= 70%, повышает урон Базовой атаки и Навыков на 20%.",
+	"irkutsk": "2 части: Бонус-атака союзника дает стак Подвига (+5% урона бонус-атак, до 5). При 5 стаках КУ +25%.",
+	"server_depths": "2 части: Увеличивает скорость на 6%. При использовании Навыка E скорость повышается на 12% на 2 хода. Если этот Навык E наносит Бинарный урон, поражённые противники получают на 10% больше Бинарного урона на 2 хода (складывается только от разных источников).",
+	"inverted_depths": "2 части: Увеличивает силу атаки на 12%. Если владелец находится не в первом слоте (слот 0) и имеет общую фракцию с первым персонажем в отряде, увеличивает наносимый урон обоих персонажей на 10%."
 }
 
 const SET_2PC_DESCRIPTIONS := {
@@ -80,12 +88,17 @@ const SET_2PC_DESCRIPTIONS := {
 	"silhouette": "+16% Крит. Урона",
 	"accepted_sin": "+12% Макс. ХП",
 	"bereft_future": "+6% Скорости",
-	"detroit": "+12% Силы Атаки. Если Скорость >= 120, дополнительно +12% СА (всего +24% СА)",
-	"lost_edge": "+12% Макс. ХП. Если Макс. ХП >= 5000, повышает СА всех союзников на 8%",
-	"japan_island": "+15% Защиты. Если ШПЭ >= 50%, дополнительно +15% Защиты",
-	"krasnodar": "+8% Крит. шанса. Повышает урон Сверхспособности и Бонус-атак на 15% если Крит. шанс >= 50%",
-	"other_side_universe": "+12% Крит. шанса. При убийстве врага дает +4% Крит. шанса до конца боя",
-	"irkutsk": "+16% Эффекта Пробития. Если Скорость >= 145, дополнительно +20% Эффекта Пробития"
+	"damaged_strings": "+15% Бинарного урона",
+	"dying_stars_child": "+8% Крит. шанса",
+	# Планарные
+	"lost_edge": "+12% ХП. Дает +8% СА отряду если скорость >= 120 (суммируется)",
+	"japan_island": "+15% Защиты (+15% если ШПЭ >= 50%)",
+	"krasnodar": "+8% Крит. шанса (+15% ультимейту/бонус-атаке если КШ >= 50%)",
+	"detroit": "+12% Силы Атаки (+12% если скорость >= 120)",
+	"other_side_universe": "+12% Крит. шанса (+20% к Базовой/Q/E если КШ >= 70%)",
+	"irkutsk": "+5-25% урона Бонус-атак за стаки Подвига, +25% КУ на 5 стаках",
+	"server_depths": "+6% Скорости. Навык E дает +12% Скорости на 2 хода и +10% Бинарной уязвимости врагам при Бинарном уроне",
+	"inverted_depths": "+12% Силы Атаки. Если не в 1-м слоте и фракция совпадает с первым союзником — урон обоих +10%"
 }
 
 const SET_4PC_DESCRIPTIONS := {
@@ -102,7 +115,9 @@ const SET_4PC_DESCRIPTIONS := {
 	"galilean": "При нанесении урона Бонус-атакой повышает СА на 6% (до 8 стаков)",
 	"silhouette": "Накладывает дебафф Маски Силуэта при критических ударах",
 	"accepted_sin": "При изменении ХП владельца повышает Крит. шанс на 8% (до 2 раз)",
-	"bereft_future": "Увеличивает Крит. урон всех союзников на 10% после действия владельца"
+	"bereft_future": "Увеличивает Крит. урон всех союзников на 10% после действия владельца",
+	"damaged_strings": "После Сверхспособности Бинарный урон игнорирует 20% защиты противника на 3 хода",
+	"dying_stars_child": "Навыки Q и E дают +5 Зеро (при Антиматерии 1). Если Зеро > 40, наносимый урон +15%"
 }
 
 # Доступные основные характеристики по слотам
@@ -115,13 +130,96 @@ const MAIN_STATS_BY_SLOT := {
 	"rope": ["hp_pct", "atk_pct", "def_pct", "break_effect", "err"]
 }
 
-# Все доступные сабстаты
+# Все доступные сабстаты (12 сабстатов)
 const ALL_SUBSTATS := [
 	"flat_hp", "flat_atk", "flat_def",
 	"hp_pct", "atk_pct", "def_pct",
-	"ehr", "crit_dmg", "crit_rate",
-	"speed", "break_effect"
+	"speed", "crit_rate", "crit_dmg",
+	"ehr", "eff_res", "break_effect"
 ]
+
+# Веса вероятности выпадения сабстатов (из официальной статистики распределения HSR)
+const SUBSTAT_WEIGHTS := {
+	"flat_hp": 978,
+	"flat_atk": 1002,
+	"flat_def": 1000,
+	"hp_pct": 993,
+	"atk_pct": 1028,
+	"def_pct": 1007,
+	"speed": 435,
+	"crit_rate": 660,
+	"crit_dmg": 633,
+	"ehr": 821,
+	"eff_res": 810,
+	"break_effect": 830
+}
+
+# Возможные значения саброллов: [Low roll, Mid roll, High roll]
+# 5★ заданы строго по таблице HSR:
+#   Low = 0.8 * High, Mid = 0.9 * High, High = 1.0 * High
+# 4★ = 0.8x от 5★, 3★ = 0.6x от 5★
+const SUBSTAT_ROLL_TIERS := {
+	"flat_hp": {
+		5: [33.87, 38.104, 42.338],
+		4: [27.096, 30.483, 33.87],
+		3: [20.322, 22.862, 25.403]
+	},
+	"flat_atk": {
+		5: [16.935, 19.052, 21.169],
+		4: [13.548, 15.242, 16.935],
+		3: [10.161, 11.431, 12.701]
+	},
+	"flat_def": {
+		5: [16.935, 19.052, 21.169],
+		4: [13.548, 15.242, 16.935],
+		3: [10.161, 11.431, 12.701]
+	},
+	"hp_pct": {
+		5: [0.03456, 0.03888, 0.0432],
+		4: [0.02765, 0.03110, 0.03456],
+		3: [0.02074, 0.02333, 0.02592]
+	},
+	"atk_pct": {
+		5: [0.03456, 0.03888, 0.0432],
+		4: [0.02765, 0.03110, 0.03456],
+		3: [0.02074, 0.02333, 0.02592]
+	},
+	"def_pct": {
+		5: [0.0432, 0.0486, 0.0540],
+		4: [0.03456, 0.03888, 0.0432],
+		3: [0.02592, 0.02916, 0.0324]
+	},
+	"speed": {
+		5: [2.0, 2.3, 2.6],
+		4: [1.6, 1.8, 2.0],
+		3: [1.2, 1.4, 1.6]
+	},
+	"crit_rate": {
+		5: [0.02592, 0.02916, 0.0324],
+		4: [0.02074, 0.02333, 0.02592],
+		3: [0.01555, 0.01750, 0.01944]
+	},
+	"crit_dmg": {
+		5: [0.05184, 0.05832, 0.0648],
+		4: [0.04147, 0.04666, 0.05184],
+		3: [0.03110, 0.03499, 0.03888]
+	},
+	"ehr": {
+		5: [0.03456, 0.03888, 0.0432],
+		4: [0.02765, 0.03110, 0.03456],
+		3: [0.02074, 0.02333, 0.02592]
+	},
+	"eff_res": {
+		5: [0.03456, 0.03888, 0.0432],
+		4: [0.02765, 0.03110, 0.03456],
+		3: [0.02074, 0.02333, 0.02592]
+	},
+	"break_effect": {
+		5: [0.05184, 0.05832, 0.0648],
+		4: [0.04147, 0.04666, 0.05184],
+		3: [0.03110, 0.03499, 0.03888]
+	}
+}
 
 # Таблицы значений основных статов: [Базовое (ур. 0), Максимальное] для 3★, 4★, 5★
 const MAIN_STAT_VALUES := {
@@ -146,19 +244,20 @@ const MAIN_STAT_VALUES := {
 	"imaginary_dmg": {3: [0.037, 0.233], 4: [0.049, 0.311], 5: [0.062, 0.388]}
 }
 
-# Шаги прокачки/ролла сабстатов
+# Шаги прокачки/ролла сабстатов по умолчанию (средний ролл Mid)
 const SUBSTAT_STEP_VALUES := {
-	"flat_hp": {3: 20.0, 4: 30.0, 5: 40.0},
-	"flat_atk": {3: 10.0, 4: 15.0, 5: 20.0},
-	"flat_def": {3: 10.0, 4: 15.0, 5: 20.0},
-	"hp_pct": {3: 0.020, 4: 0.030, 5: 0.040},
-	"atk_pct": {3: 0.020, 4: 0.030, 5: 0.040},
-	"def_pct": {3: 0.025, 4: 0.038, 5: 0.050},
-	"ehr": {3: 0.020, 4: 0.030, 5: 0.040},
-	"crit_rate": {3: 0.015, 4: 0.022, 5: 0.029},
-	"crit_dmg": {3: 0.030, 4: 0.044, 5: 0.058},
-	"speed": {3: 1.0, 4: 2.0, 5: 2.5},
-	"break_effect": {3: 0.030, 4: 0.044, 5: 0.058}
+	"flat_hp": {3: 22.86, 4: 30.48, 5: 38.104},
+	"flat_atk": {3: 11.43, 4: 15.24, 5: 19.052},
+	"flat_def": {3: 11.43, 4: 15.24, 5: 19.052},
+	"hp_pct": {3: 0.0233, 4: 0.0311, 5: 0.03888},
+	"atk_pct": {3: 0.0233, 4: 0.0311, 5: 0.03888},
+	"def_pct": {3: 0.0292, 4: 0.0389, 5: 0.0486},
+	"speed": {3: 1.4, 4: 1.8, 5: 2.3},
+	"crit_rate": {3: 0.0175, 4: 0.0233, 5: 0.02916},
+	"crit_dmg": {3: 0.0350, 4: 0.0467, 5: 0.05832},
+	"ehr": {3: 0.0233, 4: 0.0311, 5: 0.03888},
+	"eff_res": {3: 0.0233, 4: 0.0311, 5: 0.03888},
+	"break_effect": {3: 0.0350, 4: 0.0467, 5: 0.05832}
 }
 
 # Максимальный уровень реликвии по редкости
@@ -248,10 +347,17 @@ const CAVERN_DUNGEONS := [
 		"icon": "🏚",
 		"sets": ["accepted_sin", "bereft_future"],
 		"desc": "Принявший грех глава и Исследователь отнятого будущего"
+	},
+	{
+		"id": "dungeon_detroit_airfield",
+		"name": "Аэродром Детройта",
+		"icon": "🛫",
+		"sets": ["damaged_strings", "dying_stars_child"],
+		"desc": "След из повреждённых строк и Дитя умирающих звёзд"
 	}
 ]
 
-# Данжи планарных украшений (3 штуки)
+# Данжи планарных украшений (4 штуки)
 const PLANAR_DUNGEONS := [
 	{
 		"id": "planar_empyreans",
@@ -273,6 +379,13 @@ const PLANAR_DUNGEONS := [
 		"icon": "🏙",
 		"sets": ["other_side_universe", "irkutsk"],
 		"desc": "Другая сторона вселенной и Погрязший в руинах Иркутск"
+	},
+	{
+		"id": "planar_server",
+		"name": "Сервер",
+		"icon": "🖥",
+		"sets": ["server_depths", "inverted_depths"],
+		"desc": "Сервер в глубинах реальности и Потайные глубины Изнанки"
 	}
 ]
 
@@ -302,11 +415,12 @@ static func generate_relic(set_id: String, slot: String, rarity: int) -> Diction
 	for i in range(init_sub_count):
 		if available_subs.is_empty():
 			break
-		var picked_idx := randi() % available_subs.size()
-		var sub_id: String = available_subs[picked_idx]
-		available_subs.remove_at(picked_idx)
+		var sub_id := pick_weighted_substat(available_subs)
+		var picked_idx := available_subs.find(sub_id)
+		if picked_idx >= 0:
+			available_subs.remove_at(picked_idx)
 		
-		var step_val: float = get_substat_step(sub_id, rarity)
+		var step_val: float = roll_substat_step(sub_id, rarity)
 		substats.append({
 			"type": sub_id,
 			"value": step_val,
@@ -345,12 +459,35 @@ static func get_available_substats(main_stat_id: String, current_subs: Array) ->
 		result.append(sub_id)
 	return result
 
-# Шаг значения для сабстата в зависимости от редкости
+# Взвешенный выбор сабстата на основе распределения HSR
+static func pick_weighted_substat(available_subs: Array[String]) -> String:
+	if available_subs.is_empty():
+		return ""
+	var total_weight := 0
+	for sub_id in available_subs:
+		total_weight += int(SUBSTAT_WEIGHTS.get(sub_id, 1000))
+	if total_weight <= 0:
+		return available_subs[randi() % available_subs.size()]
+	
+	var r := randi() % total_weight
+	var cumulative := 0
+	for sub_id in available_subs:
+		cumulative += int(SUBSTAT_WEIGHTS.get(sub_id, 1000))
+		if r < cumulative:
+			return sub_id
+	return available_subs[available_subs.size() - 1]
+
+# Случайный выбор одного из трех значений ролла (Low, Mid, High)
+static func roll_substat_step(sub_id: String, rarity: int) -> float:
+	var tiers_by_rarity: Dictionary = SUBSTAT_ROLL_TIERS.get(sub_id, {})
+	var tier_list: Array = tiers_by_rarity.get(rarity, [1.0, 1.0, 1.0])
+	return float(tier_list[randi() % tier_list.size()])
+
+# Шаг значения для сабстата в зависимости от редкости (Mid roll)
 static func get_substat_step(sub_id: String, rarity: int) -> float:
-	var table: Dictionary = SUBSTAT_STEP_VALUES.get(sub_id, {})
-	if table.has(rarity):
-		return float(table[rarity])
-	return 1.0
+	var tiers_by_rarity: Dictionary = SUBSTAT_ROLL_TIERS.get(sub_id, {})
+	var tier_list: Array = tiers_by_rarity.get(rarity, [1.0, 1.0, 1.0])
+	return float(tier_list[1])
 
 # Расчет значения основного стата по редкости и уровню
 static func calculate_main_stat_value(stat_id: String, rarity: int, level: int) -> float:
@@ -373,11 +510,11 @@ static func roll_substat_upgrade(relic: Dictionary) -> void:
 	var subs: Array = relic.get("substats", [])
 	
 	if subs.size() < 4:
-		# Меньше 4 сабстатов: добавляем новый уникальный сабстат
+		# Меньше 4 сабстатов: добавляем новый уникальный сабстат взвешенно
 		var avail := get_available_substats(main_stat_id, subs)
 		if not avail.is_empty():
-			var new_sub_id: String = avail[randi() % avail.size()]
-			var step_val: float = get_substat_step(new_sub_id, rarity)
+			var new_sub_id := pick_weighted_substat(avail)
+			var step_val: float = roll_substat_step(new_sub_id, rarity)
 			subs.append({
 				"type": new_sub_id,
 				"value": step_val,
@@ -388,7 +525,7 @@ static func roll_substat_upgrade(relic: Dictionary) -> void:
 		var roll_idx := randi() % subs.size()
 		var target_sub: Dictionary = subs[roll_idx]
 		var sub_id: String = String(target_sub.get("type", ""))
-		var step_val: float = get_substat_step(sub_id, rarity)
+		var step_val: float = roll_substat_step(sub_id, rarity)
 		target_sub["value"] = float(target_sub.get("value", 0.0)) + step_val
 		target_sub["rolls"] = int(target_sub.get("rolls", 1)) + 1
 		
@@ -564,6 +701,7 @@ static func format_stat_name(stat_id: String) -> String:
 		"atk_pct": return "Сила Атаки%"
 		"def_pct": return "Защита%"
 		"ehr": return "Шанс попадания эффектов"
+		"eff_res": return "Сопротивление эффектам"
 		"heal": return "Исходящее исцеление"
 		"crit_rate": return "Крит. шанс"
 		"crit_dmg": return "Крит. урон"
@@ -677,6 +815,22 @@ static func get_dungeon_info(dungeon_id: String) -> Dictionary:
 				"enemies": "Силуэт в маске (Босс), Серверный Вирус (Босс)",
 				"rewards": "Другая сторона вселенной, Погрязший в руинах Иркутск"
 			}
+		"dungeon_detroit_airfield":
+			return {
+				"name": "Аэродром Детройта",
+				"icon": "🛫",
+				"anomaly": "«Бинарный резонанс»: Бинарный урон отряда +30%, восстановление Зеро увеличивает наносимый урон на +20%!",
+				"enemies": "Серверный Вирус (Босс), Элитный Страж",
+				"rewards": "След из повреждённых строк, Дитя умирающих звёзд"
+			}
+		"planar_server":
+			return {
+				"name": "Сервер",
+				"icon": "🖥",
+				"anomaly": "«Глубины Системы»: Скорость +15%, совпадение фракций союзников с лидером дает +25% урона!",
+				"enemies": "Орто Мутант (Босс), Повелитель Пустоты (Босс)",
+				"rewards": "Сервер в глубинах реальности, Потайные глубины Изнанки"
+			}
 		_:
 			return {
 				"name": "Подземелье",
@@ -774,5 +928,3 @@ static func generate_tutorial_drops() -> Array[Dictionary]:
 		drops.append(f_relic)
 
 	return drops
-
-

@@ -16,8 +16,9 @@ var stats: CombatStats = CombatStats.new()
 var statuses: StatusEffects = StatusEffects.new()
 
 var energy: float = 0.0
-var action_value: float = 0.0
+var action_value: float = -1.0
 var base_action_value: float = 100.0
+var _av_initialized: bool = false
 
 var max_toughness: float = 0.0
 var toughness: float = 0.0
@@ -51,6 +52,7 @@ func setup_from_template(template: Dictionary) -> void:
 	stats.break_effect = s.get("break_effect", stats.break_effect)
 	stats.weakness_efficiency = s.get("weakness_efficiency", stats.weakness_efficiency)
 	stats.damage_bonus = s.get("damage_bonus", stats.damage_bonus)
+	stats.effect_res = s.get("effect_res", stats.effect_res)
 
 	_base_spd = stats.spd
 	if template.has("toughness"):
@@ -64,8 +66,9 @@ func setup_from_template(template: Dictionary) -> void:
 func recalculate_action_value() -> void:
 	var spd := stats.get_effective_spd()
 	base_action_value = CombatConstants.AV_BASE / spd
-	if action_value <= 0.0:
+	if not _av_initialized or action_value < 0.0:
 		action_value = base_action_value
+		_av_initialized = true
 
 func on_speed_changed(old_spd: float, new_spd: float) -> void:
 	if new_spd <= 0.0 or old_spd <= 0.0:
@@ -125,6 +128,10 @@ func get_effective_be() -> float:
 	var be := stats.break_effect
 	if has_meta("milena_be_buff"):
 		be += float(get_meta("milena_be_buff", 0.0))
+	if has_meta("lenskaya_ult_be_turns") and int(get_meta("lenskaya_ult_be_turns", 0)) > 0:
+		be += float(get_meta("lenskaya_ult_be_buff", 0.40))
+	if has_meta("lenskaya_trace2_be_turns") and int(get_meta("lenskaya_trace2_be_turns", 0)) > 0:
+		be += float(get_meta("lenskaya_trace2_be_buff", 0.40))
 	return be
 
 func add_speed_modifier(pct: float, flat: float) -> void:

@@ -6,12 +6,89 @@ static func _src(source: String) -> String:
 		return ""
 	return " — источник: %s" % source
 
+static func _is_antimatter_member(unit: CombatUnit) -> bool:
+	if unit == null:
+		return false
+	return FactionSystem.FACTIONS.has("antimatter") and unit.id in FactionSystem.FACTIONS["antimatter"].members
+
+static func _get_dynamic_crit_rate(unit: CombatUnit, allies: Array = []) -> float:
+	if unit == null:
+		return 0.0
+	var cr: float = unit.stats.crit_rate
+	if unit.id == "lenskaya":
+		var manipulation: int = int(unit.get_meta("lenskaya_manipulation", 0))
+		var stat_stacks: int = int(clampi(manipulation, 0, 15))
+		cr += float(stat_stacks) * 0.05
+	elif unit.id == "lenskaya_sky_guardian":
+		var eff_be := unit.get_effective_be()
+		cr += minf(eff_be * 0.10, 0.30)
+	elif unit.id == "rimes":
+		var stacks: int = int(unit.get_meta("rimes_talent_stacks", 0))
+		var max_stacks: int = 6 if unit.eidolon >= 1 else 4
+		if stacks == max_stacks:
+			cr += 0.35
+		if unit.has_meta("rimes_isolation_target"):
+			cr += 0.20
+
+	var sara_admin_on_field: CombatUnit = null
+	for ally in allies:
+		if ally is CombatUnit and ally.id == "sara_admin" and ally.is_alive():
+			sara_admin_on_field = ally
+			break
+	if sara_admin_on_field and unit.is_ally:
+		var v_count: int = int(unit.get_meta("console_vectors", 0))
+		if v_count >= 30:
+			cr += 0.20
+
+	var velz_on_field: CombatUnit = null
+	for ally in allies:
+		if ally is CombatUnit and ally.id == "velzebul" and ally.is_alive():
+			velz_on_field = ally
+			break
+	if velz_on_field and unit.is_ally:
+		var cur_z: int = int(unit.get_meta("antimatter_xaeroh", 0))
+		if cur_z == 0 and velz_on_field.has_meta("antimatter_xaeroh"):
+			cur_z = int(velz_on_field.get_meta("antimatter_xaeroh", 0))
+		var z_tiers: int = mini(6, int(floor(float(cur_z) / 30.0)))
+		if z_tiers > 0:
+			cr += float(z_tiers) * 0.05
+
+	# Связь Навыка Q Марины • Хранителя небес
+	var marina_sg_on_field: CombatUnit = null
+	for ally in allies:
+		if ally is CombatUnit and ally.id == "marina_sky_guardian" and ally.is_alive():
+			marina_sg_on_field = ally
+			break
+	if marina_sg_on_field != null and int(marina_sg_on_field.get_meta("marina_sk_link_turns", 0)) > 0:
+		var linked_ally: CombatUnit = marina_sg_on_field.get_meta("marina_sk_linked_ally", null)
+		var is_linked := false
+		if unit == marina_sg_on_field or unit == linked_ally:
+			is_linked = true
+		elif unit is Memosprite and (unit.owner == marina_sg_on_field or unit.owner == linked_ally):
+			is_linked = true
+		if is_linked:
+			cr += float(marina_sg_on_field.get_meta("marina_sk_link_crit_rate", 0.0))
+
+	return cr
+
+static func _get_dynamic_ehr(unit: CombatUnit) -> float:
+	if unit == null:
+		return 0.0
+	var eff_ehr: float = unit.stats.effect_hit_rate
+	if unit.id == "valramors":
+		eff_ehr += unit.stats.crit_rate * 0.35
+	return eff_ehr
+
 # Полностью исправленный метод get_stats_text() для scripts/ui/battle_info_provider.gd:
 # Полностью заменяем метод get_stats_text() в scripts/ui/battle_info_provider.gd:
 # === ПОЛНОСТЬЮ ЗАМЕНИТЕ МЕТОД get_stats_text() В BATTLE_INFO_PROVIDER.GD ===
 static func get_stats_text(unit: CombatUnit, allies: Array = []) -> String:
 	var s := unit.stats
 	var lines: PackedStringArray = []
+	
+	if unit is Memosprite:
+		var owner_name: String = (unit as Memosprite).owner.display_name if (unit as Memosprite).owner != null else "Неизвестен"
+		lines.append("[color=cyan]❄ [Дух Памяти] Владелец: %s[/color]" % owner_name)
 	
 	# Считываем кэшированные оригинальные (чистые) характеристики персонажа
 	var base_hp := float(unit.get_meta("base_hp_original", s.max_hp))
@@ -139,35 +216,53 @@ static func get_stats_text(unit: CombatUnit, allies: Array = []) -> String:
 	lines.append("СА: %d (%d)%s (эфф. %d)" % [int(s.atk), int(base_atk), atk_add_text, int(eff_atk)])
 	
 	var def_buff_pct: float = 0.0
+	if not unit.is_ally:
+		if unit.has_meta("def_reductions"):
+			var reds: Dictionary = unit.get_meta("def_reductions")
+			for src in reds:
+				var d: Dictionary = reds[src]
+				if int(d.get("turns", 0)) > 0:
+					def_buff_pct -= float(d.get("percent", 0.0))
+		var am_count := 0
+		var cur_zero_val := 0
+		for ally in allies:
+			if ally is CombatUnit and ally.is_alive():
+				if _is_antimatter_member(ally):
+					am_count += 1
+				if ally.has_meta("antimatter_xaeroh"):
+					cur_zero_val = maxi(cur_zero_val, int(ally.get_meta("antimatter_xaeroh", 0)))
+		if am_count >= 2 and cur_zero_val >= 20:
+			var am_shred: float = minf(0.75, floor(float(cur_zero_val) / 20.0) * 0.05)
+			def_buff_pct -= am_shred
 
 	# Вывод Защиты (ЗАЩ) в чистом скобочном формате
 	var def_add_text := " (+%.0f%% реликвии)" % relic_def_pct if relic_def_pct > 0.0 else ""
 	var eff_def: float = base_def * (1.0 + (relic_def_pct / 100.0) + def_buff_pct)
 	lines.append("ЗАЩ: %d (%d)%s (эфф. %d)" % [int(s.def), int(base_def), def_add_text, int(eff_def)])
 	
-	# Вывод Скорости (СКР) в чистом скобочном формате
-	var spd_add_text := " (+%d реликвии)" % int(relic_speed_flat) if relic_speed_flat > 0.0 else ""
+	# Вывод Скорости (СКР) в чистом скобочном формате с детализацией
+	var spd_add_parts: Array[String] = []
+	if relic_speed_flat > 0.0:
+		spd_add_parts.append("+%d реликвии" % int(relic_speed_flat))
+	var spd_pct_b := float(s.get_meta("spd_pct_bonus", 0.0))
+	var spd_flat_b := float(s.get_meta("spd_flat_bonus", 0.0))
+	if absf(spd_pct_b) > 0.001:
+		spd_add_parts.append("%+d%% баффы" % int(spd_pct_b * 100.0))
+	if absf(spd_flat_b) > 0.001:
+		spd_add_parts.append("%+d плоск. баффы" % int(spd_flat_b))
+	var spd_add_text := " (%s)" % ", ".join(spd_add_parts) if not spd_add_parts.is_empty() else ""
 	lines.append("СКР: %d (%d)%s" % [int(s.get_effective_spd()), int(base_spd), spd_add_text])
 	
-	var dynamic_crit_rate: float = s.crit_rate
-	
-	if unit.id == "lenskaya":
-		var manipulation: int = int(unit.get_meta("lenskaya_manipulation", 0))
-		var stat_stacks: int = int(clampi(manipulation, 0, 15))
-		dynamic_crit_rate += float(stat_stacks) * 0.05
-		
-	elif unit.id == "rimes":
-		var stacks: int = int(unit.get_meta("rimes_talent_stacks", 0))
-		var max_stacks: int = 6 if unit.eidolon >= 1 else 4
-		if stacks == max_stacks:
-			dynamic_crit_rate += 0.35
-		if unit.has_meta("rimes_isolation_target"):
-			dynamic_crit_rate += 0.20
+	var dynamic_crit_rate: float = _get_dynamic_crit_rate(unit, allies)
 
 	# --- Расчет эффективного Крит. Урона для Инфо-панели ---
 	var effective_crit_dmg: float = s.get_effective_crit_dmg(unit.statuses)
 	
-	# Учет Следа 3 Сары Админа (30+ Векторов -> КШ +20%, КУ +50% для всей пати)
+	if unit.id == "rimes":
+		if unit.has_meta("rimes_isolation_target"):
+			effective_crit_dmg += 0.80
+
+	# Учет Следа 3 Сары Админа (30+ Векторов -> КУ +50% для всей пати)
 	var sara_admin_on_field: CombatUnit = null
 	for ally in allies:
 		if ally is CombatUnit and ally.id == "sara_admin" and ally.is_alive():
@@ -177,20 +272,35 @@ static func get_stats_text(unit: CombatUnit, allies: Array = []) -> String:
 	if sara_admin_on_field and unit.is_ally:
 		var v_count: int = int(unit.get_meta("console_vectors", 0))
 		if v_count >= 30:
-			dynamic_crit_rate += 0.20
 			effective_crit_dmg += 0.50
 			
+	# Учет Таланта Вельзевул (за каждые 30 Зеро -> +10% КУ для всех союзников)
+	var velz_on_field: CombatUnit = null
+	for ally in allies:
+		if ally is CombatUnit and ally.id == "velzebul" and ally.is_alive():
+			velz_on_field = ally
+			break
+			
+	if velz_on_field and unit.is_ally:
+		var cur_z: int = int(unit.get_meta("antimatter_xaeroh", 0))
+		if cur_z == 0 and velz_on_field.has_meta("antimatter_xaeroh"):
+			cur_z = int(velz_on_field.get_meta("antimatter_xaeroh", 0))
+		var z_tiers: int = mini(6, int(floor(float(cur_z) / 30.0)))
+		if z_tiers > 0:
+			effective_crit_dmg += float(z_tiers) * 0.10
+
+	# Учет бонуса Крит. урона от резонанса Антиматерии [2]
+	if unit.has_meta("antimatter_crit_dmg_turns") and int(unit.get_meta("antimatter_crit_dmg_turns", 0)) > 0:
+		effective_crit_dmg += float(unit.get_meta("antimatter_crit_dmg_bonus", 0.0))
+
 	# ИСПРАВЛЕНО: Сет Иркутска: При 5 стаках Подвига Крит. урон повышается на +25%
 	if unit.has_meta("has_set_irkutsk"):
 		var i_stacks: int = int(unit.get_meta("relic_irkutsk_feat_stacks", 0))
 		if i_stacks == 5:
 			effective_crit_dmg += 0.25 # Отображаем прибавку КУ на панели информации
 			
-	var eff_ehr: float = s.effect_hit_rate
+	var eff_ehr: float = _get_dynamic_ehr(unit)
 	if unit.id == "valramors":
-		# Начисляем След 2 (+35% от шанса крита) во временную переменную ШПЭ
-		eff_ehr += s.crit_rate * 0.35
-		
 		# Учет Следа 3 (+80% КУ и +EHR% СА)
 		var is_active := (unit.slot_index == 0) or (unit.eidolon >= 6)
 		if is_active:
@@ -201,17 +311,57 @@ static func get_stats_text(unit: CombatUnit, allies: Array = []) -> String:
 	if unit.has_meta("isaac_ult_buff_turns") and int(unit.get_meta("isaac_ult_buff_turns", 0)) > 0:
 		effective_crit_dmg += 1.00
 
+	# Учет Следа 1 Марины (+20% КУ для связанных целей и их духов памяти)
+	var marina_sg_unit_for_cd: CombatUnit = null
+	for ally in allies:
+		if ally is CombatUnit and ally.id == "marina_sky_guardian" and ally.is_alive():
+			marina_sg_unit_for_cd = ally
+			break
+	if marina_sg_unit_for_cd != null and int(marina_sg_unit_for_cd.get_meta("marina_sk_link_turns", 0)) > 0:
+		var linked_ally: CombatUnit = marina_sg_unit_for_cd.get_meta("marina_sk_linked_ally", null)
+		var is_linked := false
+		if unit == marina_sg_unit_for_cd or unit == linked_ally:
+			is_linked = true
+		elif unit is Memosprite and (unit.owner == marina_sg_unit_for_cd or unit.owner == linked_ally):
+			is_linked = true
+		if is_linked:
+			effective_crit_dmg += 0.20
+
+	# Учет Таланта Эго (+30% + 13% от КУ Эго) и фракции Свечение (+30%/+45% КУ) для духов памяти
+	if unit is Memosprite:
+		var ego_unit: Memosprite = null
+		if marina_sg_unit_for_cd != null:
+			var sp := MemospriteSystem.get_sprite(marina_sg_unit_for_cd, null)
+			if sp != null and sp.is_alive():
+				ego_unit = sp
+		if ego_unit != null:
+			effective_crit_dmg += ego_unit.stats.crit_dmg * 0.13 + 0.30
+		var radiance_cnt := 0
+		for ally in allies:
+			if ally is CombatUnit and ally.is_alive():
+				if FactionSystem.FACTIONS.has("radiance") and ally.id in FactionSystem.FACTIONS["radiance"].members:
+					radiance_cnt += 1
+		if radiance_cnt >= 2:
+			effective_crit_dmg += 0.45 if radiance_cnt >= 3 else 0.30
+
+	if unit.id == "lenskaya_sky_guardian":
+		var eff_be_val := unit.get_effective_be()
+		effective_crit_dmg += minf(eff_be_val * 0.50, 1.50)
+
 	lines.append("Крит: %.0f%% / +%.0f%%" % [dynamic_crit_rate * 100.0, effective_crit_dmg * 100.0])
 	
-	lines.append("ШПЭ: %.0f%%" % [s.effect_hit_rate * 100.0])
+	lines.append("ШПЭ: %.0f%%" % [eff_ehr * 100.0])
 	
 	var base_be := s.break_effect
-	var eff_be := base_be
-	if unit.has_meta("milena_be_buff"):
-		eff_be += float(unit.get_meta("milena_be_buff", 0.0))
+	var eff_be := unit.get_effective_be()
 	lines.append("ЭП: %.0f%% (эфф. %.0f%%)" % [base_be * 100, eff_be * 100])
 	
-	lines.append("ЭН: %d / %d" % [int(unit.energy), int(unit.max_energy)])
+	if unit is Memosprite:
+		var cur_ch: int = int(unit.get_charge())
+		var max_ch: int = int(unit.charge_comp.max_charge if unit.charge_comp != null else 100.0)
+		lines.append("Заряд (Charge): %d / %d" % [cur_ch, max_ch])
+	else:
+		lines.append("ЭН: %d / %d" % [int(unit.energy), int(unit.max_energy)])
 	if unit.max_toughness > 0:
 		lines.append("Стойкость: %d / %d" % [int(unit.toughness), int(unit.max_toughness)])
 		var weak: PackedStringArray = []
@@ -224,12 +374,18 @@ static func get_stats_text(unit: CombatUnit, allies: Array = []) -> String:
 		for elem in [CombatConstants.Element.PHYSICAL, CombatConstants.Element.ICE, CombatConstants.Element.FIRE, CombatConstants.Element.WIND, CombatConstants.Element.LIGHTNING, CombatConstants.Element.QUANTUM, CombatConstants.Element.IMAGINARY]:
 			var is_weak: bool = elem in unit.weaknesses
 			var base_res := 0.0 if is_weak else 20.0
+			if elem == CombatConstants.Element.ICE and unit.has_meta("ice_res_bonus"):
+				base_res = float(unit.get_meta("ice_res_bonus", 0.40)) * 100.0
+			if elem == CombatConstants.Element.IMAGINARY and unit.has_meta("imaginary_res_bonus"):
+				base_res = float(unit.get_meta("imaginary_res_bonus", 0.40)) * 100.0
 			
 			var shred := 0.0
 			if elem == CombatConstants.Element.PHYSICAL and unit.has_meta("phys_res_reduced_turns") and int(unit.get_meta("phys_res_reduced_turns", 0)) > 0:
 				shred = 20.0
 			if elem == CombatConstants.Element.FIRE and unit.has_meta("shoji_fire_res_reduced_turns") and int(unit.get_meta("shoji_fire_res_reduced_turns", 0)) > 0:
 				shred = 40.0
+			if (elem == CombatConstants.Element.ICE or elem == CombatConstants.Element.QUANTUM) and unit.has_meta("velzebul_ice_quantum_res_turns") and int(unit.get_meta("velzebul_ice_quantum_res_turns", 0)) > 0:
+				shred += 20.0
 			if unit.has_meta("katarina_all_res_reduction") and int(unit.get_meta("katarina_vuln_turns", 0)) > 0:
 				shred += float(unit.get_meta("katarina_all_res_reduction", 0.20)) * 100.0
 			elif elem == CombatConstants.Element.PHYSICAL and unit.has_meta("katarina_phys_res_reduction") and int(unit.get_meta("katarina_vuln_turns", 0)) > 0:
@@ -323,10 +479,10 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 		buffs.append("• Теория на практике x%d/8: накопление Сверхспособностей. На 8 стаках Q заменяется на Улучшенный Q." % int(unit.get_meta("isaac_theory_stacks", 0)))
 		
 	if unit.has_meta("isaac_dmg_buff_turns") and int(unit.get_meta("isaac_dmg_buff_turns", 0)) > 0:
-		buffs.append("• Наставление Айзека (%d х.): наносимый урон (все типы) повышен на +80%%." % int(unit.get_meta("isaac_dmg_buff_turns", 0)))
+		buffs.append("• Наставление Айзека (%d х.): наносимый урон (все типы) повышен на +50%%." % int(unit.get_meta("isaac_dmg_buff_turns", 0)))
 		
 	if unit.has_meta("isaac_ult_buff_turns") and int(unit.get_meta("isaac_ult_buff_turns", 0)) > 0:
-		buffs.append("• Бафф Сверхспособности Айзека (%d х.): Крит. урон повышен на +100%%, скорость на +20 ед." % int(unit.get_meta("isaac_ult_buff_turns", 0)))
+		buffs.append("• Бафф Сверхспособности Айзека (%d х.): Крит. урон повышен на +60%%, скорость на +16 ед." % int(unit.get_meta("isaac_ult_buff_turns", 0)))
 	
 	if unit.has_meta("mask_layers") and int(unit.get_meta("mask_layers", 0)) > 0:
 		buffs.append("• Тайна маски x%d/14: защита Силуэта повышена на +40%%. Получение ударов снижает уровни, но ранит союзника на 3%% макс. ХП." % int(unit.get_meta("mask_layers", 0)))
@@ -406,6 +562,14 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 				var bonus_20 := int(float(rec_out) * 0.20)
 				var elem_str := String(CombatConstants.ELEMENT_NAMES.get(unit.element, "своего типа")).to_lower()
 				buffs.append("• Занять позицию: накоплено %d урона. Следующая атака с нанесением урона нанесёт +20%% (%d ед.) %s урона, распределённого поровну между поражёнными целями." % [rec_out, bonus_20, elem_str])
+		"behind_the_curtains":
+			buffs.append("• Выход из-за кулис (конус): Крит. шанс +22%. При трате Зеро восстанавливает 20% от потраченных Зеро в виде энергии.")
+			if unit.has_meta("btc_err_turns") and int(unit.get_meta("btc_err_turns", 0)) > 0:
+				buffs.append("• Выход из-за кулис [Антиматерия] (%d х.): Скорость восстановления энергии +10%%." % int(unit.get_meta("btc_err_turns", 0)))
+			if unit.has_meta("btc_atk_buff_turns") and int(unit.get_meta("btc_atk_buff_turns", 0)) > 0:
+				buffs.append("• Выход из-за кулис (%d х.): Сила атаки +30%% (от траты Зеро)." % int(unit.get_meta("btc_atk_buff_turns", 0)))
+		"i_will_become_god":
+			buffs.append("• Я стану богом (конус): Базовая скорость +12. При нанесении урона накладывает статус «Поклонение» (ЗАЩ -30%, союзники восстанавливают 3 Зеро при атаке цели).")
 					
 	if unit.has_meta("crimson_tears_atk_pct") and float(unit.get_meta("crimson_tears_atk_pct", 0.0)) > 0.0:
 		var ct_pct: float = float(unit.get_meta("crimson_tears_atk_pct", 0.0)) * 100.0
@@ -446,7 +610,7 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 	if unit.has_meta("doceva_tears_guarded_immune") and bool(unit.get_meta("doceva_tears_guarded_immune")):
 		buffs.append("• Защита Зоны [Доцева]: Иммунитет к урону (100% урона перенаправляется в Доцеву). Крит. шанс повышен на 20%.")
 	if unit.has_meta("doceva_tears_ally_damage_reduced") and bool(unit.get_meta("doceva_tears_ally_damage_reduced")):
-		buffs.append("• Защита Зоны [Доцева]: Получаемый урон уменьшен на 80% (перенаправляется в Доцеву).")
+		buffs.append("• Защита Зоны [Доцева]: Получаемый урон уменьшен на 70% (перенаправляется в Доцеву).")
 	if unit.has_meta("doceva_tears_atk_buff_pct") and float(unit.get_meta("doceva_tears_atk_buff_pct", 0.0)) > 0.0:
 		var pct_val: int = int(float(unit.get_meta("doceva_tears_atk_buff_pct", 0.0)) * 100.0)
 		buffs.append("• «Закрой глаза» [Доцева]: СА всех союзников +%d%%." % pct_val)
@@ -478,6 +642,14 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 				if cd_pct > 0:
 					buffs.append("• След 1 Катарины: Крит. урон повышен на +%d%% за %d союзник(ов) Пути Небытия (источник: Катарина)." % [cd_pct, nihility_count])
 		
+	# Статусы Ленской • Хранитель небес
+	if unit.has_meta("lenskaya_enhanced_basic_turns") and int(unit.get_meta("lenskaya_enhanced_basic_turns", 0)) > 0:
+		buffs.append("• Усиленная базовая атака (%d х.): 6 ударов по 30%% СА (всего 180%% СА), истощение 30 стойкости." % int(unit.get_meta("lenskaya_enhanced_basic_turns", 0)))
+	if unit.has_meta("lenskaya_ult_be_turns") and int(unit.get_meta("lenskaya_ult_be_turns", 0)) > 0:
+		buffs.append("• Эффект пробития (%d х.): собственный ЭП +40%% (Сверхспособность Ленской)." % int(unit.get_meta("lenskaya_ult_be_turns", 0)))
+	if unit.has_meta("lenskaya_trace2_be_turns") and int(unit.get_meta("lenskaya_trace2_be_turns", 0)) > 0:
+		buffs.append("• Эффект пробития (%d х.): +40%% ЭП от Сверхспособности Ленской (След 2)." % int(unit.get_meta("lenskaya_trace2_be_turns", 0)))
+
 	# =========================================================================
 	# СТАТУСЫ КОНСОЛИ И САРЫ • ПРАВА АДМИНИСТРАТОРА
 	# =========================================================================
@@ -532,11 +704,14 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 			var e2_desc: String = " (E2: Бинарный урон союзников +50%, КУ +1% за Вектор)" if unit.eidolon >= 2 else ""
 			buffs.append("• Стойка «Вирус» [Слот 1] (ДД): Враги получают +60%% Бинарного урона, Навык Q наносит Бинарный взрывной урон, урон ульты +40%%%s." % e2_desc)
 		elif stance == "dance":
-			buffs.append("• Стойка «Танец» [Слот 2-4] (Саппорт): Скорость команды +20%%, не-Бинарный урон +30%%. Весь Бинарный урон Сёдзи становится обычным. Q задерживает врагов. След 3: даёт ДД пробитие всех сопротивлений.")
+			buffs.append("• Стойка «Танец» [Слот 2-4] (Саппорт): Скорость команды +16%%, не-Бинарный урон +25%%. Весь Бинарный урон Сёдзи становится обычным. Q задерживает врагов. След 3: даёт ДД пробитие всех сопротивлений.")
 		if unit.get_meta("shoji_swan_enhanced_basic", false):
-			buffs.append("• Взрывной аккорд [Сёдзи]: Следующая базовая атака усилена (130%% цели / 40%% соседям, +13 Векторов).")
+			buffs.append("• Взрывной аккорд [Сёдзи]: Следующая базовая атака усилена (125%% цели / 35%% соседям, +13 Векторов).")
 		if unit.has_meta("shoji_swan_trace2_spd_turns") and int(unit.get_meta("shoji_swan_trace2_spd_turns", 0)) > 0:
 			buffs.append("• След 2 Сёдзи (%d х.): Скорость повышена на +20%%." % int(unit.get_meta("shoji_swan_trace2_spd_turns", 0)))
+
+	if unit.has_meta("shoji_swan_dance_ally_buff"):
+		buffs.append("• Танец Сёдзи (постоянный): Скорость повышена на +16%%, не-Бинарный урон отряда на +25%%.")
 
 	if unit.has_meta("shoji_swan_atk_turns") and int(unit.get_meta("shoji_swan_atk_turns", 0)) > 0:
 		buffs.append("• Разрядка Векторов [Сёдзи] (%d х.): Сила атаки повышена на +50%%." % int(unit.get_meta("shoji_swan_atk_turns", 0)))
@@ -643,6 +818,21 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 		var wrath_turns: int = int(unit.get_meta("inevitable_fall_wrath_turns", 0))
 		buffs.append("• Проявление Гнева (%d х.) [color=yellow](конус)[/color]: наносимый урон повышен на +30%%, но в начале своего хода персонаж теряет 1%% от макс. ХП." % wrath_turns)
 		
+	if unit.has_meta("milena_be_buff"):
+		var be_val: float = float(unit.get_meta("milena_be_buff", 0.0)) * 100.0
+		buffs.append("• Талант Милены: Эффект пробития повышен на +%.0f%%." % be_val)
+
+	if unit.has_meta("mnema_reverence_stacks") and int(unit.get_meta("mnema_reverence_stacks", 0)) > 0:
+		var mn_stk: int = int(unit.get_meta("mnema_reverence_stacks", 0))
+		buffs.append("• Почитание памяти x%d/4 [color=yellow](конус «Нити мнемы»)[/color]: наносимый урон повышен на +%d%%." % [mn_stk, mn_stk * 8])
+
+	if unit.has_meta("burned_page_turns") and int(unit.get_meta("burned_page_turns", 0)) > 0:
+		var bp_t: int = int(unit.get_meta("burned_page_turns", 0))
+		buffs.append("• Сгоревшая страница (%d х.) [color=yellow](конус)[/color]: скорость повышена на +8%%, макс. HP повышено на +15%%." % bp_t)
+
+	if unit.get_meta("light_cone_id", "") == "let_past_stay_behind":
+		buffs.append("• Пусть прошлое остаётся позади [color=yellow](конус)[/color]: Крит. урон повышен на +36%%.")
+
 	if unit.has_meta("milena_overtone_spd_active") and unit.get_meta("milena_overtone_spd_active", false):
 		buffs.append("• Бафф Обертона (Милена): Скорость повышена на 15%, Сила атаки увеличена на 30%")
 		
@@ -768,15 +958,96 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 		var s_stacks: int = int(unit.get_meta("relic_sin_stacks", 0))
 		buffs.append("• Сет Принявшего грех x%d/6 (%d х.): Крит. шанс повышен на +%d%% за потери здоровья." % [s_stacks, int(unit.get_meta("relic_sin_turns", 0)), s_stacks * 5])
 		
+	# --- ПЛАНАРНЫЕ РЕЛИКВИИ: ПАССИВНЫЕ ЭФФЕКТЫ ---
+	var dyn_cr: float = _get_dynamic_crit_rate(unit, allies)
+	var dyn_ehr: float = _get_dynamic_ehr(unit)
+
+	# 1. Другая сторона вселенной: Крит. шанс >= 70% -> +20% урон базовой атаки и навыков
+	if unit.has_meta("has_set_other_side_universe") or String(unit.get_meta("planar_set", "")) == "other_side_universe":
+		if dyn_cr >= 0.70:
+			buffs.append("• Другая сторона вселенной [Планарный сет]: Крит. шанс >= 70%% (сейчас %.0f%%) -> урон базовой атаки и навыков повышен на +20%%." % [dyn_cr * 100.0])
+
+	# 2. Сияющий Детройт: Скорость >= 120 -> +12% СА
+	if unit.has_meta("has_set_detroit") or String(unit.get_meta("planar_set", "")) == "detroit":
+		var eff_spd: float = unit.stats.get_effective_spd()
+		if eff_spd >= 120.0:
+			buffs.append("• Сияющий Детройт [Планарный сет]: Скорость >= 120 (сейчас %d) -> сила атаки повышена на +12%%." % int(eff_spd))
+
+	# 3. Краснодар - сердце апокалипсиса: Крит. шанс >= 50% -> +15% урон ульты и бонус-атак
+	if unit.has_meta("has_set_krasnodar") or String(unit.get_meta("planar_set", "")) == "krasnodar":
+		if dyn_cr >= 0.50:
+			buffs.append("• Краснодар [Планарный сет]: Крит. шанс >= 50%% (сейчас %.0f%%) -> урон сверхспособности и бонус-атак повышен на +15%%." % [dyn_cr * 100.0])
+
+	# 4. Лаборатория сгинувшего края: Скорость носителя >= 120 -> +8% СА всей пати
+	var lost_edge_count: int = 0
+	for ally in allies:
+		if ally is CombatUnit and ally.is_alive():
+			if (ally.has_meta("has_set_lost_edge") or String(ally.get_meta("planar_set", "")) == "lost_edge") and ally.stats.get_effective_spd() >= 120.0:
+				lost_edge_count += 1
+	if lost_edge_count > 0 and unit.is_ally:
+		buffs.append("• Лаборатория края [Планарный сет]: Скорость носителя >= 120 -> сила атаки всех союзников повышена на +%d%%." % [lost_edge_count * 8])
+
+	# 5. Свободный остров Япония: ШПЭ >= 50% -> +15% защиты
+	if unit.has_meta("has_set_japan_island") or String(unit.get_meta("planar_set", "")) == "japan_island":
+		if dyn_ehr >= 0.50:
+			buffs.append("• Остров Япония [Планарный сет]: ШПЭ >= 50%% (сейчас %.0f%%) -> защита повышена на +15%%." % [dyn_ehr * 100.0])
+
+	# 6. Погрязший в руинах Иркутск: стаки Подвига (+5% FUA за стак, при 5 стаках +25% КУ)
 	if unit.has_meta("relic_irkutsk_feat_stacks") and int(unit.get_meta("relic_irkutsk_feat_stacks", 0)) > 0:
 		var i_stacks: int = int(unit.get_meta("relic_irkutsk_feat_stacks", 0))
-		buffs.append("• Сет Иркутска x%d/5: урон бонус-атак повышен на +%d%%. На 5 стаках КУ повышен на +25%%." % [i_stacks, i_stacks * 5])
+		if i_stacks >= 5:
+			buffs.append("• Погрязший в руинах Иркутск [Планарный сет] (Подвиг 5/5): урон бонус-атак повышен на +25%%, крит. урон повышен на +25%%.")
+		else:
+			buffs.append("• Погрязший в руинах Иркутск [Планарный сет] (Подвиг %d/5): урон бонус-атак повышен на +%d%%. На 5 стаках КУ повышен на +25%%." % [i_stacks, i_stacks * 5])
 		
 	if unit.has_meta("relic_silhouette_spd_turns") and int(unit.get_meta("relic_silhouette_spd_turns", 0)) > 0:
 		buffs.append("• Сет Силуэта (%d х.): Скорость повышена на +20 ед. за совершение Казни." % int(unit.get_meta("relic_silhouette_spd_turns", 0)))
 		
 	if unit.has_meta("relic_bereft_spd_turns") and int(unit.get_meta("relic_bereft_spd_turns", 0)) > 0:
 		buffs.append("• Сет Исследователя отнятого будущего (%d х.): Скорость повышена на +12%%." % int(unit.get_meta("relic_bereft_spd_turns", 0)))
+
+	# 7. Сет: След из повреждённых строк (игнорирование защиты)
+	if unit.has_meta("damaged_strings_def_ignore_turns") and int(unit.get_meta("damaged_strings_def_ignore_turns", 0)) > 0:
+		buffs.append("• След из повреждённых строк (%d х.): Бинарный урон игнорирует 20%% защиты противника." % int(unit.get_meta("damaged_strings_def_ignore_turns", 0)))
+
+	# 8. Сет: Дитя умирающих звёзд (бонус урона при Зеро > 40)
+	if unit.has_meta("set_dying_stars_child_4"):
+		var cur_z: int = int(unit.get_meta("antimatter_xaeroh", 0))
+		if cur_z == 0:
+			for a in allies:
+				if a is CombatUnit and a.has_meta("antimatter_xaeroh"):
+					cur_z = maxi(cur_z, int(a.get_meta("antimatter_xaeroh", 0)))
+		if cur_z > 40:
+			buffs.append("• Дитя умирающих звёзд (4 шт.): Зеро > 40 (сейчас %d) -> наносимый урон повышен на +15%%." % cur_z)
+		else:
+			buffs.append("• Дитя умирающих звёзд (4 шт.): Зеро <= 40 (сейчас %d) -> требуется > 40 Зеро для бонуса урона +15%%." % cur_z)
+
+	# 9. Сет: Сервер в глубинах реальности (бонус скорости)
+	if unit.has_meta("server_depths_spd_turns") and int(unit.get_meta("server_depths_spd_turns", 0)) > 0:
+		buffs.append("• Сервер в глубинах реальности (%d х.): Скорость повышена на +12%%." % int(unit.get_meta("server_depths_spd_turns", 0)))
+
+	# 10. Сет: Потайные глубины Изнанки
+	if unit.is_ally:
+		if unit.has_meta("has_set_inverted_depths") or String(unit.get_meta("planar_set", "")) == "inverted_depths":
+			buffs.append("• Потайные глубины Изнанки (2 шт.): Сила Атаки повышена на +12%%.")
+		var inv_active := false
+		if unit.slot_index != 0 and (unit.has_meta("has_set_inverted_depths") or String(unit.get_meta("planar_set", "")) == "inverted_depths"):
+			var f_ally: CombatUnit = null
+			for a in allies:
+				if a is CombatUnit and a.slot_index == 0:
+					f_ally = a
+					break
+			if f_ally != null and f_ally.is_alive() and FactionSystem.have_shared_faction(unit.id, f_ally.id):
+				inv_active = true
+		elif unit.slot_index == 0:
+			for a in allies:
+				if a is CombatUnit and a.is_alive() and a != unit and a.slot_index != 0:
+					if (a.has_meta("has_set_inverted_depths") or String(a.get_meta("planar_set", "")) == "inverted_depths"):
+						if FactionSystem.have_shared_faction(unit.id, a.id):
+							inv_active = true
+							break
+		if inv_active:
+			buffs.append("• Потайные глубины Изнанки [Планарный сет]: Синергия фракции с лидером -> наносимый урон повышен на +10%%.")
 		
 	var lc_id: String = unit.get_meta("light_cone_id", "")
 	if lc_id != "":
@@ -846,6 +1117,138 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 	if unit.id == "joan":
 		var stacks := int(unit.get_meta("joan_coffee_liqueur_stacks", 0))
 		buffs.append("• Кофейный ликёр x%d/2: тратится на проведение FUA, когда атаки союзников бьют всех врагов на поле." % stacks)
+
+	# =========================================================================
+	# СТАТУСЫ И БАФФЫ ВЕЛЬЗЕВУЛ И ЛЕНСКОЙ ЯА (АНТИМАТЕРИЯ)
+	# =========================================================================
+	if unit.id == "velzebul":
+		if bool(unit.get_meta("velzebul_in_offering", false)):
+			buffs.append("• Стойка «Подношение»: базовая атака усилена (восстанавливает 5 Зеро, 0 ОН), сбор Грешных сердец.")
+		var v_hearts: int = int(unit.get_meta("velzebul_sinful_hearts", 0))
+		if v_hearts > 0:
+			buffs.append("• Грешные сердца x%d/4: Сверхспособность разблокируется при 4 сердцах (След 3: Скорость Вельзевул +%d%%)." % [v_hearts, v_hearts * 10])
+		if bool(unit.get_meta("velzebul_e_enhanced", false)):
+			buffs.append("• Усиленный Навык E (1 ОН): наносит взрывной урон и накладывает «Печать Вельзевула» на 3 хода.")
+		if unit.has_meta("velzebul_e4_spd_turns") and int(unit.get_meta("velzebul_e4_spd_turns", 0)) > 0:
+			buffs.append("• Эйдолон 4 Вельзевул (%d х.): Скорость повышена на +30%%." % int(unit.get_meta("velzebul_e4_spd_turns", 0)))
+
+	# Баффы от присутствия Вельзевул для команды:
+	if unit.is_ally:
+		var velz_team_ref: CombatUnit = null
+		for ally in allies:
+			if ally is CombatUnit and ally.id == "velzebul" and ally.is_alive():
+				velz_team_ref = ally
+				break
+		if velz_team_ref != null:
+			# След 3: +10% СА за каждое сердце союзникам Антиматерии
+			if _is_antimatter_member(unit):
+				var h_cnt: int = int(velz_team_ref.get_meta("velzebul_sinful_hearts", 0))
+				if h_cnt > 0:
+					buffs.append("• След 3 Вельзевул (Грешные сердца x%d): Сила атаки повышена на +%d%%." % [h_cnt, mini(h_cnt * 10, 40)])
+			# Талант: +5% КШ, +10% КУ всем союзникам за каждые 30 Зеро
+			var cur_z: int = int(unit.get_meta("antimatter_xaeroh", 0))
+			if cur_z == 0 and velz_team_ref.has_meta("antimatter_xaeroh"):
+				cur_z = int(velz_team_ref.get_meta("antimatter_xaeroh", 0))
+			var z_tiers: int = mini(6, int(floor(float(cur_z) / 30.0)))
+			if z_tiers > 0:
+				buffs.append("• Талант Вельзевул (%d Зеро): Крит. шанс +%d%%, Крит. урон +%d%%." % [cur_z, z_tiers * 5, z_tiers * 10])
+			if velz_team_ref.eidolon >= 6 and cur_z > 30:
+				buffs.append("• Эйдолон 6 Вельзевул (%d Зеро): Наносимый урон всех союзников +%d%%." % [cur_z, cur_z - 30])
+
+	if unit.has_meta("velzebul_ult_antimatter_dmg_turns") and int(unit.get_meta("velzebul_ult_antimatter_dmg_turns", 0)) > 0:
+		buffs.append("• Сверхспособность Вельзевул (%d х.): наносимый урон повышен на +40%%." % int(unit.get_meta("velzebul_ult_antimatter_dmg_turns", 0)))
+
+	if unit.has_meta("velzebul_tech_dmg_turns") and int(unit.get_meta("velzebul_tech_dmg_turns", 0)) > 0:
+		buffs.append("• Техника Вельзевул (%d х.): наносимый урон повышен на +15%%." % int(unit.get_meta("velzebul_tech_dmg_turns", 0)))
+
+	# Марина • Хранитель небес:
+	if unit.has_meta("marina_sk_link_turns") and int(unit.get_meta("marina_sk_link_turns", 0)) > 0:
+		var link_t: int = int(unit.get_meta("marina_sk_link_turns", 0))
+		var link_cr: float = float(unit.get_meta("marina_sk_link_crit_rate", 0.0)) * 100.0
+		var linked_target: CombatUnit = unit.get_meta("marina_sk_linked_ally", null)
+		var t_name: String = linked_target.display_name if linked_target else "Цель"
+		buffs.append("• Связь Марины (%d х., цель: %s): Крит. шанс +%.1f%% (След 1: КУ +20%%)." % [link_t, t_name, link_cr])
+	elif unit.has_meta("marina_sk_linked_by") or (unit is Memosprite and unit.owner != null and unit.owner.has_meta("marina_sk_linked_by")):
+		var marina_src: CombatUnit = unit.get_meta("marina_sk_linked_by") if unit.has_meta("marina_sk_linked_by") else unit.owner.get_meta("marina_sk_linked_by")
+		if marina_src != null and int(marina_src.get_meta("marina_sk_link_turns", 0)) > 0:
+			var link_t: int = int(marina_src.get_meta("marina_sk_link_turns", 0))
+			var link_cr: float = float(marina_src.get_meta("marina_sk_link_crit_rate", 0.0)) * 100.0
+			var e4_str := ", Э4: игнорирование защиты 18%" if marina_src.eidolon >= 4 else ""
+			buffs.append("• Под связью Марины (%d х.): Крит. шанс +%.1f%%, Крит. урон +20%%%s." % [link_t, link_cr, e4_str])
+
+	if unit.has_meta("marina_sk_elysium_zone_turns") and int(unit.get_meta("marina_sk_elysium_zone_turns", 0)) > 0:
+		buffs.append("• Зона «Элизиум» (%d х.): Все враги получают +30%% урона. При атаках союзников враг с наибольшим ХП получает доп. урон." % int(unit.get_meta("marina_sk_elysium_zone_turns", 0)))
+
+	# Раймс • Восхождение:
+	if unit.id == "rimes_ascension":
+		var c_val := float(unit.get_meta("crescendo_stacks", 0.0))
+		buffs.append("• Крещендо: %.1f%%/100%% (Сверхспособность доступна при 100%%)." % c_val)
+		var t_st := int(unit.get_meta("talent_dmg_stacks", 0))
+		if t_st > 0:
+			var t_turns := int(unit.get_meta("talent_dmg_turns", 0))
+			buffs.append("• Талант Раймса (%d х.): Наносимый урон повышен на +%d%% (стаков: %d/3)." % [t_turns, t_st * 20, t_st])
+		var r_turns := int(unit.get_meta("rimes_rupture_zone_turns", 0))
+		if r_turns > 0:
+			buffs.append("• Зона «Разрыв» (%d х.): Все враги имеют -20%% сопротивления; при Зеро > 50 даёт КУ." % r_turns)
+
+	if unit.id == "antimatter_paws" or (unit is Memosprite and (unit as Memosprite).definition != null and (unit as Memosprite).definition.id == "antimatter_paws"):
+		var ch := int((unit as Memosprite).get_charge()) if unit is Memosprite and (unit as Memosprite).charge_comp != null else 1
+		buffs.append("• Заряды Лап: %d/4 (макс. ХП +%d%%)." % [ch, (ch - 1) * 30])
+		var p_t3 := int(unit.get_meta("paws_trace3_stacks", 0))
+		if p_t3 > 0:
+			buffs.append("• След 3 Лап: Наносимый урон +%d%% (стаков: %d/6)." % [p_t3 * 30, p_t3])
+
+	if unit is Memosprite:
+		buffs.append("• Талант Эго: Крит. урон повышен на +30% + 13% от КУ Эго.")
+		if unit.has_meta("marina_sk_e6_dmg_buff_turns"):
+			buffs.append("• Эйдолон 6 Марины (1 х.): Наносимый урон духов памяти +50%.")
+
+	# Статусы Ленской ЯА
+	if unit.id == "lenskaya_antimatter":
+		var am_st: String = String(unit.get_meta("lenskaya_am_stance", "none"))
+		if am_st == "keeper":
+			buffs.append("• Форма «Хранитель Ничто»: Навык Q совершает 7 ударов с бонусом от скорости. След 1: вход даёт +1 ОН, расход Зеро даёт +5 ЭН.")
+		elif am_st == "warrior":
+			buffs.append("• Форма «Воин небытия»: Навык Q бьёт по площади и казнит врагов (<10% ХП) при выходе из изнанки.")
+		if bool(unit.get_meta("lenskaya_am_in_inverted", false)):
+			buffs.append("• Состояние «В изнанке»: полная недосягаемость для атак противников до следующего действия.")
+		if unit.has_meta("lenskaya_am_atk_buff_turns") and int(unit.get_meta("lenskaya_am_atk_buff_turns", 0)) > 0:
+			buffs.append("• Выход из изнанки (%d х.): Сила атаки повышена на +40%%." % int(unit.get_meta("lenskaya_am_atk_buff_turns", 0)))
+		if unit.has_meta("lenskaya_am_spd_buff_turns") and int(unit.get_meta("lenskaya_am_spd_buff_turns", 0)) > 0:
+			buffs.append("• Скорость Хранителя (%d х.): Скорость повышена (30%% от скорости команды)." % int(unit.get_meta("lenskaya_am_spd_buff_turns", 0)))
+
+	# Баффы Ленской ЯА союзникам
+	if unit.has_meta("lenskaya_am_team_atk_turns") and int(unit.get_meta("lenskaya_am_team_atk_turns", 0)) > 0:
+		var am_atk_f: int = int(float(unit.get_meta("lenskaya_am_team_atk_boost", 0.0)))
+		buffs.append("• Благословение Хранителя (%d х.): Сила атаки повышена на +%d ед. (30%% от СА Ленской)." % [int(unit.get_meta("lenskaya_am_team_atk_turns", 0)), am_atk_f])
+
+	if unit.has_meta("antimatter_crit_dmg_turns") and int(unit.get_meta("antimatter_crit_dmg_turns", 0)) > 0:
+		var am_cd_val: int = int(float(unit.get_meta("antimatter_crit_dmg_bonus", 0.0)) * 100.0)
+		buffs.append("• Резонанс Антиматерии (%d х.): Крит. урон повышен на +%d%% за расход Зеро." % [int(unit.get_meta("antimatter_crit_dmg_turns", 0)), am_cd_val])
+	
+	# Баффы Сангинии Ял
+	if unit.id == "sanguinia":
+		var waves := int(unit.get_meta("sanguinia_waves", 0))
+		buffs.append("• Журчание волн (%d/47 стаков): урон бонус-атак всего отряда повышен на +%d%%. На 47 продвигает сильнейшего на 100%% с +100%% к урону." % [waves, waves * 2])
+		if unit.has_meta("sanguinia_e4_atk_turns") and int(unit.get_meta("sanguinia_e4_atk_turns", 0)) > 0:
+			buffs.append("• Эйдолон 4 (%d х.): Сила атаки повышена на +40%%." % int(unit.get_meta("sanguinia_e4_atk_turns", 0)))
+		if unit.has_meta("sanguinia_e2_dmg_turns") and int(unit.get_meta("sanguinia_e2_dmg_turns", 0)) > 0:
+			buffs.append("• Эйдолон 2 (%d х.): Наносимый урон повышен на +60%%." % int(unit.get_meta("sanguinia_e2_dmg_turns", 0)))
+
+	if unit.has_meta("sanguinia_q_atk_turns") and int(unit.get_meta("sanguinia_q_atk_turns", 0)) > 0:
+		buffs.append("• Поддержка Сангинии (Навык Q) (%d х.): Сила атаки повышена на +40%%." % int(unit.get_meta("sanguinia_q_atk_turns", 0)))
+
+	if unit.has_meta("sanguinia_prep_atk_turns") and int(unit.get_meta("sanguinia_prep_atk_turns", 0)) > 0:
+		var txt := "• «Готовьтесь...» (%d х.): Сила атаки повышена на +60%%." % int(unit.get_meta("sanguinia_prep_atk_turns", 0))
+		if unit.has_meta("sanguinia_prep_ignore_def_attack"):
+			txt += " Следующая атака игнорирует 20% защиты (След 2)."
+		buffs.append(txt)
+
+	if unit.has_meta("sanguinia_tech_spd_turns") and int(unit.get_meta("sanguinia_tech_spd_turns", 0)) > 0:
+		buffs.append("• Техника Сангинии (%d х.): Скорость повышена на +15 ед." % int(unit.get_meta("sanguinia_tech_spd_turns", 0)))
+
+	if unit.has_meta("sanguinia_talent_dmg_boost"):
+		buffs.append("• Талант Сангинии (47 стаков): Урон следующей атаки повышен на +100%%.")
 	
 	# =========================================================================
 	# 2. СБОР ОСЛАБЛЕНИЙ (ДЕБАФФОВ)
@@ -894,10 +1297,15 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 	if unit.has_meta("dead_or_alive") and unit.get_meta("dead_or_alive"):
 		debuffs.append("• Живым или мёртвым: получаемый целью крит. урон +20% (дополнительно +20% при E2), крит. шанс по ней +10%.")
 		
+	if unit.has_meta("worship_turns") and int(unit.get_meta("worship_turns", 0)) > 0:
+		debuffs.append("• Поклонение (%d х.): Защита снижена на 30%%. Когда любой союзник наносит урон цели, отряд восстанавливает 3 Зеро." % int(unit.get_meta("worship_turns", 0)))
+		
 	if unit.has_meta("def_reductions"):
 		var reductions: Dictionary = unit.get_meta("def_reductions")
 		var base_def: float = float(unit.get_meta("base_def", unit.stats.def))
 		for src in reductions:
+			if src == "Поклонение":
+				continue
 			var data: Dictionary = reductions[src]
 			var turns: int = int(data.get("turns", 0))
 			if turns > 0:
@@ -922,10 +1330,10 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 			debuffs.append("• След 3 Жоана (DoT на цели): Получаемый Крит. урон [color=green]+50%[/color], входящий DoT урон [color=red]-90%[/color].")
 			
 	if unit.has_meta("isaac_crit_dmg_taken_turns") and int(unit.get_meta("isaac_crit_dmg_taken_turns", 0)) > 0:
-		debuffs.append("• Слабость к критическому урону (%d х.): получаемый критический урон увеличен на +50%%." % int(unit.get_meta("isaac_crit_dmg_taken_turns", 0)))
+		debuffs.append("• Слабость к критическому урону (%d х.): получаемый критический урон увеличен на +35%%." % int(unit.get_meta("isaac_crit_dmg_taken_turns", 0)))
 	
 	if unit.has_meta("isaac_dmg_reduce_turns") and int(unit.get_meta("isaac_dmg_reduce_turns", 0)) > 0:
-		debuffs.append("• Подавление урона (%d х.): наносимый этой целью урон снижен на −30%%." % int(unit.get_meta("isaac_dmg_reduce_turns", 0)))
+		debuffs.append("• Подавление урона (%d х.): наносимый этой целью урон снижен на −20%%." % int(unit.get_meta("isaac_dmg_reduce_turns", 0)))
 	
 	if unit.has_meta("valramors_talent_turns") and int(unit.get_meta("valramors_talent_turns", 0)) > 0:
 		var elem_id: int = int(unit.get_meta("valramors_talent_weakness", -1))
@@ -933,7 +1341,22 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 		var elem_name: String = String(CombatConstants.ELEMENT_NAMES.get(elem_id, "нет"))
 		debuffs.append("• Приказ принят (%d х.): сила атаки снижена на -15%%, скорость снижена на -8%%. Наложена уязвимость к элементу: %s." % [int(unit.get_meta("valramors_talent_turns", 0)), elem_name])
 	if unit.has_meta("valramors_ult_vuln_turns") and int(unit.get_meta("valramors_ult_vuln_turns", 0)) > 0:
-		debuffs.append("• Уязвимость Валраморса (%d х.): получаемый противником урон увеличен на +20%%." % int(unit.get_meta("valramors_ult_vuln_turns", 0)))
+		debuffs.append("• Печать бессмертия (%d х.): получаемый урон увеличен на +20%%." % int(unit.get_meta("valramors_ult_vuln_turns", 0)))
+
+	if unit.has_meta("shoji_burn_turns") and int(unit.get_meta("shoji_burn_turns", 0)) > 0:
+		var sh_turns: int = int(unit.get_meta("shoji_burn_turns", 0))
+		debuffs.append("• Горение Сёдзи (%d х.): получает периодический огненный урон в размере 120%% от СА Сёдзи в свой ход." % sh_turns)
+		
+	if unit.has_meta("shoji_fire_res_reduced_turns") and int(unit.get_meta("shoji_fire_res_reduced_turns", 0)) > 0:
+		var fr_turns: int = int(unit.get_meta("shoji_fire_res_reduced_turns", 0))
+		debuffs.append("• Огненная уязвимость (%d ход.): сопротивление Огненному урону снижено на 40%% (Сёдзи E1)." % fr_turns)
+
+	if unit.has_meta("shoji_swan_dance_vuln_turns") and int(unit.get_meta("shoji_swan_dance_vuln_turns", 0)) > 0:
+		var vuln_pct := int(float(unit.get_meta("shoji_swan_dance_vuln_pct", 0.0)) * 100.0)
+		debuffs.append("• Лебединая уязвимость (%d х.): Получаемый урон ко всем типам увеличен на +%d%%." % [int(unit.get_meta("shoji_swan_dance_vuln_turns", 0)), vuln_pct])
+
+	if unit.has_meta("shoji_swan_tech_vuln_turns") and int(unit.get_meta("shoji_swan_tech_vuln_turns", 0)) > 0:
+		debuffs.append("• Техника Сёдзи (%d х.): Получаемый урон ко всем типам увеличен на +25%%." % int(unit.get_meta("shoji_swan_tech_vuln_turns", 0)))
 	
 	if unit.has_meta("joan_dont_miss_turns") and int(unit.get_meta("joan_dont_miss_turns", 0)) > 0:
 		var turns := int(unit.get_meta("joan_dont_miss_turns", 0))
@@ -1002,22 +1425,6 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 		
 	if unit.has_meta("musienko_recorded_damage") and float(unit.get_meta("musienko_recorded_damage", 0.0)) > 0.0:
 		debuffs.append("• Записанный урон Мусиенко: накоплено %d урона. При выходе из Аннигиляции цель получит чистый урон." % int(float(unit.get_meta("musienko_recorded_damage", 0.0))))
-		
-	if unit.has_meta("shoji_burn_turns") and int(unit.get_meta("shoji_burn_turns", 0)) > 0:
-		var sh_turns: int = int(unit.get_meta("shoji_burn_turns", 0))
-		debuffs.append("• Горение Сёдзи (%d х.): получает периодический огненный урон в размере 120%% от СА Сёдзи в свой ход." % sh_turns)
-		
-	if unit.has_meta("shoji_fire_res_reduced_turns") and int(unit.get_meta("shoji_fire_res_reduced_turns", 0)) > 0:
-		var fr_turns: int = int(unit.get_meta("shoji_fire_res_reduced_turns", 0))
-		debuffs.append("• Огненная уязвимость (%d ход.): сопротивление Огненному урону снижено на 40%% (Сёдзи E1)." % fr_turns)
-
-	if unit.has_meta("shoji_swan_dance_vuln_turns") and int(unit.get_meta("shoji_swan_dance_vuln_turns", 0)) > 0:
-		var vuln_pct := int(float(unit.get_meta("shoji_swan_dance_vuln_pct", 0.0)) * 100.0)
-		debuffs.append("• Лебединая уязвимость (%d х.): Получаемый урон ко всем типам увеличен на +%d%%." % [int(unit.get_meta("shoji_swan_dance_vuln_turns", 0)), vuln_pct])
-
-	if unit.has_meta("shoji_swan_tech_vuln_turns") and int(unit.get_meta("shoji_swan_tech_vuln_turns", 0)) > 0:
-		debuffs.append("• Техника Сёдзи (%d х.): Получаемый урон ко всем типам увеличен на +30%%." % int(unit.get_meta("shoji_swan_tech_vuln_turns", 0)))
-
 	if unit.has_meta("naama_intox_stacks") and int(unit.get_meta("naama_intox_stacks", 0)) > 0:
 		var stacks: int = int(unit.get_meta("naama_intox_stacks", 0))
 		debuffs.append("• Опьянение x%d/20: в ход врага наносит DoT урон. На 20 стаках снижает защиту на 20%%." % stacks)
@@ -1035,6 +1442,18 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 		if radiance_host:
 			debuffs.append("• Сияние (%d х.): враг получает периодический огненный урон в размере 70%% от силы атаки %s." % [radiance_time, radiance_host.display_name])
 			
+	if unit.has_meta("lenskaya_radiance_enemy_turns") and int(unit.get_meta("lenskaya_radiance_enemy_turns", 0)) > 0:
+		var r_turns: int = int(unit.get_meta("lenskaya_radiance_enemy_turns", 0))
+		var is_e2: bool = bool(unit.get_meta("lenskaya_radiance_enemy_e2", false))
+		debuffs.append("• Враг Свечения (%d х.): истощение стойкости 150%% (1.5x), получаемый урон Пробития и Суперпробития +%d%%." % [r_turns, 45 if is_e2 else 30])
+
+	if unit.has_meta("traces_of_memories_turns") and int(unit.get_meta("traces_of_memories_turns", 0)) > 0:
+		var t_turns: int = int(unit.get_meta("traces_of_memories_turns", 0))
+		debuffs.append("• По следам воспоминаний (%d х.): при атаке владельца конуса восстановит ему 10 энергии, снимется и снизит защиту цели на 10%% на 1 ход." % t_turns)
+
+	if unit.has_meta("lenskaya_e6_weakness_turns") and int(unit.get_meta("lenskaya_e6_weakness_turns", 0)) > 0:
+		debuffs.append("• Мнимая уязвимость (%d х.): наложена Навыком E Ленской (E6)." % int(unit.get_meta("lenskaya_e6_weakness_turns", 0)))
+
 	if unit.has_meta("dotseva_debtor_status") and int(unit.get_meta("dotseva_debtor_status", 0)) > 0:
 		debuffs.append("• Должник (%d х.): после смерти врага Доцева получит +2 Калибровки, соседи получат урон." % int(unit.get_meta("dotseva_debtor_status", 0)))
 		
@@ -1068,9 +1487,77 @@ static func get_statuses_text(unit: CombatUnit, allies: Array = []) -> String:
 	if unit.has_meta("admin_vuln_turns") and int(unit.get_meta("admin_vuln_turns", 0)) > 0:
 		debuffs.append("• Тестовая уязвимость (%d х.): получаемый урон увеличен на +%.0f%%." % [int(unit.get_meta("admin_vuln_turns", 0)), float(unit.get_meta("admin_vuln_pct", 0.30)) * 100.0])
 
+	if unit.has_meta("sanguinia_special_guest_charges"):
+		var guest_charges := int(unit.get_meta("sanguinia_special_guest_charges", 0))
+		debuffs.append("• Особый гость (%d/12 зар.)%s: атаки союзников снижают заряды на 1. На 9, 6, 3, 0 Сангиния немедленно проводит Бонус-атаку (130%% центру, 35%% соседям). При 0 статус снимается и восстанавливается 1 Очко Навыков." % [
+			guest_charges, _src("Сангиния Ял")
+		])
+
 	for deb_msg in st.debuffs:
+		if deb_msg == "sanguinia_special_guest":
+			continue
 		debuffs.append("• %s" % deb_msg)
 
+	# Ослабления Вельзевул и Ленской ЯА на противниках:
+	if unit.has_meta("velzebul_seal_turns") and int(unit.get_meta("velzebul_seal_turns", 0)) > 0:
+		debuffs.append("• Печать Вельзевула (%d х.): атаки Навыком Q Ленской восстанавливают 15 энергии и 5 Зеро; атаки Вельзевул дают +1 ОН." % int(unit.get_meta("velzebul_seal_turns", 0)))
+
+	if unit.has_meta("velzebul_ice_quantum_res_turns") and int(unit.get_meta("velzebul_ice_quantum_res_turns", 0)) > 0:
+		debuffs.append("• Ослабление Вельзевул (%d х.): сопротивление Ледяному и Квантовому урону снижено на -20%%." % int(unit.get_meta("velzebul_ice_quantum_res_turns", 0)))
+
+	if unit.has_meta("lenskaya_am_decomp_turns") and int(unit.get_meta("lenskaya_am_decomp_turns", 0)) > 0:
+		var dec_s: int = int(unit.get_meta("lenskaya_am_decomp_stacks", 1))
+		debuffs.append("• Разложение x%d/3 (%d х.): получаемый квантовый урон увеличен на +%d%%." % [dec_s, int(unit.get_meta("lenskaya_am_decomp_turns", 0)), dec_s * 15])
+
+	if unit.has_meta("ego_reality_vuln_turns") and int(unit.get_meta("ego_reality_vuln_turns", 0)) > 0:
+		debuffs.append("• Реальность (%d х.): получаемый урон увеличен на +30%%, +5%% чистого урона от атак союзников." % int(unit.get_meta("ego_reality_vuln_turns", 0)))
+
+	if not unit.is_ally:
+		var rimes_asc_u: CombatUnit = null
+		for ally in allies:
+			if ally is CombatUnit and ally.id == "rimes_ascension" and ally.is_alive():
+				rimes_asc_u = ally
+				break
+		if rimes_asc_u != null and int(rimes_asc_u.get_meta("rimes_rupture_zone_turns", 0)) > 0:
+			debuffs.append("• Зона «Разрыв» (%d х.): Сопротивление всем типам урона снижено на -20%%." % int(rimes_asc_u.get_meta("rimes_rupture_zone_turns", 0)))
+		var am_alive := 0
+		var max_z := 0
+		for ally in allies:
+			if ally is CombatUnit and ally.is_alive():
+				if _is_antimatter_member(ally):
+					am_alive += 1
+				if ally.has_meta("antimatter_xaeroh"):
+					max_z = maxi(max_z, int(ally.get_meta("antimatter_xaeroh", 0)))
+		if am_alive >= 2 and max_z >= 20:
+			var def_s: int = int(minf(75.0, floor(float(max_z) / 20.0) * 5.0))
+			debuffs.append("• Поле Антиматерии (%d Зеро): Защита снижена на -%d%%." % [max_z, def_s])
+
+	if unit.has_meta("server_depths_vuln_sources"):
+		var s_sources: Dictionary = unit.get_meta("server_depths_vuln_sources", {})
+		var s_count: int = 0
+		for src_id in s_sources:
+			if int(s_sources[src_id]) > 0:
+				s_count += 1
+		if s_count > 0:
+			debuffs.append("• Сервер в глубинах реальности: получаемый Бинарный урон повышен на +%d%% (источников: %d)." % [s_count * 10, s_count])
+
+	if unit.has_meta("hacked_bleed_stacks") and int(unit.get_meta("hacked_bleed_stacks", 0)) > 0:
+		debuffs.append("• Кровотечение [Взлом] x%d/5 (%d х.): получает периодический физический урон в ход." % [int(unit.get_meta("hacked_bleed_stacks", 0)), int(unit.get_meta("hacked_bleed_turns", 0))])
+
+	if unit.has_meta("shoji_vz_viral_burn_turns") and int(unit.get_meta("shoji_vz_viral_burn_turns", 0)) > 0:
+		debuffs.append("• Вирусный ожог (%d х.): получает периодический урон." % int(unit.get_meta("shoji_vz_viral_burn_turns", 0)))
+
+	if unit.has_meta("cleaner_def_reduction_turns") and int(unit.get_meta("cleaner_def_reduction_turns", 0)) > 0:
+		debuffs.append("• Сенсорная перегрузка (%d х.): защита снижена на -20%%." % int(unit.get_meta("cleaner_def_reduction_turns", 0)))
+
+	if bool(unit.get_meta("shoji_vz_firewall_active", false)):
+		buffs.append("• Брандмауэр Цитадели: прямой урон снижен на 40% (DoT наносит полный урон).")
+
+	if unit.has_meta("orto_horror_symbiosis_reduction") and float(unit.get_meta("orto_horror_symbiosis_reduction", 0.0)) > 0.0:
+		buffs.append("• Ортофетаминовый симбиоз: входящий урон снижен на %.0f%% благодаря свите Заражённых." % (float(unit.get_meta("orto_horror_symbiosis_reduction", 0.0)) * 100.0))
+
+	if unit.id == "velzebul_boss" and VelzebulBoss.is_antimatter_shell_active(unit):
+		buffs.append("• Панцирь Антиматерии: входящий урон снижен на 25% (снимается физ. срезкой Катарины).")
 
 	# =========================================================================
 	# 3. ФОРМАТИРОВАНИЕ ВЫВОДА
@@ -1232,10 +1719,37 @@ static func get_unit_effective_atk_static(unit: CombatUnit, allies: Array, exclu
 	var standard_pct: float = unit.statuses.self_atk_buff_percent + unit.statuses.atk_buff_percent
 	var standard_flat: float = unit.statuses.atk_buff_flat
 	
+	# Бафф Силы Атаки Ленской при выходе из «В изнанке» (+40% на 3 хода)
+	var lenskaya_am_self_atk_pct := 0.0
+	if unit.has_meta("lenskaya_am_atk_buff_turns") and int(unit.get_meta("lenskaya_am_atk_buff_turns", 0)) > 0:
+		lenskaya_am_self_atk_pct = 0.40
+
+	# Бафф Силы Атаки команды от Навыка E «Хранитель Ничто»
+	var lenskaya_am_team_flat := 0.0
+	if unit.has_meta("lenskaya_am_team_atk_turns") and int(unit.get_meta("lenskaya_am_team_atk_turns", 0)) > 0:
+		lenskaya_am_team_flat = float(unit.get_meta("lenskaya_am_team_atk_boost", 0.0))
+
+	# Бафф Силы Атаки союзникам Антиматерии от Следа 3 Вельзевул (+10% за каждое сердце, макс +40%)
+	var velz_t3_pct := 0.0
+	for ally in allies:
+		if ally is CombatUnit and ally.id == "velzebul" and ally.is_alive():
+			if _is_antimatter_member(unit):
+				var hearts: int = int(ally.get_meta("velzebul_sinful_hearts", 0))
+				velz_t3_pct = minf(float(hearts) * 0.10, 0.40)
+	# Баффы Силы Атаки от Сангинии Ял (Навык Q, «Готовьтесь...», Эйдолон 4)
+	var sanguinia_atk_pct := 0.0
+	if unit.has_meta("sanguinia_q_atk_turns") and int(unit.get_meta("sanguinia_q_atk_turns", 0)) > 0:
+		sanguinia_atk_pct += float(unit.get_meta("sanguinia_q_atk_buff", 0.40))
+	if unit.has_meta("sanguinia_prep_atk_turns") and int(unit.get_meta("sanguinia_prep_atk_turns", 0)) > 0:
+		sanguinia_atk_pct += float(unit.get_meta("sanguinia_prep_atk_buff", 0.60))
+	if unit.has_meta("sanguinia_e4_atk_turns") and int(unit.get_meta("sanguinia_e4_atk_turns", 0)) > 0:
+		sanguinia_atk_pct += float(unit.get_meta("sanguinia_e4_atk_buff", 0.40))
 	
-	return s.atk * (1.0 + standard_pct + q_pct + faction_pct + lc_pct + lost_edge_bonus + detroit_dynamic_atk_pct + relic_atk_pct + milena_overtone_pct + lenskaya_t3_pct + joan_gold_pct + stage_partner_pct + blazing_sun_pct + valramors_debuff_pct + isaac_trace2_pct + shoji_swan_atk_pct + doceva_tears_pct + katarina_q_pct) + standard_flat + q_flat + extra_flat_atk + vika_flat + milena_flat_atk + keloist_flat_atk + galilean_flat_atk + silhouette_flat_atk
+	return s.atk * (1.0 + standard_pct + q_pct + faction_pct + lc_pct + lost_edge_bonus + detroit_dynamic_atk_pct + relic_atk_pct + milena_overtone_pct + lenskaya_t3_pct + joan_gold_pct + stage_partner_pct + blazing_sun_pct + valramors_debuff_pct + isaac_trace2_pct + shoji_swan_atk_pct + doceva_tears_pct + katarina_q_pct + lenskaya_am_self_atk_pct + velz_t3_pct + sanguinia_atk_pct) + standard_flat + q_flat + extra_flat_atk + vika_flat + milena_flat_atk + keloist_flat_atk + galilean_flat_atk + silhouette_flat_atk + lenskaya_am_team_flat
 	
 static func get_skills_text(unit: CombatUnit) -> String:
+	if unit is Memosprite:
+		return _memosprite_skills(unit as Memosprite)
 	match unit.id:
 		MarinaAbilities.ID:
 			return _marina_skills(unit.eidolon)
@@ -1301,6 +1815,18 @@ static func get_skills_text(unit: CombatUnit) -> String:
 			return _katarina_skills(unit.eidolon)
 		"dotseva_crimson_tears":
 			return _dotseva_crimson_tears_skills(unit.eidolon)
+		"lenskaya_antimatter":
+			return _lenskaya_antimatter_skills(unit.eidolon)
+		"velzebul":
+			return _velzebul_skills(unit.eidolon)
+		"marina_sky_guardian":
+			return _marina_sky_guardian_skills(unit.eidolon)
+		"lenskaya_sky_guardian":
+			return _lenskaya_sky_guardian_skills(unit.eidolon)
+		"rimes_ascension":
+			return _rimes_ascension_skills(unit.eidolon)
+		"sanguinia":
+			return _sanguinia_skills(unit.eidolon)
 			
 		"masked_silhouette":
 			return "🎭 [color=red]СИЛУЭТ В МАСКЕ (БОСС)[/color] — ХП: 120000 / 180000\n\n" + \
@@ -1323,8 +1849,79 @@ static func get_skills_text(unit: CombatUnit) -> String:
 			return _infected_skills()
 		"ortho_spore":
 			return _ortho_spore_skills()
+		"citadel_cleaner":
+			return _citadel_cleaner_skills()
+		"ortofetamin_horror":
+			return _ortofetamin_horror_skills()
+		"shoji_vz":
+			return _shoji_vz_skills()
+		"velzebul_boss":
+			return _velzebul_boss_skills()
+		"rimes_final_boss":
+			return _rimes_final_boss_skills()
+		"your_memories":
+			return _your_memories_skills()
+		"void_paws":
+			return _void_paws_skills()
 		
 	return "Нет данных о способностях."
+
+static func get_single_skill_text(unit: CombatUnit, skill_type: String) -> String:
+	if unit == null:
+		return ""
+	var full_text: String = get_skills_text(unit)
+	if full_text.is_empty() or full_text == "Нет данных о способностях.":
+		return ""
+
+	var target_char := ""
+	var start_idx := -1
+	match skill_type:
+		"basic":
+			target_char = "⚔"
+		"enhanced_basic":
+			if unit.id == "lenskaya_sky_guardian":
+				start_idx = full_text.find("🏹 [b]Усиленная базовая")
+				if start_idx == -1:
+					start_idx = full_text.find("Усиленная базовая")
+				target_char = "🏹"
+			elif "💥" in full_text:
+				target_char = "💥"
+			else:
+				target_char = "⚔"
+		"skill_q":
+			target_char = "🔷"
+		"skill_e":
+			target_char = "🔹"
+		"ult":
+			target_char = "✨"
+		_:
+			return ""
+
+	if start_idx == -1:
+		start_idx = full_text.find(target_char)
+	if start_idx == -1:
+		match skill_type:
+			"basic": start_idx = full_text.find("Базовая")
+			"enhanced_basic": start_idx = full_text.find("Усиленная")
+			"skill_q": start_idx = full_text.find("Навык Q")
+			"skill_e": start_idx = full_text.find("Навык E")
+			"ult": start_idx = full_text.find("Сверхспособность")
+		if start_idx == -1:
+			return ""
+
+	var all_markers := ["⚔", "💥", "🔷", "🔹", "✨", "💡", "💎", "⚡", "🎯", "🌙", "🌟", "💫", "🕊", "🔗", "🌌", "🌀", "•"]
+	var end_idx := full_text.length()
+	for m in all_markers:
+		if m == target_char:
+			continue
+		var m_idx := full_text.find(m, start_idx + 1)
+		if m_idx != -1 and m_idx < end_idx:
+			if skill_type == "skill_e" and m == "🔹":
+				continue
+			end_idx = m_idx
+
+	var result := full_text.substr(start_idx, end_idx - start_idx).strip_edges()
+	return result
 
 static func _marina_skills(eidolon: int) -> String:
 	return "⚔ Базовая: 80% СА по одной цели. +1 ОН, +20 ЭН.\n" + \
@@ -1425,6 +2022,85 @@ static func _infected_skills() -> String:
 	"⚡ Пассивно — Данные вируса: При поражении восполняет +4 Вектора Консоли.\n" + \
 	"💥 Нестабильный патоген: Если погибает при HP < 30%, взрывается, нанося 15% своего макс. HP соседним врагам."
 
+static func _citadel_cleaner_skills() -> String:
+	return "🤖 [color=orange]ЧИСТИЛЬЩИК ЦИТАДЕЛИ[/color] — ХП: 38000\n\n" + \
+	"⚔ Протокол стерилизации: 100% СА по одной цели.\n" + \
+	"🔷 Импульс фильтрации: 80% СА цели и по 40% СА соседям (50% шанс Горения на 2 хода).\n" + \
+	"⚡ Сенсорная перегрузка (Пассивно): DoT или Бинарный урон снижают защиту на 20% на 2 хода и задерживают ход на 15%.\n" + \
+	"💥 Взрыв ядра [Взломан]: При уничтожении взрывается, нанося 12% макс. ХП союзным врагам и накладывая Кровотечение на 2 хода (складывается до 5 раз)."
+
+static func _ortofetamin_horror_skills() -> String:
+	return "☣ [color=red]УЖАС ОРТОФЕТАМИНА (ЭЛИТНЫЙ)[/color] — ХП: 135000\n\n" + \
+	"🛡 Симбиоз с Заражёнными: Получает на 25% меньше урона за каждого живого Заражённого (до -50%).\n" + \
+	"🧬 Выброс мутагена: 60% СА по всему отряду и призыв до 2 Заражённых (1 раз в 3 хода).\n" + \
+	"💉 Ортофетаминовый впрыск: 180% СА по бойцу с наивысшей СА (Катарина) и снижение его СА на 15% на 2 хода.\n" + \
+	"💥 Химический разрыв: 120% СА цели и по 60% СА соседям."
+
+static func _shoji_vz_skills() -> String:
+	return "🖥 [color=red]СЁДЗИ ВЗ (БОСС — 2 ФАЗЫ)[/color] — ХП: 240000 / 290000\n\n" + \
+	"[color=yellow]ФАЗА 1:[/color]\n" + \
+	"🤖 Авторизация протокола: Призывает 2 Взломанных Чистильщиков Цитадели (1 раз в 3 хода).\n" + \
+	"🛡 Брандмауэр Цитадели: Пока Чистильщики живы, прямой урон снижен на 40% (DoT-урон наносит 100%).\n" + \
+	"📡 Потоковый импульс: 120% СА цели и по 60% соседям.\n" + \
+	"👾 Вирусное проникновение: 180% СА цели и Вирусный ожог (DoT 80% СА) на 2 хода.\n" + \
+	"🔄 Инверсия протокола: Атакует 2 случайные цели по 100% СА и задерживает их действие на 15%.\n\n" + \
+	"[color=yellow]ФАЗА 2:[/color]\n" + \
+	"⚡ Тотальная перезагрузка: Мгновенно восстанавливает ХП и призывает 2 Чистильщиков.\n" + \
+	"🌐 Уязвимость ядра: Получаемый Бинарный и DoT урон увеличен на +5% за каждый активный DoT на боссе (макс. +30%).\n" + \
+	"💥 Каскадный сбой (Сверхспособность): 150% СА по всем героям. Урон снижается на 10% за каждый стак Кровотечения на боссе (до -50% при 5 стаках!).\n" + \
+	"⚡ Перегрузка терминала: 140% СА цели, 70% соседям (+40% урона по ослабленным)."
+
+static func _velzebul_boss_skills() -> String:
+	return "👑 [color=red]ВЕЛЬЗЕВУЛ (БОСС — 2 ФАЗЫ)[/color] — ХП: 320000 / 400000\n\n" + \
+	"❄ Сопротивление Льду: 40% базового сопротивления Ледяному элементу.\n" + \
+	"🛡 Панцирь Антиматерии: Входящий урон снижен на 25% (снимается физ. срезкой Катарины).\n" + \
+	"💥 Нестабильность Антиматерии: При падении ХП ниже 80% и 50% наносит себе 7% макс. ХП чистым уроном (помогает снять Сломленный дух Катарины!).\n" + \
+	"[color=yellow]ФАЗА 1:[/color]\n" + \
+	"☠ Печать разложения: 200% СА по союзнику с наибольшей СА.\n" + \
+	"🌌 Дыхание Бездны: 80% СА по всему отряду.\n" + \
+	"🩸 Гнилостное расщепление: 115% СА цели, 55% соседям и срез защиты цели на -15% на 2 хода.\n\n" + \
+	"[color=yellow]ФАЗА 2 (Истинная Владычица Мух):[/color]\n" + \
+	"🌪 Рой Антиматерии: 80% СА по всему отряду.\n" + \
+	"⚡ Смертоносное жало: 200% СА по одной цели.\n" + \
+	"💥 Совершает серии из двух сокрушительных действий за ход!"
+
+static func _rimes_final_boss_skills() -> String:
+	return "👑 [color=red]РАЙМС • ФИНАЛЬНЫЙ БОСС (НЕДЕЛЬНЫЙ БОСС — 3 ФАЗЫ)[/color]\n\n" + \
+	"🛡 Недельный босс: Иммунитет к Казни и расщеплению. 40% сопротивления мнимому урону.\n" + \
+	"🌌 Тактика: Антиматерия (Ленская • Явление Антиматерии и Вельзевул).\n\n" + \
+	"[color=yellow]ФАЗА 1 (ХП: 280 000 | СА: 2100 | ЗАЩ: 1150):[/color]\n" + \
+	"⚔ Гравитационный раскол: 175% СА цели с наивысшей СА, 65% соседям (0 урона Ленской в Изнанке).\n" + \
+	"❄ Ледяное расщепление энтропии: AoE 85% СА (урон снижен на 25%, если цель ускорена Вельзевул/следом).\n" + \
+	"🌌 Сжатие анти-материи: AoE 100% СА + кража 10 Зеро (урон снижен на 20%, если Зеро > 0).\n\n" + \
+	"[color=yellow]ФАЗА 2 (ХП: 380 000 | СА: 2200 | ЗАЩ: 1250):[/color]\n" + \
+	"✨ Доступен «ХОР ЧЕЛОВЕЧЕСТВА» (Помощь на панели справа)!\n" + \
+	"🕳 Сингулярность забвения: AoE 105% СА + Зона коллапса (3 стака: -20% входящего урона).\n" + \
+	"🔀 Инверсия горизонтов: по 115% СА двум случайным союзникам.\n\n" + \
+	"[color=yellow]ФАЗА 3 (ХП: 690 000 | СА: 2380 | ЗАЩ: 1350):[/color]\n" + \
+	"🐾 Зов Бездны: призывает «Лапы Ничто» на все свободные позиции.\n" + \
+	"👑 Сверхспособность «По воле дирижёра»: Подготовка 1 ход. На 2 ход босс и все живые лапы наносят массовый урон и сжигают энергию. Уничтожение ВСЕХ лап срывает атаку и срезает 30% Защиты босса на 2 хода!\n" + \
+	"🌌 Пульсация сингулярности: AoE 90% СА (Зеро поглощает до 50% урона).\n\n" + \
+	"[color=cyan]ПОМОЩЬ: «ХОР ЧЕЛОВЕЧЕСТВА» (Фазы 2 и 3):[/color]\n" + \
+	"• 12 зарядов: +1 за ульту союзника (Каори/Катарина 1 раз за серию), +1 за пробитие босса, +1 за каждые 12 ходов отряда.\n" + \
+	"• При 12 зарядах: игрок выбирает союзника -> 100% энергии (или 12 желаний Жоана). Врагам наносится 12 ударов Чистого урона (по 10% СА + 3% макс. ХП команды за удар)."
+
+static func _your_memories_skills() -> String:
+	return "💎 [color=cyan]ТВОИ ВОСПОМИНАНИЯ (ЭЛИТНЫЙ ВРАГ — МНИМЫЙ ЭЛЕМЕНТ)[/color] — ХП: 115 000\n\n" + \
+	"Уязвимости: Квантовая, Ледяная, Электрическая.\n" + \
+	"Тактика: Вельзевул (поддержка) и Марина (керри).\n" + \
+	"❄ Пассивка «Отражение на льду»: когда герой накладывает дебафф, его Ледяной урон +15% на 3 хода.\n" + \
+	"⏳ Пассивка «Тяжесть прошлого»: СА снижена на 8% за каждый дебафф (до -32%). Если скорость ниже базовой (подавление Марины), Защита снижена на 20%.\n\n" + \
+	"[color=yellow]Способности:[/color]\n" + \
+	"⏳ Фантомный кристалл: 150% СА мнимым уроном + Оцепенение (-20% скорости на 2 хода).\n" + \
+	"⏳ Эхо забвения: AoE 90% СА мнимым уроном по всему отряду.\n" + \
+	"💎 Призма памяти: окружает себя щитом-призмой. Любая ледяная атака разбивает призму, откладывает ход врага на 25% и восстанавливает +1 Очко Навыков!"
+
+static func _void_paws_skills() -> String:
+	return "🐾 [color=purple]ЛАПА НИЧТО (СВИТА ФИНАЛЬНОГО БОССА)[/color] — ХП: 45 000\n\n" + \
+	"Уязвимости: Квантовая, Ледяная, Физическая.\n" + \
+	"🐾 Хватка Бездны: атакует случайного союзника (75% СА) и высасывает 15 энергии.\n" + \
+	"🌌 Сдерживание Зеро: за каждые 20 Зеро команды потеря энергии снижается на 5 (при 60+ Зеро высасывание полностью блокируется!), а Защита лапы падает на 10% за каждые 20 Зеро."
+
 static func _dasha_skills(eidolon: int) -> String:
 	return "⚔ Базовая: 60% СА по одной цели.
 ⚔ Усил. базовая: 160% СА цели и 90% соседям (в Танце кругов).
@@ -1480,7 +2156,7 @@ static func _lenskaya_skills(eidolon: int) -> String:
 	return "[color=yellow]⚔ Базовая атака:[/color] Наносит 110% СА. В «Жале» заменяется на Усиленную (160% центру, 60% соседям).\n\n" + \
 			"[color=yellow]🔷 Навык Q (1 ОН):[/color] Наносит 180% СА всем и замедляет на 20% на 2 хода.\n" + \
 			"В «Жале» накладывает «Награду за голову» на 1 х (3 х при Е4). Если союзник бьет эту цель, Ленская совершает FUA силой 50% СА (70% цели + 40% соседям, если союзник ударил бонус-атакой. Е1 бьет 70% по всем, Е6 бьет чистым уроном).\n\n" + \
-			"[color=yellow]🔹 Навык E (1 ОН):[/color] Потребляет все стаки Манипуляции и наносит выбранному врагу (24 * Манипуляция)% СА, и (7 * Манипуляция)% СА соседям.\n\n" + \
+			"[color=yellow]🔹 Навык E (1 ОН):[/color] Потребляет все стаки Манипуляции и наносит выбранному врагу (26 * Манипуляция)% СА, и (7 * Манипуляция)% СА соседям.\n\n" + \
 			"[color=yellow]✨ Сверхспособность (130 ЭН):[/color] 80% СА всем врагам, вход в «Жало» на 3 хода, даёт +2 Манипуляции, След 2 делает авто-выстрел по самому толстому врагу.\n\n" + \
 			"[color=cyan]💡 Талант:[/color] Любая бонус-атака даёт Ленской +1 Манипуляцию (максимум — 47). Каждый заряд до 15 даёт ей +5% крит. шанса и +3% урона FUA всей команде.\n" + \
 			"[color=cyan]След 3:[/color] Бонус-атака союзника повышает его СА на 15% на 2 хода (суммируется до 2х раз)."
@@ -1499,11 +2175,11 @@ static func _rimes_skills(eidolon: int) -> String:
 			"[color=cyan]Э2:[/color] Убийство врага дает доп. действие (1 раз за ход)."
 
 static func _isaac_skills(eidolon: int) -> String:
-	return "[color=yellow]⚔ Базовая атака:[/color] Наносит 80% СА выбранному противнику. След 3: продвигает действие Айзека на 20%.\n\n" + \
-			"[color=yellow]🔷 Навык Q (1 ОН):[/color] Наносит 90% СА всем врагам и даёт +2 стака «Теории на практике».\n" + \
-			"На 8 стаках заменяется на Улучшенный Q (0 ОН при Е2): продвигает действие союзника на 100%, увеличивает его урон на +80% на 1 ход (Е4 снимает с него все ослабления).\n\n" + \
-			"[color=yellow]🔹 Навык E (2 ОН):[/color] Наносит 120% СА цели и 60% соседям, повышая получаемый ими КУ на +50%, а наносимый ими урон падает на −30% на 3 хода.\n\n" + \
-			"[color=yellow]✨ Сверхспособность (120 ЭН):[/color] Повышает КУ союзника на +100% и скорость на +20 ед. на 2 хода.\n\n" + \
+	return "[color=yellow]⚔ Базовая атака:[/color] Наносит 70% СА выбранному противнику. След 3: продвигает действие Айзека на 20%.\n\n" + \
+			"[color=yellow]🔷 Навык Q (1 ОН):[/color] Наносит 75% СА всем врагам и даёт +2 стака «Теории на практике».\n" + \
+			"На 8 стаках заменяется на Улучшенный Q (0 ОН при Е2): продвигает действие союзника на 100%, увеличивает его урон на +50% на 1 ход (Е4 снимает с него все ослабления).\n\n" + \
+			"[color=yellow]🔹 Навык E (2 ОН):[/color] Наносит 100% СА цели и 50% соседям, повышая получаемый ими КУ на +35%, а наносимый ими урон падает на −20% на 3 хода.\n\n" + \
+			"[color=yellow]✨ Сверхспособность (120 ЭН):[/color] Повышает КУ союзника на +60% и скорость на +16 ед. на 2 хода.\n\n" + \
 			"[color=cyan]💡 Талант:[/color] Использование ульты союзниками даёт Айзеку +1 стак «Теории на практике» (макс 8). На 8 стаках Q становится Улучшенным.\n" + \
 			"[color=cyan]След 1:[/color] Урон Айзека +50%, пока союзник под его ультимейтом.\n" + \
 			"[color=cyan]След 2:[/color] Если в пати есть Сара и на Айзеке есть «Заплатка», он восстанавливает 5 энергии в начале хода."
@@ -1649,17 +2325,17 @@ static func _dasha_admin_skills(eidolon: int) -> String:
 
 static func _shoji_swan_skills(eidolon: int) -> String:
 	return "[color=cyan]🌐 БИНАРНЫЙ АДАПТЕР (СЁДЗИ • ЛЕБЕДИНОЕ ОЗЕРО):[/color] Роль зависит от позиции в отряде!\n" + \
-	"[color=yellow]• Слот 1 (ДД) — Стойка «Вирус»:[/color] Все враги получают +60% Бинарного урона. Навык Q наносит Бинарный урон 180% цели и 60% соседям. Сверхспособность наносит на 40% больше Бинарного урона. (E2: Бинарный урон союзников +50%, свой КУ +1% за Вектор).\n" + \
-	"[color=yellow]• Слот 2–4 (Саппорт / Сап-ДД) — Стойка «Танец»:[/color] В начале боя повышает Скорость всех союзников на +20%. Не-Бинарный урон союзников повышен на +30%. Любой Бинарный урон Сёдзи конвертируется в обычный урон ветра (до E6). Навык Q задерживает действие всех врагов на (Векторы/3 + 10)%, блокирует Q на 2 хода и заряжает Усиленную базовую атаку. Сверхспособность накладывает на всех врагов уязвимость ко всем типам урона на (Векторы)% [при E1: 90%] на 2 хода. След 3: пока активен Танец, передовой боец (слот 1) получает пробитие всех сопротивлений на +1% за каждые 2 ед. скорости Сёдзи выше 110 (до +25%).\n\n" + \
-	"[color=yellow]⚔ Базовая атака [Одиночная]:[/color] 100% СА урона ветра. След 1: восстанавливает 3 Вектора.\n" + \
-	"[color=cyan]⚔ Усиленная базовая [Взрывная]:[/color] 130% СА цели и 40% СА соседям. Восстанавливает 13 Векторов.\n\n" + \
-	"[color=yellow]🔷 Навык Q (1 ОН):[/color] Зависит от стойки (Вирус: Бинарный взрыв 180%/60%; Танец: Задержка действий всех врагов, перезарядка 2 хода, усиливает след. базовую).\n\n" + \
-	"[color=yellow]🔹 Навык E (1 ОН) [Групповая / Детонация]:[/color] Разблокируется при 20 Векторах на весь бой. 120% СА всем врагам Бинарным уроном. Детонирует все эффекты периодического урона (DoT) на всех противниках с силой 30%. За каждый сдетонированный ДоТ восстанавливает +1 Вектор (при E4: дополнительно +20 Векторов единоразово).\n\n" + \
-	"[color=gold]✨ Сверхспособность (130 ЭН) [Групповая]:[/color] 150% СА всем врагам уроном ветра. Во «Вирусе» урон Бинарный и на 40% выше. В «Танце» накладывает уязвимость ко всем типам урона на (Векторы)% [при E1: 90%] на 2 хода. След 2: даёт Сёдзи +20% скорости на 3 хода.\n\n" + \
+	"[color=yellow]• Слот 1 (ДД) — Стойка «Вирус»:[/color] Все враги получают +50% Бинарного урона. Навык Q наносит Бинарный урон 170% цели и 55% соседям. Сверхспособность наносит на 35% больше Бинарного урона. (E2: Бинарный урон союзников +50%, свой КУ +1% за Вектор).\n" + \
+	"[color=yellow]• Слот 2–4 (Саппорт / Сап-ДД) — Стойка «Танец»:[/color] В начале боя повышает Скорость всех союзников на +16%. Не-Бинарный урон союзников повышен на +25%. Любой Бинарный урон Сёдзи конвертируется в обычный урон ветра (до E6). Навык Q задерживает действие всех врагов на (Векторы/3 + 10)%, блокирует Q на 2 хода и заряжает Усиленную базовую атаку. Сверхспособность накладывает на всех врагов уязвимость ко всем типам урона на (Векторы * 0.75)% (до 50%) [при E1: 65%] на 2 хода. След 3: пока активен Танец, передовой боец (слот 1) получает пробитие всех сопротивлений на +1% за каждые 2 ед. скорости Сёдзи выше 110 (до +25%).\n\n" + \
+	"[color=yellow]⚔ Базовая атака [Одиночная]:[/color] 95% СА урона ветра. След 1: восстанавливает 3 Вектора.\n" + \
+	"[color=cyan]⚔ Усиленная базовая [Взрывная]:[/color] 125% СА цели и 35% СА соседям. Восстанавливает 13 Векторов.\n\n" + \
+	"[color=yellow]🔷 Навык Q (1 ОН):[/color] Зависит от стойки (Вирус: Бинарный взрыв 170%/55%; Танец: Задержка действий всех врагов, перезарядка 2 хода, усиливает след. базовую).\n\n" + \
+	"[color=yellow]🔹 Навык E (1 ОН) [Групповая / Детонация]:[/color] Разблокируется при 20 Векторах на весь бой. 115% СА всем врагам Бинарным уроном. Детонирует все эффекты периодического урона (DoT) на всех противниках с силой 30%. За каждый сдетонированный ДоТ восстанавливает +1 Вектор (при E4: дополнительно +20 Векторов единоразово).\n\n" + \
+	"[color=gold]✨ Сверхспособность (130 ЭН) [Групповая]:[/color] 145% СА всем врагам уроном ветра. Во «Вирусе» урон Бинарный и на 35% выше. В «Танце» накладывает уязвимость ко всем типам урона на (Векторы * 0.75)% (до 50%) [при E1: 65%] на 2 хода. След 2: даёт Сёдзи +20% скорости на 3 хода.\n\n" + \
 	"[color=cyan]💡 Талант «Разрядка Консоли»:[/color] При достижении 90 Векторов сбрасывает счетчик Векторов до 0 и даёт ВСЕМ союзникам +50% Силы атаки на 2 хода.\n\n" + \
 	"[color=cyan]Следы:[/color] С1: Базовая атака даёт 3 Вектора. С2: Ульта даёт Сёдзи +20% скорости на 3 хода. С3 (в Танце): ДД отряда получает до +25% пробития всех сопротивлений от скорости Сёдзи.\n\n" + \
-	"[color=purple]Эйдолоны:[/color] Е1: В Танце ульта накладывает 90% уязвимости, урон ульты +1% за Вектор. Е2: Во Вирусе Бинарный урон союзников +50%, КУ Сёдзи +1% за Вектор. Е4: Навык Е даёт +20 Векторов. Е6: Весь урон всех союзников становится Бинарным, а Бинарный урон получает стандартные баффы урона!\n\n" + \
-	"[color=orange]⚡ Техника [Атакующая]:[/color] 100% СА Бинарным уроном всем врагам на старте и накладывает +30% уязвимости ко всем типам урона на 2 хода."
+	"[color=purple]Эйдолоны:[/color] Е1: В Танце ульта накладывает 65% уязвимости, урон ульты +0.75% за Вектор. Е2: Во Вирусе Бинарный урон союзников +50%, КУ Сёдзи +1% за Вектор. Е4: Навык Е даёт +20 Векторов. Е6: Весь урон всех союзников становится Бинарным, а Бинарный урон получает стандартные баффы урона!\n\n" + \
+	"[color=orange]⚡ Техника [Атакующая]:[/color] 90% СА Бинарным уроном всем врагам на старте и накладывает +25% уязвимости ко всем типам урона на 2 хода."
 
 static func _katarina_skills(eidolon: int) -> String:
 	return "⚔ [b]Катарина[/b] — Элемент: Физический, Путь: Небытие, Фракция: Эмпирейцы\n\n" + \
@@ -1684,7 +2360,7 @@ static func _dotseva_crimson_tears_skills(eidolon: int) -> String:
 	"⚔ [b]Базовая атака[/b]: 65% СА по одной цели. (+1 ОН, +20 ЭН).\n" + \
 	"🔷 [b]Навык Q (1 ОН)[/b]: 90% СА всем врагам на поле. (+30 ЭН).\n" + \
 	"🔷 [b]Улучшенный Q (0 ОН)[/b] (во время действия Зоны): 100% СА цели, 50% соседям. Лечит Доцеву (25% СА + 200) и союзников (7% СА + 80). Цель получает +15% урона на 2 хода. След 3: >6 дебаффов дает +1 ОН. (E6: доп. чистый урон = 50% СА отряда).\n" + \
-	"🔹 [b]Навык E (2 ОН)[/b]: Зона на 3 хода. Крит. шанс выбранного союзника +20% пока активна Зона. 100% урона по выбранному союзнику и 80% по другим перенаправляются на Доцеву (+5 ЭН). (E1: +40% агро цели, экстренный хил 15% СА при ХП < 25%. E4: +30% макс. ХП союзников во время Зоны).\n" + \
+	"🔹 [b]Навык E (2 ОН)[/b]: Зона на 3 хода. Крит. шанс выбранного союзника +20% пока активна Зона. 100% урона по выбранному союзнику и 70% по другим перенаправляются на Доцеву (+5 ЭН). (E1: +40% агро цели, экстренный хил 15% СА при ХП < 25%. E4: +30% макс. ХП союзников во время Зоны).\n" + \
 	"✨ [b]Сверхспособность (100 ЭН)[/b]: 100% СА всем врагам, наносимый ими урон снижается на 30% на 2 хода. (E2: враги получают +40% урона на 2 хода).\n" + \
 	"👁 [b]Талант[/b]: Дебафф от союзника дает стак «Закрой глаза» (макс 15). Каждый стак дает +3% СА всем союзникам.\n" + \
 	"⚡ [b]Следы[/b]:\n" + \
@@ -1693,6 +2369,28 @@ static func _dotseva_crimson_tears_skills(eidolon: int) -> String:
 	"  • След 3: Улучшенный Q восстанавливает 1 ОН, если у цели > 6 дебаффов.\n" + \
 	"  (E6: Ход союзников продвигает действие Доцевой на 15%).\n" + \
 	"🎯 [b]Техника[/b]: Разворачивает защитную Зону на старте боя и восстанавливает +1 Очко навыков."
+
+static func _lenskaya_antimatter_skills(eidolon: int) -> String:
+	return "🌌 [b]Ленская • Явление антиматерии[/b] — Элемент: Квантовый, Путь: Разрушение, Фракция: Антиматерия\n\n" + \
+	"⚔ [b]Базовая атака («Без формы»)[/b]: 100% СА по одной цели. (+1 ОН, +20 ЭН). (E6: конвертируется в Квантовый Бинарный урон).\n" + \
+	"💥 [b]Усиленная базовая атака [Одиночная атака][/b] (в формах «Хранитель» и «Воин»): Наносит выбранному противнику квантовый урон, равный 120% СА. (+1 ОН, +20 ЭН). (E6: считается Бинарным уроном).\n" + \
+	"🔷 [b]Навык Q «Без формы» (1 ОН)[/b]: 110% СА главной цели, 50% СА соседям (+30 ЭН). (E6: Квантовый Бинарный урон).\n" + \
+	"🔷 [b]Навык Q «Хранитель Ничто» (30 Xaeroh)[/b]: 7 ударов квантовым уроном (1 по выбранной цели + 6 случайных отскоков по 50% СА). Каждый удар получает +1% урона за каждую единицу скорости свыше 100 (макс +175% урона). (+30 ЭН).\n" + \
+	"🔷 [b]Навык Q «Воин небытия» (30 Xaeroh)[/b]: В обычном режиме: 180% СА цели, 70% СА соседям. Если в «В изнанке» — выходит из неё (+40% СА на 3 хода) и казнит врага с ХП < 10% (не босса). Наносит 400% СА цели и 120% СА остальным врагам (+30 ЭН).\n" + \
+	"🔹 [b]Навык E «Без формы» (2 ОН)[/b]: 300% СА по одной цели (+30 ЭН).\n" + \
+	"🔹 [b]Навык E «Хранитель Ничто» (60 Xaeroh)[/b]: Повышает свою скорость на 30% от скорости всех союзников на 2 хода. Повышает СА всей команды на 30% от СА Ленской на 3 хода (+30 ЭН).\n" + \
+	"🔹 [b]Навык E «Воин небытия» (60 Xaeroh)[/b]: Входит в состояние «В изнанке» (полная недосягаемость для врагов до следующего действия). (+30 ЭН).\n" + \
+	"♻ [b]Талант «Сброс» (0 ОН)[/b]: Доступен в формах при < 30 Xaeroh. Сбрасывает Xaeroh до 0, снимает форму, продвигает действие на 100% вперед и восстанавливает 25 энергии (След 2).\n" + \
+	"✨ [b]Сверхспособность (130 ЭН)[/b] — выбор из 3 вариантов:\n" + \
+	"  1. [b]Хранитель Ничто[/b]: Переход в форму, +100 Xaeroh, +1 Очко навыков. (E6: наносит 50% СА всем врагам).\n" + \
+	"  2. [b]Воин небытия[/b]: Переход в форму, +100 Xaeroh, +1 Очко навыков. (E6: наносит 50% СА всем врагам).\n" + \
+	"  3. [b]Уничтожение сверхновой[/b]: Даёт +100 Xaeroh, затем обрушивает колоссальный луч на врага: урон равен 2.8% СА за каждую единицу Xaeroh. При 100+ Xaeroh пробивает уязвимость вне зависимости от типа. (E4: 60% СА квантового Бинарного урона всем остальным врагам. E6: сохраняет 70% Xaeroh и даёт доп. ход ульты для выбора формы).\n" + \
+	"⚡ [b]Следы[/b]:\n" + \
+	"  • След 1: Расход Xaeroh даёт +5 энергии; вход в форму восстанавливает 1 ОН.\n" + \
+	"  • След 2: Выход из форм через Талант «Сброс» восстанавливает 25 энергии.\n" + \
+	"  • След 3: Если в отряде есть участники Консоли, атаки навыком Q наносят доп. чистый урон от накопленных Векторов (20% СА за каждые 20 Векторов).\n" + \
+	"🎯 [b]Техника[/b]: В начале боя союзники получают +30 ед. Xaeroh, а Ленская входит в форму «Хранитель Ничто».\n" + \
+	"🌌 [b]Фракция Антиматерии[/b]: Общий счетчик Xaeroh (+20 на старте). Каждые 20 Xaeroh снижают защиту врагов на 5%. Траты Xaeroh повышают КУ союзников (+6% за 10 ед. на 1 ход, не складывается). При 3 союзниках призывается Чёрная дыра (казнь врагов < 7% ХП, квантовый DoT)."
 
 static func _count_enemy_debuffs(unit: CombatUnit) -> int:
 	if unit == null:
@@ -1726,4 +2424,128 @@ static func _count_enemy_debuffs(unit: CombatUnit) -> int:
 	if int(unit.get_meta("valramors_talent_turns", 0)) > 0: count += 1
 	if int(unit.get_meta("valramors_ult_vuln_turns", 0)) > 0: count += 1
 	if int(unit.get_meta("joan_dont_miss_turns", 0)) > 0: count += 1
+	if int(unit.get_meta("velzebul_seal_turns", 0)) > 0: count += 1
+	if int(unit.get_meta("velzebul_ice_quantum_res_turns", 0)) > 0: count += 1
+	if int(unit.get_meta("lenskaya_am_decomp_turns", 0)) > 0: count += 1
+	if int(unit.get_meta("ego_reality_vuln_turns", 0)) > 0: count += 1
 	return count
+
+static func _velzebul_skills(eidolon: int) -> String:
+	return "🩸 [b]Вельзевул[/b] — Элемент: Ледяной, Путь: Гармония, Фракция: Антиматерия (Базовая СКР: 113)\n\n" + \
+	"⚔ [b]Базовая атака [Одиночная атака][/b]: 100% СА ледяного урона по одной цели. (+1 ОН, +20 ЭН).\n" + \
+	"💥 [b]Усиленная базовая атака [Одиночная атака][/b] (в стойке «Подношение»): 190% СА ледяного урона по цели. Восстанавливает 5 Зеро, не генерирует и не тратит ОН (0 ОН). Даёт 1 Грешное сердце (макс 4). (+20 ЭН). (E1: +5 ЭН и +5 Зеро).\n" + \
+	"🔷 [b]Навык Q [Групповая атака] (1 ОН)[/b]: 110% СА ледяного урона всем врагам. Генерирует 15 Зеро (+30 ЭН). (E4: Скорость +30% на 2 хода).\n" + \
+	"🔹 [b]Навык E (Подношение Вельзевул) (2 ОН)[/b]: Переходит в стойку «Подношение». Базовая атака становится Усиленной до сбора 4 сердец. (+30 ЭН).\n" + \
+	"🔹 [b]Усиленный Навык E (1 ОН, Взрыв)[/b] (разблокируется навсегда при сборе 4 сердец): 110% СА главной цели, 30% СА соседям. Накладывает статус «Печать Вельзевула» на 3 хода (+30 ЭН).\n" + \
+	"🩸 [b]Печать Вельзевула[/b]: При нанесении урона цели Навыком Q союзник с макс. энергией > 240 (Ленская) восстанавливает 15 энергии и 5 Зеро (1 раз за действие).\n" + \
+	"✨ [b]Сверхспособность (140 ЭН)[/b] (требует 4 Грешных сердца): 150% СА ледяного урона всем врагам. Союзники пути Антиматерии получают +40% к урону на 2 хода. Сопротивление всех противников льду и кванту снижается на 20% на 2 хода. (E2: продвигает действие союзников Антиматерии на 100%, остальных — на 40%).\n" + \
+	"💎 [b]Талант[/b]: За каждые 30 накопленных очков Зеро всеми союзниками повышает Крит. шанс всех союзников на 5% (макс до +30%) и их Крит. урон на 10% (макс до +60%). (E6: В начале своего хода +10 Зеро; за каждую 1 ед. Зеро свыше 30 урон союзников +1%).\n" + \
+	"⚡ [b]Следы[/b]:\n" + \
+	"  • След 1: Атаки Вельзевул по цели со статусом «Печать Вельзевула» восстанавливают 1 ОН.\n" + \
+	"  • След 2: Когда любой другой союзник Антиматерии применяет Сверхспособность, его атака временно считается совершенной при наличии 80 Зеро.\n" + \
+	"  • След 3: За каждое Грешное сердце союзники Антиматерии получают +10% к Силе Атаки (макс +40%), а Вельзевул получает +10% к Скорости (макс +40%). При сборе 4 Грешных сердец макс. ХП Вельзевул повышается на 40% до конца боя.\n" + \
+	"🎯 [b]Техника (Поддержка)[/b]: В начале боя продвигает действие первого союзника в отряде (или второго, если Вельзевул на первой позиции) на 100% и восстанавливает ему 30% энергии."
+
+static func _marina_sky_guardian_skills(eidolon: int) -> String:
+	var e1 := " (Э1: множитель 36% и +1 удар)" if eidolon >= 1 else ""
+	var e2 := " (Э2: 20% урона атаки наносится Чистым уроном)" if eidolon >= 2 else ""
+	var e4 := " (Э4: атаки под связью игнорируют 18% защиты)" if eidolon >= 4 else ""
+	var e6 := " (Э6: продвигает всех духов памяти на 100% и +50% урона на 1 ход)" if eidolon >= 6 else ""
+	return "🕊 [b]Марина • Хранитель небес[/b] — Элемент: Ветряной, Путь: Память, Фракции: Хранители небес, Свечение (Базовая СКР: 105)\n\n" + \
+	"⚔ [b]Базовая атака [Одиночная атака][/b]: Наносит 100% СА ветряного урона выбранному противнику и восстанавливает Эго 5% его заряда. (+1 ОН, +20 ЭН).\n\n" + \
+	"🔷 [b]Навык Q [Поддержка] (1 ОН)[/b]: Образует связь с выбранным союзником и его духом памяти на 3 хода. Длительность связи уменьшается на 1 в конце каждого хода Марины. Каждый раз, когда связанные цели совершают атаку, их шанс крит. попадания повышается на +1.5% (макс. +25%). След 1: +20% КУ." + e4 + " (+30 ЭН).\n\n" + \
+	"🔹 [b]Навык E (2 ОН)[/b]: Призывает духа памяти «Эго». Если дух памяти уже призван, то с него снимаются все эффекты контроля и умение восстанавливает 60% от его макс. ХП. (+30 ЭН).\n\n" + \
+	"✨ [b]Сверхспособность (140 ЭН)[/b]: Восстанавливает 40% заряда Эго и создает зону «Элизиум» на 2 хода. Пока активен Элизиум, получаемый противниками урон повышается на 30%. Когда союзник атакует противника, цель с самым высоким ХП среди пораженных этой атакой получает доп. ветряной урон (не считается атакой), равный 30% СА Марины, 1 доп. раз за каждого пораженного противника. Длительность зоны уменьшается на 1 в начале каждого хода Марины." + e1 + e2 + e6 + "\n\n" + \
+	"💡 [b]Талант[/b]: Изначально скорость духа памяти Эго равна 130, а макс. ХП – 68% от макс. ХП Марины + 300. За каждые 10 ед. энергии, полученной союзниками, Эго восстанавливает 1% заряда. Действие любого другого союзного духа памяти, кроме Эго, восстанавливает Марине 8 ед. энергии (до 1 раза за ход Марины, сброс в начале хода Марины).\n\n" + \
+	"🌙 [b]Фракция «Хранители небес»[/b]: 1 участник: +5% чистого урона за каждого участника. Призывает Деву луны (СКР 60). В свой ход продвигает действия всех союзников на 40% и наносит чистый урон (7% общей СА + 2% макс. ХП союзников за каждый накопленный удар). 2 участника: духи памяти получают +8% чистого урона за участника, Дева луны восстанавливает всем союзникам 15% макс. энергии. 4 участника: действия Хранителей продвигают Деву луны на 5% и дают +2 удара.\n\n" + \
+	"🌟 [b]Фракция «Свечение»[/b]: Звёздный проводник Марина: наносимый духами памяти урон +20%, их КУ +30% ([2] активен, [3] в 1.5 раза: +30% урона, +45% КУ).\n\n" + \
+	"⚡ [b]Следы[/b]:\n" + \
+	"  • След 1: Крит. урон персонажей и их духов памяти в связи Навыка Q увеличивается на 20%.\n" + \
+	"  • След 2: В начале боя действие Марины продвигается на 30%. Во время первого призыва Эго получает 40% заряда.\n" + \
+	"  • След 3: При использовании умения «Дежавю?» Эго немедленно получает 5% заряда.\n\n" + \
+	"🎯 [b]Техника (Поддержка)[/b]: В начале боя призывает Эго без траты очков навыков."
+
+static func _memosprite_skills(sprite: Memosprite) -> String:
+	if sprite.id == "ego":
+		return "❄ [b]Дух Памяти «Эго»[/b] (Владелец: Марина • Хранитель небес)\n\n" + \
+		"⚔ [b]Навык[/b]:\n" + \
+		"  • [b]Дежавю?[/b]: Совершает 4 удара, каждый из которых наносит случайному противнику ветряной урон, равный 30% от силы атаки Эго. В конце наносит всем противникам ветряной урон, равный 90% от силы атаки Эго. След 3: +5% заряда.\n" + \
+		"  • [b]Реальность (100% Заряда)[/b]: Наносит выбранному противнику 180% СА и двум окружающим его целям 70% СА. Получаемый этими целями урон увеличивается на 30% на 2 хода, а атаки союзников по ним дополнительно наносят 5% чистого урона.\n\n" + \
+		"💡 [b]Талант[/b]:\n" + \
+		"Повышает крит. урон всех духов памяти на 13% от крит. урона Эго + 30%.\n" + \
+		"Во время своего действия Эго автоматически использует умение «Дежавю?». Если заряд достигает 100%, Эго выполняет действие немедленно и в следующем действии игрок выбирает противника для умения «Реальность»."
+	elif sprite.id == "antimatter_paws" or (sprite.definition != null and sprite.definition.id == "antimatter_paws"):
+		return _antimatter_paws_skills()
+	
+	var def := sprite.definition
+	var text := "❄ [b]Дух Памяти «%s»[/b]\n\n" % sprite.display_name
+	if def:
+		text += "⚔ [b]Навык: %s[/b]\n" % def.skill_name
+		if def.enhanced_skill_name != "":
+			text += "🌟 [b]Усиленный навык: %s (при 100%% Заряда)[/b]\n" % def.enhanced_skill_name
+		text += "💡 [b]Талант: %s[/b]\n" % def.talent_name
+	return text
+
+static func _antimatter_paws_skills() -> String:
+	return "🐾 [b]Дух Памяти «Лапы антиматерии»[/b] (Владелец: Раймс • Восхождение)\n\n" + \
+	"Базовая скорость: 165. Макс. ХП = 120% макс. ХП Раймса (+30% за каждый заряд выше 1). Перенаправляет смертельный урон с союзников на себя с множителем 300%. Недоступен для прямой атаки врагов.\n\n" + \
+	"⚔ [b]Навык: Con brio (< 4 зарядов)[/b]:\n" + \
+	"  • 40% макс. ХП Лап. 1 удар по врагу с наибольшим ХП + по 1 случайному удару за каждый накопленный заряд выше 1 по 35% макс. ХП Лап (макс. 4 удара).\n" + \
+	"🌟 [b]Усиленный навык: Sforzando (4 заряда)[/b]:\n" + \
+	"  • 3 удара по 50% макс. ХП Лап всем врагам + 4-й удар 90% макс. ХП Лап всем врагам. При наличии >= 60 Зеро тратит 20 Зеро и повторяет 4-й удар (90%). Сбрасывает заряды до 1.\n\n" + \
+	"💡 [b]Талант (Пассивный финал)[/b]:\n" + \
+	"  • При гибели или исчезновении наносит 6 ударов (E6: 9 ударов) по случайным врагам по 40% (E6: 52%) макс. ХП Лап и восстанавливает всему отряду 6% макс. ХП Лап + 400."
+
+static func _lenskaya_sky_guardian_skills(eidolon: int) -> String:
+	var e1 := " (E1: первое использование за бой тратит на 1 ОН меньше)" if eidolon >= 1 else ""
+	var e2 := " (E2: +15% урона Суперпробития, суммарно +45%)" if eidolon >= 2 else ""
+	var e4 := " (E4: восстанавливает 5 энергии)" if eidolon >= 4 else ""
+	var e6 := " (E6: накладывает Мнимую уязвимость на 2 хода перед ударом)" if eidolon >= 6 else ""
+	return "🏹 [b]Ленская • Хранитель небес[/b] — Элемент: Мнимый, Путь: Охота, Фракции: Хранители небес, Свечение (Базовая СКР: 108)\n\n" + \
+	"⚔ [b]Базовая атака [Одиночная атака][/b]: Наносит 100% СА мнимого урона выбранному противнику и истощает 10 единиц стойкости (+1 ОН, +20 ЭН).\n\n" + \
+	"🏹 [b]Усиленная базовая атака[/b]: Наносит 4 удара по 50% СА мнимого урона (суммарно 200% СА) и истощает по 10 единиц стойкости за каждый удар (суммарно 40 единиц стойкости)." + e4 + " След 3: урон Суперпробития +30% (+20 ЭН).\n\n" + \
+	"🔷 [b]Навык Q [Ослабление] (1 ОН)[/b]: Накладывает на выбранного противника статус «Враг Свечения» на 3 хода и активирует усиленную базовую атаку на 3 хода. «Враг Свечения»: теряет стойкость с эффективностью 150% (в 1.5 раза быстрее) и получает на 30% больше урона от Пробития и Суперпробития" + e2 + " (+30 ЭН).\n\n" + \
+	"💥 [b]Навык E [Одиночная атака] (2 ОН)[/b]: Наносит 300% СА мнимого урона выбранному противнику и истощает 30 единиц стойкости." + e1 + e6 + " (+30 ЭН).\n\n" + \
+	"✨ [b]Сверхспособность (110 ЭН)[/b]: Повышает собственный Эффект Пробития на 40% на 3 хода и продвигает собственное действие на 100%. След 2: если Ленская не на первом месте в отряде, первый союзник получает +40% к Эффекту Пробития на 2 хода.\n\n" + \
+	"💡 [b]Талант[/b]: Когда Ленская или другие союзники атакуют противника с пробитой уязвимостью, урон этой атаки конвертируется в 60% урона суперпробития 1 раз за действие.\n\n" + \
+	"🌙 [b]Фракция «Хранители небес»[/b]: 1 участник: +5% чистого урона за каждого участника. Призывает Деву луны (СКР 60). 2 участника: духи памяти получают +8% чистого урона, Дева луны восстанавливает 15% макс. энергии. 4 участника: продвижение Девы луны на 5% и +2 удара.\n\n" + \
+	"🌟 [b]Фракция «Свечение»[/b]: Звёздный проводник Ленская: урон пробития команды +30% ([2] активен, [3] в 1.5 раза: +45% урона пробития).\n\n" + \
+	"⚡ [b]Следы[/b]:\n" + \
+	"  • След 1: Крит. Шанс повышается на 10% от Эффекта Пробития (макс. +30%). Крит. Урон повышается на 50% от Эффекта Пробития (макс. +150%).\n" + \
+	"  • След 2: При использовании Сверхспособности, если Ленская не на первом месте в отряде, союзник на первом месте получает +40% к Эффекту Пробития на 2 хода.\n" + \
+	"  • След 3: Урон Суперпробития Усиленной базовой атаки повышается на 30%.\n\n" + \
+	"🎯 [b]Техника (Атакующая)[/b]: В начале боя наносит всем противникам 100% СА Мнимого урона и истощает 40 единиц стойкости независимо от типов уязвимостей."
+
+static func _rimes_ascension_skills(eidolon: int) -> String:
+	var e1 := " (E1: +20% урона по врагам с ХП <= 80%, +40% при ХП <= 50%)" if eidolon >= 1 else ""
+	var e2 := " (E2: +2 заряда Лап вместо 1, продвижение Лап на 50%, +30% Крещендо)" if eidolon >= 2 else ""
+	var e4 := " (E4: исходящее исцеление всего отряда +30%)" if eidolon >= 4 else ""
+	var e6 := " (E6: игнорирование уязвимостей, +20% квант. RES PEN, 9 ударов финала Лап по 52%)" if eidolon >= 6 else ""
+	return "👑 [b]Раймс • Восхождение[/b] — Элемент: Квантовый, Путь: Память, Фракции: Антиматерия, Небожители (Базовая СКР: 102, ХП: 4500)\n\n" + \
+	"⚔ [b]Базовая атака [Одиночная атака][/b]: Наносит квантовый урон, равный 100% от макс. ХП Раймса (+1 ОН, 0 ЭН).\n\n" + \
+	"🔷 [b]Навык Q (0 ОН) — Слияние [Групповая атака][/b]: Без Лап наносит 90% макс. ХП Раймса всем врагам. При наличии Лап расходует 15% текущего ХП союзников (30% у Лап) и выполняет совместную атаку (50% макс. ХП Раймса + 30% макс. ХП Лап). При Зеро >= 60 тратит 10 Зеро, увеличивает урон на 20% и восстанавливает Лапам 1 заряд.\n\n" + \
+	"🔹 [b]Навык E (2 ОН / След 1: 1 ОН) — Призыв Лап [Призыв / Восстановление][/b]: Призывает Духа Памяти «Лапы антиматерии». Если уже призван — восстанавливает 60% макс. ХП Лап, снимает все эффекты контроля и дает +1 заряд" + e2 + ".\n\n" + \
+	"✨ [b]Сверхспособность (100% Крещендо) — Зона Разрыв[/b]: Восстанавливает 10 единиц Зеро и призывает Духа Памяти «Лапы антиматерии» (если уже призваны — восстанавливает 60% их макс. ХП и дает +1 заряд). Продвигает действие Лап на 100% и создает зону «Разрыв» на 3 хода Раймса: понижает все типы сопротивлений врагов на 20%. За каждые 10 Зеро выше 50 крит. урон Раймса и Лап увеличивается на 10% (макс +60%)." + e1 + e4 + e6 + "\n\n" + \
+	"💡 [b]Талант — Симфония Антиматерии[/b]: Не накапливает обычную энергию. За каждый 1% потерянного союзниками ХП получает 1% Крещендо (шкала до 100%). При потере ХП союзником наносимый урон Раймса и Лап повышается на 20% на 3 хода (стакается до 3 раз, макс +60%).\n\n" + \
+	"⚡ [b]Следы[/b]:\n" + \
+	"  • След 1: Стоимость Навыка E снижается с 2 до 1 ОН.\n" + \
+	"  • След 2: 30% получаемого союзниками исцеления конвертируется в Крещендо (не более 12% за ход от каждого союзника).\n" + \
+	"  • След 3: За каждое применение/удар Лап их наносимый урон повышается на 10% до конца хода Лап (до 6 раз, макс +60%).\n\n" + \
+	"🎯 [b]Техника[/b]: В начале боя наносит квантовый урон 100% макс. ХП Раймса всем врагам, восстанавливает 1 ОН, дает 30% Крещендо и продвигает действие отряда на 20%."
+
+static func _sanguinia_skills(eidolon: int) -> String:
+	var e1 := " (E1: Пробитие сопротивления всех типов +18%, для усиленного Навыком Q +12%, урон бонус-атак +15%)" if eidolon >= 1 else ""
+	var e2 := " (E2: игнорирование защиты цели (15% + Журчание волн * 0.5%), при сбросе стаков +60% урона на 2 хода)" if eidolon >= 2 else ""
+	var e4 := " (E4: ульта дает +40% СА на 3 хода, игнорирует себя при выборе сильнейшего союзника)" if eidolon >= 4 else ""
+	var e6 := " (E6: множитель урона «Заселение» удвоен, бонус-атаки наносят чистый урон с +20% бонусом)" if eidolon >= 6 else ""
+	return "🍸 [b]Сангиния Ял[/b] — Элемент: Огненный, Путь: Гармония, Фракция: Обречённые (Базовая СКР: 104, СА: 1500)\n\n" + \
+	"⚔ [b]Базовая атака [Одиночная атака][/b]: Наносит 100% СА огненного урона выбранному противнику (+1 ОН, +20 ЭН).\n\n" + \
+	"🔷 [b]Навык Q [Поддержка] (1 ОН)[/b]: Продвигает действие выбранного союзника на 100% и повышает его силу атаки на 40% на 3 хода (+30 ЭН).\n\n" + \
+	"🔹 [b]Навык E [Ослабление] (2 ОН)[/b]: Помечает выбранного врага статусом «Особый гость» (12 зарядов). Каждая атака союзников (в том числе Бонус-атаки) уменьшает заряды на 1. При 9/6/3/0 зарядах Сангиния проводит Бонус-атаку: 130% СА цели и 35% СА двум соседним целям. При 0 зарядах статус снимается, а отряд восстанавливает 1 Очко Навыков (+30 ЭН).\n\n" + \
+	"✨ [b]Сверхспособность (150 ЭН) [Усиление][/b]: Создает на шкале действий «Готовьтесь...» (AV 59) и три «Заселение!» (AV 60). В свой ход «Готовьтесь...» продвигает союзника с наивысшей СА на 100%, дает ему 40 энергии, +60% СА на 1 ход и игнорирование 20% защиты на следующую атаку (След 2). В свой ход «Заселение!» наносят групповую бонус-атаку всем врагам (40% СА Сангинии), уменьшают заряды «Особого гостя» и восстанавливают Сангинии 7 энергии (След 1)." + e4 + e6 + "\n\n" + \
+	"💡 [b]Талант — «Журчание волн» [Поддержка][/b]: За каждую союзную Бонус-атаку и за Сверхспособность союзника с наибольшей СА получает 2 стака (макс 47). Каждый стак повышает урон Бонус-атак всех союзников на 2%. При 47 стаках моментально продвигает союзника с наивысшей СА на 100% и дает +100% урона следующей атаке. После действия продвинутого персонажа стаки сбрасываются до 0 (След 3: восстанавливает 1 Очко Навыков)." + e1 + e2 + "\n\n" + \
+	"⚡ [b]Следы[/b]:\n" + \
+	"  • След 1: Атаки «Заселение!» восстанавливают Сангинии 7 единиц энергии.\n" + \
+	"  • След 2: Следующая атака союзника, продвинутого «Готовьтесь...», игнорирует 20% защиты цели.\n" + \
+	"  • След 3: Когда Журчание волн сбрасывается до 0, Сангиния восстанавливает 1 Очко Навыков.\n\n" + \
+	"🎯 [b]Техника (Поддержка)[/b]: В начале следующего боя немедленно продвигает действие на 30% и повышает скорость союзника с наибольшей СА на 15 единиц на 3 хода."

@@ -36,6 +36,7 @@ static func apply_traces(unit: CombatUnit) -> void:
 static func consume_talent_hp(unit: CombatUnit, bm: BattleManager) -> void:
 	var hp_to_consume: float = unit.stats.max_hp * 0.15
 	var final_hp: float = maxf(unit.stats.hp - hp_to_consume, 1.0)
+	var actual_consumed: float = maxf(0.0, unit.stats.hp - final_hp)
 	unit.stats.hp = final_hp
 	bm.log_message("🩸 Талант Мусиенко: Потрачено 15%% ХП для активации способности.")
 	bm.unit_updated.emit(unit)
@@ -43,7 +44,7 @@ static func consume_talent_hp(unit: CombatUnit, bm: BattleManager) -> void:
 	# Каждое потребление ХП дает 1 заряд Кровавого возмездия
 	increment_retribution_stacks(unit, bm)
 	
-	bm.trigger_accepted_sin_hp_loss(unit)
+	bm.trigger_accepted_sin_hp_loss(unit, actual_consumed)
 
 # Начисление стаков Кровавого возмездия
 static func increment_retribution_stacks(unit: CombatUnit, bm: BattleManager) -> void:
@@ -61,6 +62,7 @@ static func increment_retribution_stacks(unit: CombatUnit, bm: BattleManager) ->
 
 # Срабатывание Бонус-атаки Таланта
 static func trigger_talent_fua(unit: CombatUnit, bm: BattleManager) -> void:
+	bm.start_attack_action()
 	bm.log_message("💥 ТАЛАНТ МУСИЕНКО: Кровавое возмездие накоплено! Бонус-атака по всем врагам!")
 	
 	# Исцеляет Мусиенко на 30% от его макс. ХП
@@ -80,6 +82,7 @@ static func trigger_talent_fua(unit: CombatUnit, bm: BattleManager) -> void:
 			
 	# Засчитывается в состоянии Аннигиляции бытия (проверяем преждевременный выход)
 	register_annihilation_action(unit, "TalentFUA", bm)
+	bm.finish_attack_action()
 
 # Регистрация истории ходов для проверки преждевременного выхода из Аннигиляции
 static func register_annihilation_action(attacker: CombatUnit, action_id: String, bm: BattleManager) -> void:

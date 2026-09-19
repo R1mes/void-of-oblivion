@@ -122,6 +122,18 @@ static func execute_skill_q(attacker: CombatUnit, target: CombatUnit, bm: Battle
 # НАВЫК E (Статус «Передача порчи» на союзника на 3 хода)
 static func execute_skill_e(attacker: CombatUnit, target: CombatUnit, bm: BattleManager) -> void:
 	target.set_meta("valramors_corruption_transfer", true)
+	
+	# Синхронизация статуса с духом памяти / владельцем
+	if target is Memosprite and (target as Memosprite).owner != null:
+		var owner_unit: CombatUnit = (target as Memosprite).owner
+		owner_unit.set_meta("valramors_corruption_transfer", true)
+		bm.unit_updated.emit(owner_unit)
+	elif bm != null and "memosprites" in bm:
+		for sprite in bm.memosprites:
+			if sprite != null and sprite.is_alive() and sprite.owner == target:
+				sprite.set_meta("valramors_corruption_transfer", true)
+				bm.unit_updated.emit(sprite)
+				
 	bm.log_message("🔮 Навык E: На союзника %s наложен статус «Передача порчи»!" % target.display_name)
 	bm.unit_updated.emit(target)
 	bm.gain_energy_with_err(attacker, 30.0)

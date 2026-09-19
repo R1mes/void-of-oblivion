@@ -1,13 +1,13 @@
 {
-  "latest_version": "1.3.4",
+  "latest_version": "1.7",
   "mandatory": false,
-  "changelog": "Void of Oblivion 1.3.3:\\n- Исправлена ошибка регистрации и привязки аккаунта (OPERATION_NOT_ALLOWED)\\n- Улучшена облачная синхронизация профиля и прогресса персонажей",
+  "changelog": "Void of Oblivion 1.7:\\n- Полная переработка и стабилизация обучения уровней 1-4\\n- Обучение управлению клавишами (W, Q, E, R, Space, Enter, A/D, 1-4)\\n- Исправление пробития стойкости Каори на 3 уровне\\n- Исправление анимации выпадения персонажей в гаче\\n- Полная разблокировка разделов главного меню после обучения",
   "patch": {
-    "version": "1.3.4",
-    "filename": "patch_v1.3.4.pck",
-    "download_url": "https://github.com/R1mes/void-of-oblivion/releases/download/v1.3.4/patch_v1.3.4.pck",
-    "size_bytes": 13913052,
-    "sha256": "7217472b1e5937c5d7acfe8aab999d2dbf801a9dde1dce3b552eb6b93807fdb9",
-    "signature_base64": "N/yX1lFo6zJMDehc7inCZPb5C4NvqIJIJ962vwhqhvfAv1kP5+df0a3cCqBKzI0Pxzy7zRQN/ryfBfEi4a2t1rMqrT8iyWBeOMiQDb27iG1qBggcKGRArOnRFBTmtWp7cPvKc8SPER3vt0ZodOyzog9DT29ebK8rftzW3zaFnAkYLnE95qAgdG9Wi/5jh8HdWVbdbs6JzrG9GZguvsJFcq+7COSZrDzMwjL2zH7fYPg3dk1LPV0NLzdVhM8wdCAq4wpMutyCKxIAZKLOe2WwDW4kKg2U1VaDC5sXC6x+JWt+ImTCOQyeRGzHC2S+wwUfRRFFls2xttDZAFF/r+kBAQ=="
+    "version": "1.7",
+    "filename": "patch_v1.7.pck",
+    "download_url": "https://github.com/R1mes/void-of-oblivion/releases/download/v1.7/patch_v1.7.pck",
+    "size_bytes": 14202832,
+    "sha256": "e0fd7b718a769a00fd923d655ad636eead3d470b38fa9cc880abc6ce7c7e8b2a",
+    "signature_base64": "hwlOGURYKVXTBBVQBeu0UwwNpq9dMH/PMyWZAxvOT3KG0wvLT4WI0XbGmHsDCZ0ldMnI8UbVwwdmUXJQKcP8YI8UhxiAYufFblBuBUVbE8dmkYBbGcmL151rBGRJaEp1rV+al5o0hfiOTxWg7CPMVnGGZOfiWl3WKl47SipIFYfBdK4sig6xvyGucY4BOLvN5hPEJFy7qgHcfy1jYNHxxmzLv+GJLjmPEKPf6sN8LBEVUjCH7c2HGXVDph7+KEpHBiMM8jvO4gb7eCtGCMnMkXQsUbp3BhkGcR/lPQ8w+umdeBo/QXiVA5s/N4NE9Ns9tCw/aLzHT7XKGoHFAseiPA=="
   }
 }

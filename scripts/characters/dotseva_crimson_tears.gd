@@ -218,7 +218,7 @@ static func execute_skill_e(attacker: CombatUnit, target_ally: CombatUnit, bm: B
 		bm.log_message("🩸 Эйдолон 4 Доцевой: Макс. ХП всех союзников повышено на +30%% во время действия Зоны!")
 
 	bm.gain_energy_with_err(attacker, 30.0)
-	bm.log_message("🛡 %s развернула защитную Зону на 3 хода! 100%% урона по %s и 80%% урона команды перенаправляются на Доцеву." % [attacker.display_name, target_ally.display_name])
+	bm.log_message("🛡 %s развернула защитную Зону на 3 хода! 100%% урона по %s и 70%% урона команды перенаправляются на Доцеву." % [attacker.display_name, target_ally.display_name])
 
 static func execute_ultimate(attacker: CombatUnit, bm: BattleManager) -> void:
 	attacker.energy = 0.0

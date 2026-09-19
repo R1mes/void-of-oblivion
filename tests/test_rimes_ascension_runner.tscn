@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://test_runner_rimes_ascension"]
+
+[ext_resource type="Script" path="res://tests/test_rimes_ascension.gd" id="1_test"]
+
+[node name="TestRimesAscensionRunner" type="Node"]
+script = ExtResource("1_test")

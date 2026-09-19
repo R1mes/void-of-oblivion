@@ -13,8 +13,8 @@ static func create_unit() -> CombatUnit:
 		"is_ally": false,
 		"is_elite": false,
 		"stats": {
-			"hp": 49500,
-			"atk": 1500,
+			"hp": 18000,
+			"atk": 1250, # Прежняя атака (1500) уменьшена на 250
 			"def": 600,
 			"spd": 96,
 			"crit_rate": 0.05,

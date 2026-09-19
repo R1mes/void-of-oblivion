@@ -148,7 +148,7 @@ static func execute_skill_e(attacker: CombatUnit, target: CombatUnit, bm: Battle
 	if attacker.eidolon >= 6:
 		tag = "Бонус-атака"
 		
-	var central_mult: float = float(24 * manipulation) / 100.0
+	var central_mult: float = float(26 * manipulation) / 100.0
 	var adj_mult: float = float(7 * manipulation) / 100.0
 	
 	bm.log_message("%s поглощает %d зарядов Манипуляции!" % [attacker.display_name, manipulation])

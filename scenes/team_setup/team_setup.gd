@@ -15,8 +15,21 @@ extends Control
 @onready var enemy_roster_list: VBoxContainer = %EnemyRosterList
 @onready var enemy_slots: HBoxContainer = %EnemySlots
 
-# Динамические селекторы
-var mode_option: OptionButton
+# Новые элементы управления и вкладок
+@onready var btn_back: Button = %BtnBack
+@onready var mode_option: OptionButton = %ModeOption
+@onready var admin_tabs: TabContainer = %AdminTabs
+@onready var enemy_custom_container: VBoxContainer = %EnemyCustomContainer
+@onready var enemy_preset_notice: PanelContainer = %EnemyPresetNotice
+@onready var enemy_preset_notice_label: Label = %EnemyPresetNoticeLabel
+@onready var enemy_detail_name: Label = %EnemyDetailName
+@onready var enemy_detail_desc: Label = %EnemyDetailDesc
+@onready var btn_add_selected_to_team: Button = %BtnAddSelectedToTeam
+@onready var btn_add_selected_to_enemy: Button = %BtnAddSelectedToEnemy
+@onready var btn_clear_enemies: Button = %BtnClearEnemies
+@onready var btn_preset_dummies: Button = %BtnPresetDummies
+@onready var btn_preset_boss: Button = %BtnPresetBoss
+
 var gear_overlay: ColorRect # Всплывающее окно снаряжения
 
 const TEAM_SIZE := 4
@@ -73,6 +86,36 @@ const AVAILABLE_ENEMIES = [
 		"id": "infected",
 		"name": "Заражённый",
 		"description": "Обычный враг. Уязвимости: Физический, Электрический, Ветряной. Поражение даёт +4 Вектора Консоли. При HP < 30% взрывается при гибели (15% макс. HP соседним врагам)."
+	},
+	{
+		"id": "ortofetamin_horror",
+		"name": "Ужас ортофетамина (Элита)",
+		"description": "Элитный враг. Уязвимости: Физическая, Электрическая, Ледяная. Тактика: Катарина и Доцева БС. Призывает Заражённых (Симбиоз колонии даёт до -20% урона). Наносит прицельные инъекции по сильнейшему союзнику."
+	},
+	{
+		"id": "citadel_cleaner",
+		"name": "Чистильщик Цитадели",
+		"description": "Обычный враг Цитадели. Уязвимости: Ветряная, Огненная. Тактика: Консоль и DoT. Пассивная Сенсорная перегрузка (-10% защиты и задержка от DoT/Бинарного урона). Взрывается при гибели (6% ХП и Кровотечение)."
+	},
+	{
+		"id": "shoji_vz",
+		"name": "Сёдзи ВЗ (Босс)",
+		"description": "Босс Цитадели (2 фазы). Уязвимости: Ветряная, Квантовая, Огненная. Тактика: Консоль и DoT (Сёдзи • Лебединое озеро). Брандмауэр снижает прямой урон на 10%. Во 2 фазе получает до +30% урона от каждого DoT."
+	},
+	{
+		"id": "velzebul_boss",
+		"name": "Вельзевул (Босс)",
+		"description": "Могущественный Босс Антиматерии (2 фазы). Уязвимости: Физическая, Ветряная, Квантовая (40% сопр. к Льду). Тактика: Катарина и Доцева БС. Панцирь Антиматерии, разрушительные атаки и внутренняя нестабильность ядра."
+	},
+	{
+		"id": "rimes_final_boss",
+		"name": "Раймс • Финальный босс (Недельный босс)",
+		"description": "Недельный босс (3 фазы). Уязвимости: Квантовая, Ледяная, Физическая (40% сопр. к Мнимому). Не может быть казнён или разделен. Со 2 фазы активирует Помощь «Хор Человечества». В 3 фазе призывает Лапы Ничто и готовит ультимейт «По воле дирижёра»."
+	},
+	{
+		"id": "your_memories",
+		"name": "Твои воспоминания (Элита)",
+		"description": "Элитный противник (Мнимый). Уязвимости: Квантовая, Ледяная, Электрическая. Тактика: Вельзевул и Марина. Пассивка «Отражение на льду» (+15% ледяного урона атакующему при дебаффе) и «Тяжесть прошлого»."
 	}
 ]
 
@@ -93,14 +136,12 @@ func _ready() -> void:
 	if eidolon_spin.get_parent() is Control:
 		eidolon_spin.get_parent().visible = false
 
-	# Выбор режима боя
-	var mode_hbox := HBoxContainer.new()
-	mode_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	var mode_label := Label.new()
-	mode_label.text = "Режим битвы: "
-	mode_hbox.add_child(mode_label)
+	# Кнопка возврата в главное меню
+	if btn_back:
+		btn_back.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu/main_menu.tscn"))
 
-	mode_option = OptionButton.new()
+	# Настройка селектора режимов боя
+	mode_option.clear()
 	mode_option.add_item("Свой бой (настройка врагов)", 0)
 	mode_option.set_item_metadata(0, "custom")
 	mode_option.add_item("Босс-файт (Повелитель Пустоты)", 1)
@@ -109,10 +150,6 @@ func _ready() -> void:
 	mode_option.set_item_metadata(2, "fiction")
 	mode_option.select(0)
 	mode_option.item_selected.connect(_on_mode_selected)
-	mode_hbox.add_child(mode_option)
-
-	start_button.get_parent().add_child(mode_hbox)
-	start_button.get_parent().move_child(mode_hbox, start_button.get_index())
 
 	# Восстановление экипированного снаряжения из TeamConfig с сохранением оригинальных слотов
 	if not TeamConfig.team_members.is_empty():
@@ -141,39 +178,94 @@ func _ready() -> void:
 	btn_save_team.pressed.connect(_show_save_team_dialog)
 	btn_load_team.pressed.connect(_show_load_team_dialog)
 	initiator_option.item_selected.connect(_on_initiator_changed)
+
+	# Подключение кнопок быстрого добавления и пресетов врагов
+	if btn_add_selected_to_team:
+		btn_add_selected_to_team.pressed.connect(_on_add_selected_to_team_pressed)
+	if btn_add_selected_to_enemy:
+		btn_add_selected_to_enemy.pressed.connect(_on_add_selected_to_enemy_pressed)
+	if btn_clear_enemies:
+		btn_clear_enemies.pressed.connect(_on_clear_enemies_pressed)
+	if btn_preset_dummies:
+		btn_preset_dummies.pressed.connect(_on_preset_dummies_pressed)
+	if btn_preset_boss:
+		btn_preset_boss.pressed.connect(_on_preset_boss_pressed)
+
 	_select_character(MarinaAbilities.ID)
+	_select_enemy(AVAILABLE_ENEMIES[0].id)
 
 func _on_mode_selected(index: int) -> void:
 	var mode: String = mode_option.get_item_metadata(index)
 	var is_custom: bool = (mode == "custom")
-	enemy_roster_list.get_parent().visible = is_custom
-	enemy_slots.get_parent().visible = is_custom
+	if enemy_custom_container:
+		enemy_custom_container.visible = is_custom
+	if enemy_preset_notice:
+		enemy_preset_notice.visible = not is_custom
+		if not is_custom:
+			if mode == "boss":
+				enemy_preset_notice_label.text = "👑 В режиме «Босс-файт» противником выступает Повелитель Пустоты (117 000 HP, 360 стойкости).\nВраги будут выставлены автоматически при запуске боя."
+			elif mode == "fiction":
+				enemy_preset_notice_label.text = "⚔ В режиме «Чистый вымысел» противниками выступают 15 Солдат Пустоты (волнами по 5).\nВраги будут выставлены автоматически при запуске боя."
 
-# === ЗАМЕНИТЕ МЕТОД _build_roster() ===
+func _on_add_selected_to_team_pressed() -> void:
+	if _selected_char_id.is_empty():
+		return
+	for slot in _team:
+		if slot != null and slot.id == _selected_char_id:
+			return
+	for i in TEAM_SIZE:
+		if _team[i] == null:
+			_add_to_slot(i)
+			break
+
+func _on_add_selected_to_enemy_pressed() -> void:
+	if _selected_enemy_id.is_empty():
+		return
+	for i in ENEMY_TEAM_SIZE:
+		if _enemy_team[i] == null:
+			_add_enemy_to_slot(i)
+			break
+
+func _on_clear_enemies_pressed() -> void:
+	for i in ENEMY_TEAM_SIZE:
+		_enemy_team[i] = null
+	_refresh_enemy_slots()
+
+func _on_preset_dummies_pressed() -> void:
+	for i in ENEMY_TEAM_SIZE:
+		_enemy_team[i] = {"id": "void_dummy"}
+	_refresh_enemy_slots()
+
+func _on_preset_boss_pressed() -> void:
+	_enemy_team[0] = {"id": VoidElite.ID}
+	_enemy_team[1] = null
+	_enemy_team[2] = {"id": "void_boss"}
+	_enemy_team[3] = null
+	_enemy_team[4] = {"id": VoidElite.ID}
+	_refresh_enemy_slots()
+
 func _build_roster() -> void:
 	for child in roster_list.get_children():
 		child.queue_free()
 
 	roster_list.columns = 7
-	roster_list.add_theme_constant_override("h_separation", 10)
-	roster_list.add_theme_constant_override("v_separation", 10)
+	roster_list.add_theme_constant_override("h_separation", 8)
+	roster_list.add_theme_constant_override("v_separation", 8)
 
 	for char_data in CharacterRegistry.get_available_characters():
 		var btn := Button.new()
-		# Увеличиваем размер плитки, чтобы три строки текста помещались комфортно
-		btn.custom_minimum_size = Vector2(120, 115)
+		btn.custom_minimum_size = Vector2(108, 90)
 		btn.pressed.connect(_on_roster_member_pressed.bind(char_data.id))
 		roster_list.add_child(btn)
 
-		# Создаем текстовый узел с поддержкой форматирования BBCode
 		var label := RichTextLabel.new()
 		label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE # Игнорирует клики, чтобы кнопка под ним нажималась
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		label.bbcode_enabled = true
 		
 		var elem_color_hex: String = CombatConstants.get_element_color(char_data.element).to_html(false)
 		var elem_label: String = CombatConstants.get_element_label(char_data.element)
-		label.text = "[center]\n[color=#%s][font_size=15][b]%s[/b][/font_size][/color]\n[font_size=14][b]%s[/b][/font_size]\n[color=gray][font_size=11][%s][/font_size][/color][/center]" % [
+		label.text = "[center]\n[color=#%s][font_size=14][b]%s[/b][/font_size][/color]\n[font_size=13][b]%s[/b][/font_size]\n[color=gray][font_size=11][%s][/font_size][/color][/center]" % [
 			elem_color_hex,
 			elem_label,
 			char_data.name,
@@ -205,40 +297,40 @@ func _build_team_slots() -> void:
 		var slot := _create_slot_panel(i)
 		team_slots.add_child(slot)
 
-# === ПОЛНОСТЬЮ ЗАМЕНИТЕ ЭТОТ МЕТОД В TEAM_SETUP.GD ===
 func _create_slot_panel(index: int) -> PanelContainer:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(190, 270) # Увеличена панель слота под крупные кнопки
+	panel.custom_minimum_size = Vector2(185, 210)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 6)
 	panel.add_child(vbox)
 
 	var label := Label.new()
 	label.text = "Слот %d" % (index + 1)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 14)
 	vbox.add_child(label)
 
 	var name_label := Label.new()
 	name_label.name = "NameLabel"
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 13)
 	name_label.text = "Пусто"
 	vbox.add_child(name_label)
 
-	# Все кнопки в лобби увеличены в 2 раза
 	var add_btn := Button.new()
 	add_btn.name = "AddButton"
 	add_btn.text = "+ Добавить"
-	add_btn.custom_minimum_size = Vector2(0, 55)
-	add_btn.add_theme_font_size_override("font_size", 16)
+	add_btn.custom_minimum_size = Vector2(0, 42)
+	add_btn.add_theme_font_size_override("font_size", 14)
 	add_btn.pressed.connect(_add_to_slot.bind(index))
 	vbox.add_child(add_btn)
 
 	var equip_btn := Button.new()
 	equip_btn.name = "EquipButton"
 	equip_btn.text = "🛡 Снаряжение"
-	equip_btn.custom_minimum_size = Vector2(0, 55)
-	equip_btn.add_theme_font_size_override("font_size", 16)
+	equip_btn.custom_minimum_size = Vector2(0, 42)
+	equip_btn.add_theme_font_size_override("font_size", 14)
 	equip_btn.pressed.connect(_open_equip_panel.bind(index))
 	equip_btn.visible = false 
 	vbox.add_child(equip_btn)
@@ -246,8 +338,8 @@ func _create_slot_panel(index: int) -> PanelContainer:
 	var remove_btn := Button.new()
 	remove_btn.name = "RemoveButton"
 	remove_btn.text = "Убрать"
-	remove_btn.custom_minimum_size = Vector2(0, 55)
-	remove_btn.add_theme_font_size_override("font_size", 16)
+	remove_btn.custom_minimum_size = Vector2(0, 38)
+	remove_btn.add_theme_font_size_override("font_size", 14)
 	remove_btn.pressed.connect(_remove_from_slot.bind(index))
 	vbox.add_child(remove_btn)
 
@@ -259,8 +351,10 @@ func _build_enemy_roster() -> void:
 
 	for enemy_data in AVAILABLE_ENEMIES:
 		var btn := Button.new()
-		btn.text = enemy_data.name
+		btn.custom_minimum_size = Vector2(0, 40)
+		btn.text = "👾  " + enemy_data.name
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.add_theme_font_size_override("font_size", 14)
 		btn.pressed.connect(_select_enemy.bind(enemy_data.id))
 		enemy_roster_list.add_child(btn)
 
@@ -274,31 +368,38 @@ func _build_enemy_slots() -> void:
 
 func _create_enemy_slot_panel(index: int) -> PanelContainer:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(140, 160)
+	panel.custom_minimum_size = Vector2(150, 160)
 
 	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
 	panel.add_child(vbox)
 
 	var label := Label.new()
 	label.text = "Враг %d" % (index + 1)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 14)
 	vbox.add_child(label)
 
 	var name_label := Label.new()
 	name_label.name = "NameLabel"
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 12)
 	name_label.text = "Пусто"
 	vbox.add_child(name_label)
 
 	var add_btn := Button.new()
 	add_btn.name = "AddButton"
-	add_btn.text = "Добавить"
+	add_btn.text = "+ Добавить"
+	add_btn.custom_minimum_size = Vector2(0, 36)
+	add_btn.add_theme_font_size_override("font_size", 13)
 	add_btn.pressed.connect(_add_enemy_to_slot.bind(index))
 	vbox.add_child(add_btn)
 
 	var remove_btn := Button.new()
 	remove_btn.name = "RemoveButton"
 	remove_btn.text = "Убрать"
+	remove_btn.custom_minimum_size = Vector2(0, 36)
+	remove_btn.add_theme_font_size_override("font_size", 13)
 	remove_btn.pressed.connect(_remove_enemy_from_slot.bind(index))
 	vbox.add_child(remove_btn)
 
@@ -306,24 +407,21 @@ func _create_enemy_slot_panel(index: int) -> PanelContainer:
 
 func _select_character(char_id: String) -> void:
 	_selected_char_id = char_id
-	_selected_enemy_id = "" 
-	
 	var data := CharacterRegistry.get_character(char_id)
 	if data.is_empty():
 		return
 
 	var elem_name: String = CombatConstants.get_element_name(data.element)
-	detail_name.text = "%s %s  •  %s" % [
+	detail_name.text = "%s %s  •  %s  [%s]" % [
 		CombatConstants.ELEMENT_SYMBOLS[data.element],
 		data.name,
 		elem_name,
+		_get_path_name(data.path)
 	]
 	detail_desc.text = data.description
 
 func _select_enemy(enemy_id: String) -> void:
 	_selected_enemy_id = enemy_id
-	_selected_char_id = "" 
-	
 	var selected_enemy_data := {}
 	for enemy in AVAILABLE_ENEMIES:
 		if enemy.id == enemy_id:
@@ -333,8 +431,10 @@ func _select_enemy(enemy_id: String) -> void:
 	if selected_enemy_data.is_empty():
 		return
 
-	detail_name.text = selected_enemy_data.name
-	detail_desc.text = selected_enemy_data.description
+	if enemy_detail_name:
+		enemy_detail_name.text = selected_enemy_data.name
+	if enemy_detail_desc:
+		enemy_detail_desc.text = selected_enemy_data.description
 
 func _add_to_slot(index: int) -> void:
 	if _selected_char_id.is_empty():
@@ -411,7 +511,7 @@ func _refresh_initiator_options() -> void:
 	var idx: int = 0
 	for slot in _team:
 		if slot != null:
-			if slot.id in ["pusenkov", "kaori", "shoji", "dasha", "vika", "rimes", "musienko", "joan", "joan_spirit", "isaac_admin", "shoji_swan"]:
+			if slot.id in ["pusenkov", "kaori", "shoji", "dasha", "vika", "rimes", "musienko", "joan", "joan_spirit", "isaac_admin", "shoji_swan", "lenskaya_antimatter", "lenskaya_sky_guardian", "rimes_ascension"]:
 				var data := CharacterRegistry.get_character(slot.id)
 				initiator_option.add_item(data.get("name", slot.id))
 				initiator_option.set_item_metadata(idx, slot.id)
@@ -542,6 +642,8 @@ func _open_equip_panel(index: int) -> void:
 		{"name": "Прячущийся во тьме силуэт", "id": "silhouette"},
 		{"name": "Принявший грех глава", "id": "accepted_sin"},
 		{"name": "Исследователь отнятого будущего", "id": "bereft_future"},
+		{"name": "След из повреждённых строк", "id": "damaged_strings"},
+		{"name": "Дитя умирающих звёзд", "id": "dying_stars_child"},
 	]
 	
 	var set1_select := OptionButton.new()
@@ -667,6 +769,8 @@ func _open_equip_panel(index: int) -> void:
 		{"name": "Краснодар - сердце апокалипсиса", "id": "krasnodar"},
 		{"name": "Другая сторона вселенной", "id": "other_side_universe"},
 		{"name": "Погрязший в руинах Иркутск", "id": "irkutsk"},
+		{"name": "Сервер в глубинах реальности", "id": "server_depths"},
+		{"name": "Потайные глубины Изнанки", "id": "inverted_depths"},
 	]
 	
 	var plan_select := OptionButton.new()
@@ -829,6 +933,8 @@ func _apply_relic_tooltips(opt_btn: OptionButton, is_cavern: bool) -> void:
 				"silhouette": desc = "2 части: увеличивает крит. урон на 16%.\n4 части: После того, как владелец получает атаку, его сила атаки повышается на 5% (суммируется до 5 раз). Если владелец Казнит противника, он получает 20 единиц скорости на 2 хода."
 				"accepted_sin": desc = "2 части: увеличивает макс. хп владельца на 12%. 4 части: При потере ХП владелец повышает свой крит. шанс на 5% на 1 ход. Эффект может складываться до 6 раз."
 				"bereft_future": desc = "2 части: увеличивает скорость владельца на 6%. 4 части: Когда владелец применяет Сверхспособность к союзнику (кроме себя)/союзникам, скорость всех союзников повышается на 12% на 1 ход."
+				"damaged_strings": desc = "2 части: Увеличивает Бинарный урон на 15%.\n4 части: После использования Сверхспособности Бинарный урон владельца игнорирует 20% защиты противника на 3 хода."
+				"dying_stars_child": desc = "2 части: Увеличивает крит. шанс владельца на 8%.\n4 части: Навыки Q и E владельца восстанавливают 5 единиц Зеро (если активна синергия Антиматерия 1). Если текущее Зеро > 40, увеличивает наносимый владельцем урон на 15%."
 		else:
 			match id:
 				"detroit": desc = "2 части: Повышает силу атаки владельца на 12%. Если скорость владельца выше или равна 120 ед., то его сила атаки повышается на доп. 12%."
@@ -837,6 +943,8 @@ func _apply_relic_tooltips(opt_btn: OptionButton, is_cavern: bool) -> void:
 				"krasnodar": desc = "2 части: Повышает крит. шанс владельца на 8%. Если крит. шанс владельца выше или равен 50%, то урон его сверхспособности и бонус-атаки повышается на 15%."
 				"other_side_universe": desc = "2 части: Повышает крит. шанс владельца на 12%. Если крит. шанс владельца не меньше 70%, то наносимый его базовой атакой и навыками Q и E урон повышается на 20%."
 				"irkutsk": desc = "2 части: Когда союзник выполняет бонус-атаку, владелец получает 1 ур. Статуса Подвиг, до макс. 5 ур. Каждый уровень этого статуса повышает наносимый бонус-атакой владельца урон на 5%. Когда статус Подвиг достигает 5 ур., крит. урон владельца дополнительно повышается на 25%"
+				"server_depths": desc = "2 части: Увеличивает скорость на 6%. При использовании Навыка E скорость повышается на 12% на 2 хода. Если этот Навык E наносит Бинарный урон, поражённые противники получают на 10% больше Бинарного урона на 2 хода. Этот эффект складывается только от разных источников."
+				"inverted_depths": desc = "2 части: Увеличивает силу атаки на 12%. Если владелец находится не в 1-м слоте (не 0-й индекс), и хотя бы одна фракция первого персонажа совпадает с фракцией владельца, наносимый урон обоих персонажей повышается на 10%."
 		
 		popup.set_item_tooltip(i, desc)
 
@@ -871,6 +979,7 @@ func _on_start_pressed() -> void:
 			enemies_selected.append({"id": VoidSoldier.ID, "slot_idx": i})
 
 	TeamConfig.reset()
+	TeamConfig.is_admin_battle = true
 	TeamConfig.team_members = team
 	TeamConfig.enemy_members = enemies_selected
 	TeamConfig.battle_mode = mode

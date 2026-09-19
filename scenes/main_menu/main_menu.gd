@@ -1,7 +1,11 @@
 extends Control
 
+const LenskayaAntimatterAbilities = preload("res://scripts/characters/lenskaya_antimatter.gd")
+const VelzebulAbilities = preload("res://scripts/characters/velzebul.gd")
+
 # Цены персонажей в магазине
 const SHOP_PRICES := {
+	"velzebul": 1850,
 	"marina": 1850,
 	"pusenkov": 1850,
 	"milena": 1850,
@@ -214,7 +218,7 @@ const EIDOLON_DESCRIPTIONS := {
 		"E6": "Когда союзник наносит Бинарный урон, Сара • Права администратора наносит дополнительный урон в размере 30% от своей силы атаки. За каждое срабатывание этого эффекта действие всех союзников продвигается вперед на 3%."
 	},
 	"shoji_swan": {
-		"E1": "В «Танце» Сверхспособность накладывает 90% уязвимости ко всем типам урона, а её урон растет на +1% за Вектор.",
+		"E1": "В «Танце» Сверхспособность накладывает 65% уязвимости ко всем типам урона, а её урон растет на +0.75% за Вектор.",
 		"E2": "В «Вирусе» Бинарный урон союзников +50%, а КУ Сёдзи растет на +1% за Вектор.",
 		"E3": "Увеличивает урон и уровни Базовой атаки и Навыков на 20%.",
 		"E4": "Навык E дополнительно генерирует +20 Векторов Консоли.",
@@ -236,6 +240,46 @@ const EIDOLON_DESCRIPTIONS := {
 		"E4": "Пока действует защитная Зона Навыка E, максимальное ХП всех союзников повышается на 30%.",
 		"E5": "Повышает уровень Сверхспособности и Таланта на 2.",
 		"E6": "Ходы союзников продвигают действие Доцевой на 15%. Улучшенный Q наносит дополнительный чистый урон (50% общей СА отряда)."
+	},
+	"lenskaya_antimatter": {
+		"E1": "В начале хода любого союзника восстанавливает 3 ед. Xaeroh. Когда союзник применяет Сверхспособность, действие Ленской продвигается вперёд на 15%.",
+		"E2": "При атаке по одиночной цели игнорирует 20% сопротивления квантовому урону. Атаки накладывают «Разложение» на 2 хода (+30% квант. уязвимости, по элите и боссам +60%). По целям под «Разложением» любая атака персонажа дополнительно наносит 1 удар бинарным уроном (20% СА).",
+		"E3": "Повышает уровень Базовой атаки и Навыков на 20%.",
+		"E4": "Использование «Уничтожения сверхновой» наносит всем остальным противникам 60% СА квантового Бинарного урона. Урон Бинарных атак повышается на 30%.",
+		"E5": "Повышает уровень Таланта и Сверхспособности на 20%.",
+		"E6": "Базовая атака и Навык Q «Без формы» конвертируют свой урон в Квантовый Бинарный урон. Вход в любую форму считается нанесением урона сверхспособностью (50% СА). При использовании «Уничтожение сверхновой» расходуется лишь 30% Xaeroh, а персонаж получает дополнительный ход Сверхспособности для выбора формы."
+	},
+	"velzebul": {
+		"E1": "При вступлении в бой сразу переходит в стойку «Подношение Вельзевул». При получении Грешного сердца дополнительно восстанавливает 5 ед. энергии и накапливает 5 Зеро.",
+		"E2": "Сверхспособность продвигает действие всех союзников пути Антиматерии на 100%, а других союзников — на 40%.",
+		"E3": "Повышает уровень Базовой атаки и Навыков на 2.",
+		"E4": "Применение Навыка Q повышает Скорость Вельзевул на 30% на 2 хода.",
+		"E5": "Повышает уровень Сверхспособности и Таланта на 2.",
+		"E6": "В начале каждого своего хода получает +10 Зеро. За каждую 1 ед. Зеро свыше 30, все союзники наносят на 1% больше урона."
+	},
+	"marina_sky_guardian": {
+		"E1": "Сверхспособность накладывает зону «Элизиум» немедленно при использовании без задержки. Время действия зоны продлевается на 1 ход (всего 3 хода).",
+		"E2": "В зоне «Элизиум» урон по связанному противнику дополнительно наносит 30% от нанесенного урона в виде чистого урона.",
+		"E3": "Повышает уровень Базовой атаки и Навыков на 2.",
+		"E4": "Когда союзник совершает действие, связанный с ним дух памяти получает +10% к полоске заряда.",
+		"E5": "Повышает уровень Сверхспособности и Таланта на 2.",
+		"E6": "Связанный союзник и его дух памяти наносят на 50% больше урона."
+	},
+	"lenskaya_sky_guardian": {
+		"E1": "Первое использование Навыка E за бой тратит на 1 Очко Навыков меньше.",
+		"E2": "Статус «Враг Свечения» дополнительно увеличивает получаемый противником урон Суперпробития на 15% (суммарно 45% для всех союзников).",
+		"E3": "Повышает уровень Базовой атаки и Навыков на 2.",
+		"E4": "Усиленная базовая атака восстанавливает 5 единиц энергии.",
+		"E5": "Повышает уровень Сверхспособности и Таланта на 2.",
+		"E6": "Перед нанесением урона Навыком E накладывает на цель Мнимую уязвимость на 2 хода (без снижения сопротивления)."
+	},
+	"rimes_ascension": {
+		"E1": "Урон Лап антиматерии по противникам с текущим здоровьем <= 80% повышается на 20%, а по противникам с текущим здоровьем <= 50% — на 40%.",
+		"E2": "Использование Навыка E дополнительно накапливает +2 заряда Лап (вместо +1), продвигает их действие вперед на 50% и дает 30% шкалы Крещендо.",
+		"E3": "Повышает уровень Базовой атаки и Навыков на 2.",
+		"E4": "Исходящее исцеление по всем союзникам повышается на 30%.",
+		"E5": "Повышает уровень Сверхспособности и Таланта на 2.",
+		"E6": "Все атаки Раймса и Лап истощают стойкость врагов независимо от типа уязвимости и обладают +20% квантового пробития сопротивления (RES PEN). При гибели или исчезновении Лап предсмертная серия ударов совершает 9 ударов (вместо 6), а множитель каждого удара повышается до 52% макс. ХП Лап (вместо 40%)."
 	}
 }
 
@@ -255,12 +299,16 @@ const RELIC_DESCRIPTIONS := {
 	"silhouette": "👤 [2 ч]: Крит. урон +16%.\n👤 [4 ч]: Получение удара дает +5% СА (макс 5). Совершение Казни дает +20 Скорости на 2 хода.",
 	"accepted_sin": "🩸 [2 ч]: Макс. ХП +12%.\n🩸 [4 ч]: При потере здоровья Крит. шанс повышается на +5% на 1 ход (макс 6 стаков / +30%).",
 	"bereft_future": "👟 [2 ч]: Скорость +6%.\n👟 [4 ч]: При ульте на союзника скорость всей пати повышается на +12% на 1 ход.",
+	"damaged_strings": "💾 [2 ч]: Бинарный урон +15%.\n💾 [4 ч]: После использования Сверхспособности Бинарный урон игнорирует 20% защиты врага на 3 хода.",
+	"dying_stars_child": "🌌 [2 ч]: Крит. шанс +8%.\n🌌 [4 ч]: Навыки Q и E восстанавливают +5 Зеро (при синергии Антиматерия 1). Если Зеро > 40, урон +15%.",
 	"detroit": "🌆 [2 ч]: Сила атаки +12%. Если СКР >= 120, сила атаки дополнительно повышается на +12% (всего +24%).",
 	"lost_edge": "🔬 [2 ч]: Макс. ХП +12%. Если СКР >= 120, сила атаки всех союзников повышается на +8%.",
 	"japan_island": "🗾 [2 ч]: Защита +15%. Если ШПЭ >= 50%, защита дополнительно повышается на +15%.",
 	"krasnodar": "☀ [2 ч]: Крит. шанс +8%. Если КШ >= 50%, урон Сверхспособности и бонус-атак повышается на +15%.",
 	"other_side_universe": "🌌 [2 ч]: Крит. шанс +12%. Если КШ >= 70%, урон базовой атаки и навыков повышается на +20%.",
-	"irkutsk": "🧊 [2 ч]: Бонус-атака союзника дает стак Подвига (+5% урона FUA). При 5 стаках КУ +25%."
+	"irkutsk": "🧊 [2 ч]: Бонус-атака союзника дает стак Подвига (+5% урона FUA). При 5 стаках КУ +25%.",
+	"server_depths": "🖥 [2 ч]: Скорость +6%. При Навыке E скорость +12% на 2 хода. Если Навык E Бинарный, враги получают на 10% больше Бинарного урона на 2 хода (стакается от разных источников).",
+	"inverted_depths": "🌀 [2 ч]: Сила атаки +12%. Если не в 1-м слоте и фракция совпадает с 1-м персонажем — наносимый урон обоих повышается на +10%."
 }
 
 # UI Контейнеры экранов
@@ -356,7 +404,9 @@ var db_tip_text: RichTextLabel
 # Элементы обучения в Главном Меню
 var is_menu_tutorial: bool = false
 var menu_tut_step: int = 0
-var menu_tut_overlay: ColorRect
+const TutorialGuideOverlayScript = preload("res://scripts/ui/tutorial_guide_overlay.gd")
+var menu_guide_overlay: Control = null
+var menu_tut_overlay: Control = null
 var menu_tut_panel: PanelContainer
 var menu_tut_label: RichTextLabel
 var menu_tut_btn: Button
@@ -764,9 +814,11 @@ func _build_ui() -> void:
 	# 3. Добыча реликвий
 	btn_menu_relics = _create_hub_card("relics", "🏺", "ДОБЫЧА РЕЛИКВИЙ", "Пещеры коррозии & Планары", hub_grid)
 	btn_menu_relics.pressed.connect(func():
+		if is_menu_tutorial and menu_tut_step == 2:
+			menu_tut_step = 201
 		_refresh_relic_farming_ui()
 		_show_screen("relic_farming")
-		if is_menu_tutorial and menu_tut_step == 2:
+		if is_menu_tutorial and menu_tut_step == 201:
 			_run_menu_tut_step(201)
 	)
 
@@ -890,8 +942,8 @@ func _create_hub_card(btn_id: String, icon_text: String, title_text: String, sub
 	btn.add_theme_stylebox_override("pressed", sb_pressed)
 
 	var sb_disabled := StyleBoxFlat.new()
-	sb_disabled.bg_color = Color(0.06, 0.07, 0.10, 0.80)
-	sb_disabled.border_color = Color(0.16, 0.18, 0.24, 0.50)
+	sb_disabled.bg_color = Color(0.03, 0.04, 0.06, 0.95)
+	sb_disabled.border_color = Color(0.10, 0.12, 0.16, 0.40)
 	sb_disabled.set_border_width_all(1)
 	sb_disabled.set_corner_radius_all(14)
 	btn.add_theme_stylebox_override("disabled", sb_disabled)
@@ -902,6 +954,7 @@ func _create_hub_card(btn_id: String, icon_text: String, title_text: String, sub
 	content.add_theme_constant_override("separation", 3)
 	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(content)
+	btn.set_meta("card_content_node", content)
 
 	var icon_lbl := Label.new()
 	icon_lbl.text = icon_text
@@ -931,6 +984,14 @@ func _create_hub_card(btn_id: String, icon_text: String, title_text: String, sub
 
 	parent.add_child(btn)
 	return btn
+
+func _set_hub_card_disabled(btn: Button, is_disabled: bool) -> void:
+	if not btn or not is_instance_valid(btn):
+		return
+	btn.disabled = is_disabled
+	var content: Control = btn.get_meta("card_content_node", null)
+	if content and is_instance_valid(content):
+		content.modulate = Color(0.24, 0.26, 0.32, 0.40) if is_disabled else Color(1.0, 1.0, 1.0, 1.0)
 
 func _create_currency_pill(icon: String, initial_val: String, text_color: Color, parent: Control) -> Label:
 	var pill := PanelContainer.new()
@@ -1097,8 +1158,8 @@ func _show_screen(screen_name: String) -> void:
 			var title_lbl: Label = btn_menu_relics.get_meta("card_title_lbl", null)
 			var icon_lbl: Label = btn_menu_relics.get_meta("card_icon_lbl", null)
 			var sub_lbl: Label = btn_menu_relics.get_meta("card_sub_lbl", null)
-			if TeamConfig.current_level_progress < 5:
-				btn_menu_relics.disabled = true
+			if TeamConfig.current_level_progress < 5 and not TeamConfig.menu_tutorial_completed:
+				_set_hub_card_disabled(btn_menu_relics, true)
 				btn_menu_relics.text = "🔒 Добыча реликвий (с 5 ур.)"
 				if title_lbl: title_lbl.text = "ДОБЫЧА РЕЛИКВИЙ"
 				if icon_lbl: icon_lbl.text = "🔒"
@@ -1109,13 +1170,19 @@ func _show_screen(screen_name: String) -> void:
 				if icon_lbl: icon_lbl.text = "🏺"
 				if sub_lbl: sub_lbl.text = "Пещеры коррозии & Планары"
 				if not is_menu_tutorial:
-					btn_menu_relics.disabled = false
+					_set_hub_card_disabled(btn_menu_relics, false)
 		if hub_overview_panel:
 			hub_overview_panel.visible = not is_menu_tutorial
 			if not is_menu_tutorial:
 				_refresh_hub_overview()
 		if not TeamConfig.menu_tutorial_completed and not is_menu_tutorial:
 			_lock_hub_buttons(true)
+		elif not is_menu_tutorial:
+			_lock_hub_buttons(false)
+
+		# Кнопка Уровней ВСЕГДА доступна в хабе вне обучения в меню!
+		if not is_menu_tutorial:
+			_set_hub_card_disabled(btn_menu_levels, false)
 		
 	_update_coins_display()
 	
@@ -1458,6 +1525,8 @@ func _create_dummy_unit_for_db(char_id: String) -> CombatUnit:
 		"shoji_swan": return ShojiSwanAbilities.create_unit(0)
 		"katarina": return KatarinaAbilities.create_unit(0)
 		"dotseva_crimson_tears": return DotsevaCrimsonTearsAbilities.create_unit(0)
+		"lenskaya_antimatter": return LenskayaAntimatterAbilities.create_unit(0)
+		"velzebul": return VelzebulAbilities.create_unit(0)
 		
 	return null
 
@@ -1633,6 +1702,18 @@ func _get_db_recommendation(char_id: String, type: String) -> String:
 				"cones": return "• [color=cyan]История, вымоченная в крови[/color], [color=cyan]Первые минуты войны[/color], [color=cyan]Начало новой жизни[/color]"
 				"relics": return "• [color=lightgreen]Обитатель гибнущей планеты[/color], [color=lightgreen]Исследователь отнятого будущего[/color]"
 				"tip": return "💡 [i]Поддерживайте защитную Зону Навыка E активной, чтобы перенаправлять урон с союзников и бесплатно применять Улучшенный Навык Q для исцеления всей команды![/i]"
+		"lenskaya_antimatter":
+			match type:
+				"allies": return "• [color=gold]Вика[/color], [color=gold]Раймс[/color], [color=gold]Ленская[/color], [color=gold]Вельзевул[/color] (Фракция Антиматерия)"
+				"cones": return "• [color=cyan]Падение мира неизбежно[/color], [color=cyan]Рубеж Бытия[/color], [color=cyan]Апокалипсис[/color]"
+				"relics": return "• [color=lightgreen]Истинный родоначальник хаоса[/color], [color=lightgreen]Сияющий Детройт[/color]"
+				"tip": return "💡 [i]Накапливайте Xaeroh для сокрушительного удара «Уничтожения сверхновой». В стойке «Воин небытия» используйте Навык E для ухода в Изнанку и последующей казни врагов Навыком Q![/i]"
+		"velzebul":
+			match type:
+				"allies": return "• [color=gold]Ленская • Явление антиматерии[/color], [color=gold]Вика[/color], [color=gold]Раймс[/color], [color=gold]Ленская[/color]"
+				"cones": return "• [color=cyan]Рубеж Бытия[/color], [color=cyan]Падение мира неизбежно[/color], [color=cyan]Лучший мир[/color]"
+				"relics": return "• [color=lightgreen]Истинный родоначальник хаоса[/color], [color=lightgreen]Сияющий Детройт[/color]"
+				"tip": return "💡 [i]Идеальный саппорт под Ленскую: Явление антиматерии и команду Антиматерии. В стойке «Подношение» используйте Усиленные базовые атаки, чтобы накопить 4 Грешных сердца, разблокировать Сверхспособность и активировать постоянный Усиленный Навык E с Печатью Вельзевула![/i]"
 			
 		_:
 			match type:
@@ -1644,8 +1725,10 @@ func _get_db_recommendation(char_id: String, type: String) -> String:
 
 # Список активных ивентовых 5★ баннеров
 const BANNERS := [
+	{"id": "velzebul", "name": "Вельзевул", "title": "🩸 Вельзевул (5★)"},
 	{"id": "katarina", "name": "Катарина", "title": "⚔ Катарина (5★)"},
 	{"id": "dotseva_crimson_tears", "name": "Доцева • Багровые слёзы", "title": "🩸 Доцева • Багровые слёзы (5★)"},
+	{"id": "lenskaya_antimatter", "name": "Ленская • Явление антиматерии", "title": "🌌 Ленская • Явление антиматерии (5★)"},
 	{"id": "dotseva", "name": "Юлия Доцева", "title": "🌟 Юлия Доцева (5★)"},
 	{"id": "shoji", "name": "Сёдзи", "title": "🔥 Сёдзи (5★)"},
 	{"id": "lenskaya", "name": "Ленская", "title": "❄ Ленская (5★)"},
@@ -1664,7 +1747,10 @@ const BANNERS := [
 	{"id": "corrupted_save", "type": "weapon", "title": "⚔ Повреждённое сохранение (5★ Конус)"},
 	{"id": "server_crash_moment", "type": "weapon", "title": "⚔ Момент, когда падают сервера (5★ Конус)"},
 	{"id": "history_soaked_in_blood", "type": "weapon", "title": "🩸 История, вымоченная в крови (5★ Конус)"},
-	{"id": "why_did_you_remember_me", "type": "weapon", "title": "⚔ Почему ты вспомнила меня? (5★ Конус)"}
+	{"id": "why_did_you_remember_me", "type": "weapon", "title": "⚔ Почему ты вспомнила меня? (5★ Конус)"},
+	{"id": "behind_the_curtains", "type": "weapon", "title": "🎭 Выход из-за кулис (5★ Конус)"},
+	{"id": "i_will_become_god", "type": "weapon", "title": "👑 Я стану богом (5★ Конус)"},
+	{"id": "let_past_stay_behind", "type": "weapon", "title": "⚔ Пусть прошлое остаётся позади (5★ Конус)"}
 ]
 
 const POOL_4LC := ["warm_embraces", "echoes_of_the_past", "forget_past_self", "better_world", "medical_smell", "what_is_reality", "new_life_start", "moon_dance", "quarantine", "first_minutes_of_war"]
@@ -1868,7 +1954,9 @@ func _fill_cavern_sets_option(opt: OptionButton) -> void:
 		{"name": "Доктор биологических наук", "id": "biology_doctor", "req_level": 11},
 		{"name": "Оборона умирающей планеты", "id": "dying_planet", "req_level": 11},
 		{"name": "Принявший грех глава", "id": "accepted_sin", "req_level": 11},
-		{"name": "Исследователь будущего", "id": "bereft_future", "req_level": 11}
+		{"name": "Исследователь будущего", "id": "bereft_future", "req_level": 11},
+		{"name": "След из повреждённых строк", "id": "damaged_strings", "req_level": 11},
+		{"name": "Дитя умирающих звёзд", "id": "dying_stars_child", "req_level": 11}
 	]
 	opt.clear()
 	var idx := 0
@@ -2078,6 +2166,7 @@ func _refresh_shop_ui() -> void:
 			current_e = int(build.get("eidolon", 0))
 
 		var panel := PanelContainer.new()
+		panel.name = "shop_char_" + char_id
 		panel.custom_minimum_size = Vector2(180, 220)
 		
 		var is_5star := (int(char_data.get("rarity", 4)) >= 5)
@@ -2113,24 +2202,30 @@ func _refresh_shop_ui() -> void:
 			name_lbl.add_theme_color_override("font_color", Color(0.85, 0.65, 1.0))
 		vbox.add_child(name_lbl)
 
-		var elem_color := CombatConstants.get_element_color(char_data.element)
-		var elem_badge := PanelContainer.new()
-		elem_badge.custom_minimum_size = Vector2(140, 32)
-		var elem_badge_sb := StyleBoxFlat.new()
-		elem_badge_sb.set_corner_radius_all(6)
-		elem_badge_sb.bg_color = Color(elem_color.r * 0.22, elem_color.g * 0.22, elem_color.b * 0.22, 0.88)
-		elem_badge_sb.border_color = elem_color
-		elem_badge_sb.set_border_width_all(2)
-		elem_badge.add_theme_stylebox_override("panel", elem_badge_sb)
+		var path_badge := PanelContainer.new()
+		path_badge.custom_minimum_size = Vector2(140, 32)
+		var path_badge_sb := StyleBoxFlat.new()
+		path_badge_sb.set_corner_radius_all(6)
+		path_badge_sb.set_border_width_all(2)
+		if is_5star:
+			path_badge_sb.bg_color = Color(0.20, 0.16, 0.10, 0.90)
+			path_badge_sb.border_color = Color(0.85, 0.68, 0.25, 0.75)
+		else:
+			path_badge_sb.bg_color = Color(0.14, 0.10, 0.22, 0.90)
+			path_badge_sb.border_color = Color(0.65, 0.40, 0.85, 0.75)
+		path_badge.add_theme_stylebox_override("panel", path_badge_sb)
 
 		var desc_lbl := Label.new()
-		desc_lbl.text = CombatConstants.get_element_full_label(char_data.element)
+		desc_lbl.text = CharacterRegistry.get_path_full_label(char_data.path)
 		desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		desc_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		desc_lbl.add_theme_font_size_override("font_size", 14)
-		desc_lbl.add_theme_color_override("font_color", elem_color)
-		elem_badge.add_child(desc_lbl)
-		vbox.add_child(elem_badge)
+		if is_5star:
+			desc_lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.65))
+		else:
+			desc_lbl.add_theme_color_override("font_color", Color(0.90, 0.78, 1.0))
+		path_badge.add_child(desc_lbl)
+		vbox.add_child(path_badge)
 
 		var btn_buy := Button.new()
 		btn_buy.custom_minimum_size = Vector2(0, 45)
@@ -2615,9 +2710,16 @@ func _show_reset_confirmation_dialog() -> void:
 	confirm_btn.custom_minimum_size = Vector2(180, 48)
 	confirm_btn.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
 	confirm_btn.pressed.connect(func():
+		is_menu_tutorial = false
+		menu_tut_step = 0
+		if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
+			menu_guide_overlay.queue_free()
+			menu_guide_overlay = null
 		TeamConfig.reset_all_progress()
 		_update_coins_display()
 		_build_levels_screen() # Перерисовываем карту (кнопка пропуска снова вернется!)
+		_lock_hub_buttons(true)
+		_set_hub_card_disabled(btn_menu_levels, false)
 		overlay.queue_free()
 		notification_label.text = "🔥 Прогресс полностью сброшен!"
 	)
@@ -2652,14 +2754,26 @@ class LevelMapControl extends Control:
 			btn.custom_minimum_size = Vector2(60, 60)
 			btn.position = points[i] - Vector2(30, 30)
 			
+			var is_unlocked := (level_num <= TeamConfig.current_level_progress)
 			var sb := StyleBoxFlat.new()
-			sb.corner_radius_top_left = 30
-			sb.corner_radius_top_right = 30
-			sb.corner_radius_bottom_left = 30
-			sb.corner_radius_bottom_right = 30
-			sb.bg_color = Color(0.2, 0.4, 0.8) if level_num <= TeamConfig.current_level_progress else Color(0.25, 0.25, 0.3)
+			sb.set_corner_radius_all(30)
 			
-			btn.add_theme_stylebox_override("normal", sb)
+			if is_unlocked:
+				var is_current := (level_num == TeamConfig.current_level_progress)
+				sb.bg_color = Color(0.18, 0.45, 0.90) if is_current else Color(0.12, 0.55, 0.35)
+				sb.border_color = Color(0.5, 0.8, 1.0) if is_current else Color(0.4, 0.85, 0.5)
+				sb.set_border_width_all(2)
+				btn.add_theme_stylebox_override("normal", sb)
+				btn.add_theme_color_override("font_color", Color.WHITE)
+				btn.disabled = false
+			else:
+				sb.bg_color = Color(0.04, 0.05, 0.08, 0.92)
+				sb.border_color = Color(0.12, 0.14, 0.18, 0.50)
+				sb.set_border_width_all(1)
+				btn.add_theme_stylebox_override("disabled", sb)
+				btn.add_theme_color_override("font_disabled_color", Color(0.24, 0.27, 0.35, 0.45))
+				btn.disabled = true
+			
 			btn.add_theme_font_size_override("font_size", 20)
 			btn.pressed.connect(func(): _on_level_selected(level_num))
 			add_child(btn)
@@ -2708,10 +2822,11 @@ class LevelMapControl extends Control:
 			TeamConfig.reset()
 			TeamConfig.battle_mode = "level_3"
 			TeamConfig.team_members = [
-				TeamConfig.get_saved_build("vika"),
+				TeamConfig.get_saved_build("kaori"),
 				TeamConfig.get_saved_build("danill"),
-				TeamConfig.get_saved_build("kaori")
+				TeamConfig.get_saved_build("vika")
 			]
+			TeamConfig.battle_initiator_id = "kaori"
 			get_tree().change_scene_to_file("res://scenes/battle/battle.tscn")
 
 		elif level_num == 4:
@@ -2905,6 +3020,7 @@ func _build_gacha_screen() -> void:
 	b_vbox.add_child(btn_hbox)
 
 	var btn_pull_1 := Button.new()
+	btn_pull_1.name = "BtnPull1"
 	btn_pull_1.text = "1 раз (1 ✨)"
 	btn_pull_1.custom_minimum_size = Vector2(200, 50)
 	btn_pull_1.add_theme_font_size_override("font_size", 18)
@@ -2912,6 +3028,7 @@ func _build_gacha_screen() -> void:
 	btn_hbox.add_child(btn_pull_1)
 
 	var btn_pull_10 := Button.new()
+	btn_pull_10.name = "BtnPull10"
 	btn_pull_10.text = "10 раз (10 ✨)"
 	btn_pull_10.custom_minimum_size = Vector2(200, 50)
 	btn_pull_10.add_theme_font_size_override("font_size", 18)
@@ -2919,6 +3036,7 @@ func _build_gacha_screen() -> void:
 	btn_hbox.add_child(btn_pull_10)
 
 	var btn_back := Button.new()
+	btn_back.name = "BtnGachaBack"
 	btn_back.text = "↩ Назад в меню"
 	btn_back.custom_minimum_size = Vector2(250, 48)
 	btn_back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -2961,6 +3079,13 @@ func _refresh_gacha_ui() -> void:
 # Выполнение 1 или 10 круток
 # Запуск 1 или 10 круток с переходом к шагу 20 во время обучения
 func _execute_gacha_pulls(count: int) -> void:
+	if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
+		menu_guide_overlay.hide_pointer()
+		if menu_guide_overlay.dialog_panel:
+			menu_guide_overlay.dialog_panel.hide()
+	if menu_tut_pointer and is_instance_valid(menu_tut_pointer):
+		menu_tut_pointer.visible = false
+
 	if TeamConfig.shine < count:
 		notification_label.text = "❌ Недостаточно Блеска Свечения!"
 		return
@@ -3346,6 +3471,7 @@ func _show_character_unlock_animation(char_id: String, is_new: bool, eidolon_lvl
 	var overlay := ColorRect.new()
 	overlay.color = Color(0, 0, 0, 0.0)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 150
 	add_child(overlay)
 
 	var center := CenterContainer.new()
@@ -3824,183 +3950,149 @@ class SparkleStar extends Control:
 			core_pts.append(center + Vector2(cos(angle), sin(angle)) * r)
 		draw_colored_polygon(core_pts, Color.WHITE)
 
-# --- СИСТЕМА ОБУЧЕНИЯ В МЕНЮ (ПОСЛЕ 5 УРОВНЯ) ---
+# --- СИСТЕМА ОБУЧЕНИЯ В МЕНЮ (ПОСЛЕ 4 УРОВНЯ / НАСТАВНИК) ---
 
 func _init_menu_tutorial_ui() -> void:
-	menu_tut_overlay = ColorRect.new()
-	menu_tut_overlay.color = Color(0, 0, 0, 0.25)
-	menu_tut_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	menu_tut_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(menu_tut_overlay)
+	if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
+		menu_guide_overlay.queue_free()
 
-	menu_tut_panel = PanelContainer.new()
-	menu_tut_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	menu_tut_panel.custom_minimum_size = Vector2(400, 260)
-	menu_tut_panel.offset_left = -430
-	menu_tut_panel.offset_right = -30
-	menu_tut_panel.offset_top = -130
-	menu_tut_panel.offset_bottom = 130
-	
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.10, 0.16, 0.95)
-	sb.border_color = Color(0.9, 0.75, 0.3, 1.0)
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(12)
-	sb.set_content_margin_all(14)
-	menu_tut_panel.add_theme_stylebox_override("panel", sb)
-	menu_tut_overlay.add_child(menu_tut_panel)
+	menu_guide_overlay = TutorialGuideOverlayScript.new()
+	menu_guide_overlay.name = "MenuTutorialGuideOverlay"
+	add_child(menu_guide_overlay)
+	menu_guide_overlay.set_skip_callback(_show_skip_menu_tutorial_dialog)
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
-	menu_tut_panel.add_child(vbox)
-
-	menu_tut_label = RichTextLabel.new()
-	menu_tut_label.custom_minimum_size = Vector2(0, 160)
-	menu_tut_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	menu_tut_label.bbcode_enabled = true
-	menu_tut_label.add_theme_font_size_override("normal_font_size", 15)
-	vbox.add_child(menu_tut_label)
-
-	menu_tut_btn = Button.new()
-	menu_tut_btn.text = "Далее ➔"
-	menu_tut_btn.custom_minimum_size = Vector2(180, 44)
-	menu_tut_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
-	
-	var btn_sb := StyleBoxFlat.new()
-	btn_sb.bg_color = Color(0.15, 0.55, 0.95, 1.0)
-	btn_sb.set_corner_radius_all(8)
-	menu_tut_btn.add_theme_stylebox_override("normal", btn_sb)
-	menu_tut_btn.add_theme_font_size_override("font_size", 16)
-	menu_tut_btn.pressed.connect(_on_menu_tut_next_pressed)
-	vbox.add_child(menu_tut_btn)
-
-	menu_tut_pointer = Label.new()
-	menu_tut_pointer.text = "⬇"
-	menu_tut_pointer.add_theme_font_size_override("font_size", 54)
-	menu_tut_pointer.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2))
-	menu_tut_pointer.add_theme_color_override("font_outline_color", Color.BLACK)
-	menu_tut_pointer.add_theme_constant_override("outline_size", 8)
-	menu_tut_pointer.z_index = 100
-	menu_tut_pointer.visible = false
-	add_child(menu_tut_pointer)
+	# Сохраняем ссылки для обратной совместимости
+	menu_tut_overlay = menu_guide_overlay
+	menu_tut_panel = menu_guide_overlay.dialog_panel
+	menu_tut_label = menu_guide_overlay.text_label
+	menu_tut_btn = menu_guide_overlay.btn_next
+	menu_tut_pointer = menu_guide_overlay.pointer_label
 
 func _set_menu_tut_panel_pos(pos: String = "right") -> void:
-	if not menu_tut_panel or not is_instance_valid(menu_tut_panel):
-		return
-	if pos == "left":
-		menu_tut_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-		menu_tut_panel.offset_left = 30
-		menu_tut_panel.offset_right = 430
-		menu_tut_panel.offset_bottom = -30
-		menu_tut_panel.offset_top = -270
-	else:
-		menu_tut_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-		menu_tut_panel.offset_left = -430
-		menu_tut_panel.offset_right = -30
-		menu_tut_panel.offset_top = -130
-		menu_tut_panel.offset_bottom = 130
+	if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
+		menu_guide_overlay.set_dialog_position(pos)
 
 func _run_menu_tut_step(step: int) -> void:
 	menu_tut_step = step
-	menu_tut_btn.visible = false
-	menu_tut_pointer.visible = false
+	if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
+		menu_guide_overlay.hide_pointer()
+		menu_guide_overlay.btn_next.visible = false
+		menu_guide_overlay.set_skip_visible(step == 1)
+	elif menu_tut_btn:
+		menu_tut_btn.visible = false
+		if menu_tut_pointer:
+			menu_tut_pointer.visible = false
+
 	_lock_hub_buttons(true)
 	if hub_overview_panel:
 		hub_overview_panel.visible = false
 
-	if step in [3, 4, 5, 6, 7, 8, 102]:
-		_set_menu_tut_panel_pos("left")
-	else:
-		_set_menu_tut_panel_pos("right")
-
 	match step:
 		1:
-			_set_menu_tut_text("Поздравляю с победой на 4 уровне!\n\n[b]Теперь выйди в главное меню![/b]")
-			if btn_levels_back:
+			_set_menu_tut_text("Поздравляю с победой на 4 уровне!\n\n[b]Теперь выйди в главное меню![/b]", 1, "🗺 Экспедиция завершена")
+			if btn_levels_back and is_instance_valid(btn_levels_back):
 				btn_levels_back.disabled = false
-				_show_menu_pointer(btn_levels_back.global_position + Vector2(100, -50))
+				_show_menu_pointer_for_control(btn_levels_back, "up")
 		2:
-			_set_menu_tut_text("Тебе открылась [b]🏺 Добыча реликвий[/b]!\n\nРеликвии дают огромную прибавку к характеристикам персонажей. Сначала отправимся в подземелье и добудем твой первый комплект для Вики!\n\nЗаходи в [b]«Добыча реликвий»[/b].")
-			btn_menu_relics.disabled = false
-			_show_menu_pointer_for_control(btn_menu_relics)
+			_set_menu_tut_text("Тебе открылась [b]🏺 Добыча реликвий[/b]!\n\nРеликвии дают огромную прибавку к характеристикам персонажей. Сначала отправимся в подземелье и добудем твой первый комплект для Вики!\n\nЗаходи в [b]«Добыча реликвий»[/b].", 2, "🏺 Реликвии")
+			if btn_menu_relics and is_instance_valid(btn_menu_relics):
+				_set_hub_card_disabled(btn_menu_relics, false)
+				_show_menu_pointer_for_control(btn_menu_relics)
 		201:
-			_set_menu_tut_text("Это пещера коррозии [b]«Академия»[/b]. Здесь добывается квантовый сет [b]«Истинный родоначальник хаоса»[/b], идеально подходящий для Вики!\n\nНажми [b]«⚡ Быстрая зачистка»[/b] (или «В бой»), чтобы получить первые реликвии!")
+			_set_menu_tut_text("Это пещера коррозии [b]«Академия»[/b]. Здесь добывается квантовый сет [b]«Истинный родоначальник хаоса»[/b], идеально подходящий для Вики!\n\nНажми [b]«⚡ Быстрая зачистка»[/b] (или «В бой»), чтобы получить первые реликвии!", 3, "⚔ Пещера коррозии")
 			if tut_academy_instant_btn and is_instance_valid(tut_academy_instant_btn):
 				tut_academy_instant_btn.disabled = false
-				_show_menu_pointer(tut_academy_instant_btn.global_position + Vector2(100, -45))
+				_show_menu_pointer_for_control(tut_academy_instant_btn, "down")
+			elif relic_farming_cards_container and is_instance_valid(relic_farming_cards_container):
+				for card in relic_farming_cards_container.get_children():
+					var b_inst: Button = card.find_child("BtnInstant_*", true, false)
+					if not b_inst:
+						var btns := card.find_children("*", "Button", true, false)
+						for b in btns:
+							if "зачистка" in b.text.to_lower():
+								b_inst = b as Button
+								break
+					if b_inst:
+						tut_academy_instant_btn = b_inst
+						tut_academy_instant_btn.disabled = false
+						_show_menu_pointer_for_control(tut_academy_instant_btn, "down")
+						break
 		202:
-			_set_menu_tut_text("Отлично! Ты получил реликвии Хаоса и материал для прокачки!\n\nВозвращайся назад в меню.")
+			_set_menu_tut_text("Отлично! Ты получил реликвии Хаоса и материал для прокачки!\n\nВозвращайся назад в меню.", 4, "🏺 Реликвии получены")
 			if btn_farming_back and is_instance_valid(btn_farming_back):
 				btn_farming_back.disabled = false
-				_show_menu_pointer(btn_farming_back.global_position + Vector2(100, -50))
+				_show_menu_pointer_for_control(btn_farming_back, "up")
 		203:
-			_set_menu_tut_text("Теперь зайдём в меню [b]«👤 Персонажи»[/b], чтобы настроить и экипировать полученные реликвии!")
-			btn_menu_chars.disabled = false
-			_show_menu_pointer_for_control(btn_menu_chars)
+			_set_menu_tut_text("Теперь зайдём в меню [b]«👤 Персонажи»[/b], чтобы настроить и экипировать полученные реликвии!", 5, "👤 Отряд")
+			if btn_menu_chars and is_instance_valid(btn_menu_chars):
+				_set_hub_card_disabled(btn_menu_chars, false)
+				_show_menu_pointer_for_control(btn_menu_chars)
 		3:
-			_set_menu_tut_text("Сейчас у тебя имеются 3 бесплатных персонажа. Давай настроим Вику!\n\nСначала выбери световой конус [b]«Апокалипсис»[/b] — он увеличивает урон её навыков.")
+			_set_menu_tut_text("Сейчас у тебя имеются 3 бесплатных персонажа. Давай настроим Вику!\n\nСначала выбери световой конус [b]«Апокалипсис»[/b] — он увеличивает урон её навыков.", 6, "🗡 Световой конус")
 			_select_char_for_build("vika")
-			if opt_light_cone:
+			if opt_light_cone and is_instance_valid(opt_light_cone):
 				opt_light_cone.disabled = false
-				_show_menu_pointer(opt_light_cone.global_position + Vector2(80, -45))
+				_show_menu_pointer_for_control(opt_light_cone, "right")
 		4:
-			_set_menu_tut_text("Теперь наденем реликвии! Реликвии пещер занимают 4 верхних слота (Голова, Руки, Тело, Ноги), а планарные — 2 нижних.\n\nНажми [b]«+ Надеть»[/b] на слоте [b]👑 Голова[/b] и выбери 4★ реликвию Хаоса!")
+			_set_menu_tut_text("Теперь наденем реликвии! Реликвии пещер занимают 4 верхних слота (Голова, Руки, Тело, Ноги), а планарные — 2 нижних.\n\nНажми [b]«+ Надеть»[/b] на слоте [b]👑 Голова[/b] и выбери 4★ реликвию Хаоса!", 7, "👑 Слот Головы")
 			if tut_slot_btn_head and is_instance_valid(tut_slot_btn_head):
 				tut_slot_btn_head.disabled = false
-				_show_menu_pointer(tut_slot_btn_head.global_position + Vector2(80, -45))
+				_show_menu_pointer_for_control(tut_slot_btn_head, "left")
 		5:
-			_set_menu_tut_text("Отлично! Теперь нажми [b]«+ Надеть»[/b] на слоте [b]🧤 Руки[/b] и выбери вторую 4★ реликвию Хаоса.")
+			_set_menu_tut_text("Отлично! Теперь нажми [b]«+ Надеть»[/b] на слоте [b]🧤 Руки[/b] и выбери вторую 4★ реликвию Хаоса.", 8, "🧤 Слот Рук")
 			if tut_slot_btn_hands and is_instance_valid(tut_slot_btn_hands):
 				tut_slot_btn_hands.disabled = false
-				_show_menu_pointer(tut_slot_btn_hands.global_position + Vector2(80, -45))
+				_show_menu_pointer_for_control(tut_slot_btn_hands, "left")
 		6:
 			if TeamConfig.relic_shards < 30:
 				TeamConfig.add_relic_shards(30)
-			_set_menu_tut_text("Посмотри на панель справа: активировался [b]Бонус 2 частей сета Хаоса (+10% Квантового урона)[/b]!\n\nА теперь улучшим Голову. Нажми [b]«⚡ Прокачать»[/b] на слоте Головы!")
+			_set_menu_tut_text("Посмотри на панель справа: активировался [b]Бонус 2 частей сета Хаоса (+10% Квантового урона)[/b]!\n\nА теперь улучшим Голову. Нажми [b]«⚡ Прокачать»[/b] на слоте Головы!", 9, "⚡ Улучшение сета")
 			if tut_slot_btn_upgrade_head and is_instance_valid(tut_slot_btn_upgrade_head):
 				tut_slot_btn_upgrade_head.disabled = false
-				_show_menu_pointer(tut_slot_btn_upgrade_head.global_position + Vector2(60, -45))
+				_show_menu_pointer_for_control(tut_slot_btn_upgrade_head, "left")
 		7:
 			if TeamConfig.relic_shards < 30:
 				TeamConfig.add_relic_shards(30)
-			_set_menu_tut_text("В окне прокачки можно скармливать ненужные реликвии или 🔮 Осколки (1 шт. = 100 XP).\n\nНажми [b]«✨ Авто»[/b] (или выбери корм справа), а затем нажми [b]«⚡ Улучшить»[/b]!")
+			_set_menu_tut_text("В окне прокачки можно скармливать ненужные реликвии или 🔮 Осколки (1 шт. = 100 XP).\n\nНажми [b]«✨ Авто»[/b] (или выбери корм справа), а затем нажми [b]«⚡ Прокачать»[/b]!", 10, "⚡ Прокачка")
 			if _upgrade_btn_apply and is_instance_valid(_upgrade_btn_apply):
 				_upgrade_btn_apply.disabled = false
 			if _upgrade_btn_auto_shards and is_instance_valid(_upgrade_btn_auto_shards):
 				_upgrade_btn_auto_shards.disabled = false
-				_show_menu_pointer(_upgrade_btn_auto_shards.global_position + Vector2(40, -45))
+				_show_menu_pointer_for_control(_upgrade_btn_auto_shards, "down")
 			elif _upgrade_btn_apply and is_instance_valid(_upgrade_btn_apply):
-				_show_menu_pointer(_upgrade_btn_apply.global_position + Vector2(100, -45))
+				_show_menu_pointer_for_control(_upgrade_btn_apply, "up")
 		8:
-			_set_menu_tut_text("Поздравляю с первой прокачкой реликвии! Запомни: не забывай сохранять сборку.\n\nНажми [b]«💾 Сохранить сборку персонажа»[/b]!")
+			_set_menu_tut_text("Поздравляю с первой прокачкой реликвии! Запомни: не забывай сохранять сборку.\n\nНажми [b]«💾 Сохранить сборку персонажа»[/b]!", 11, "💾 Сохранение сборки")
 			if btn_save_char_build and is_instance_valid(btn_save_char_build):
 				btn_save_char_build.disabled = false
-				_show_menu_pointer(btn_save_char_build.global_position + Vector2(80, -45))
-		102: # Шаг выхода обратно в меню после сохранения
-			_set_menu_tut_text("Сборка сохранена! Теперь выходи обратно в главное меню.")
+				_show_menu_pointer_for_control(btn_save_char_build, "up")
+		102:
+			_set_menu_tut_text("Сборка сохранена! Теперь выходи обратно в главное меню.", 12, "↩ Возврат в меню")
 			if btn_char_back and is_instance_valid(btn_char_back):
 				btn_char_back.disabled = false
-				_show_menu_pointer(btn_char_back.global_position + Vector2(80, -45))
+				_show_menu_pointer_for_control(btn_char_back, "up")
 		9:
-			_set_menu_tut_text("Следующее — [b]База данных[/b]. Заходи!")
-			btn_menu_db.disabled = false
-			_show_menu_pointer_for_control(btn_menu_db)
+			_set_menu_tut_text("Следующее — [b]База данных[/b]. Заходи!", 13, "📚 База данных")
+			if btn_menu_db and is_instance_valid(btn_menu_db):
+				_set_hub_card_disabled(btn_menu_db, false)
+				_show_menu_pointer_for_control(btn_menu_db)
 		10:
-			_set_menu_tut_text("Здесь ты можешь почитать всё обо всех персонажах, посмотреть советы по сборкам и союзникам. Однако, никогда не бойся выходить за рамки — вдруг ты откроешь новую мету? Когда дочитаешь — выходи в меню.")
-			if btn_db_back:
+			_set_menu_tut_text("Здесь ты можешь почитать всё обо всех персонажах, посмотреть советы по сборкам и союзникам. Однако, никогда не бойся выходить за рамки — вдруг ты откроешь новую мету? Когда дочитаешь — выходи в меню.", 14, "📚 Энциклопедия")
+			if btn_db_back and is_instance_valid(btn_db_back):
 				btn_db_back.disabled = false
-				_show_menu_pointer(btn_db_back.global_position + Vector2(100, -50))
+				_show_menu_pointer_for_control(btn_db_back, "up")
 		11:
-			_set_menu_tut_text("Далее — [b]Инвентарь[/b]! Заходи!")
-			btn_menu_inv.disabled = false
-			_show_menu_pointer_for_control(btn_menu_inv)
+			_set_menu_tut_text("Далее — [b]Инвентарь[/b]! Заходи!", 15, "🎒 Инвентарь")
+			if btn_menu_inv and is_instance_valid(btn_menu_inv):
+				_set_hub_card_disabled(btn_menu_inv, false)
+				_show_menu_pointer_for_control(btn_menu_inv)
 		12:
-			_set_menu_tut_text("Здесь можно посмотреть, какие у тебя есть персонажи и какие Эйдолоны, а также почитать, что эти Эйдолоны делают и какие баффы дают.\n\nТеперь перейди на вкладку [b]«🛡 Реликвии»[/b]!")
+			_set_menu_tut_text("Здесь можно посмотреть, какие у тебя есть персонажи и какие Эйдолоны, а также почитать, что эти Эйдолоны делают и какие баффы дают.\n\nТеперь перейди на вкладку [b]«🛡 Реликвии»[/b]!", 16, "🛡 Вкладка реликвий")
 			if btn_tab_relics and is_instance_valid(btn_tab_relics):
 				btn_tab_relics.disabled = false
-				_show_menu_pointer(btn_tab_relics.global_position + Vector2(60, -45))
+				_show_menu_pointer_for_control(btn_tab_relics, "down")
 		13:
-			_set_menu_tut_text("Лишние или слабые реликвии можно уничтожать (разбирать) на Осколки!\n\nНажми [b]«🗑 Разобрать»[/b] на любой 3★ реликвии, чтобы превратить её в Осколки для прокачки!")
+			_set_menu_tut_text("Лишние или слабые реликвии можно уничтожать (разбирать) на Осколки!\n\nНажми [b]«🗑 Разобрать»[/b] на любой 3★ реликвии, чтобы превратить её в Осколки для прокачки!", 17, "🗑 Разбор реликвий")
 			if btn_tab_relics and is_instance_valid(btn_tab_relics):
 				btn_tab_relics.disabled = false
 			if inv_characters_grid and inv_relics_container:
@@ -4010,93 +4102,273 @@ func _run_menu_tut_step(step: int) -> void:
 				_refresh_inventory_relics()
 			if tut_dismantle_btn and is_instance_valid(tut_dismantle_btn):
 				tut_dismantle_btn.disabled = false
-				_show_menu_pointer(tut_dismantle_btn.global_position + Vector2(80, -45))
+				_show_menu_pointer_for_control(tut_dismantle_btn, "left")
 		14:
-			_set_menu_tut_text("Отлично! Реликвия разобрана на Осколки. Теперь у тебя есть универсальный ресурс для улучшения экипировки!\n\nВозвращайся в меню.")
+			_set_menu_tut_text("Отлично! Реликвия разобрана на Осколки. Теперь у тебя есть универсальный ресурс для улучшения экипировки!\n\nВозвращайся в меню.", 18, "🔮 Осколки получены")
 			if btn_inv_back and is_instance_valid(btn_inv_back):
 				btn_inv_back.disabled = false
-				_show_menu_pointer(btn_inv_back.global_position + Vector2(100, -50))
+				_show_menu_pointer_for_control(btn_inv_back, "up")
 		15:
 			TeamConfig.coins = max(TeamConfig.coins, 500)
 			_update_coins_display()
-			_set_menu_tut_text("Далее — [b]Магазин[/b]!")
-			btn_menu_shop.disabled = false
-			_show_menu_pointer_for_control(btn_menu_shop)
+			_set_menu_tut_text("Далее — [b]Магазин[/b]!", 19, "🛒 Магазин")
+			if btn_menu_shop and is_instance_valid(btn_menu_shop):
+				_set_hub_card_disabled(btn_menu_shop, false)
+				_show_menu_pointer_for_control(btn_menu_shop)
 		16:
-			_set_menu_tut_text("Здесь ты можешь купить любого персонажа, который тебе нравится (если у тебя, конечно, есть на него деньги). Стандартные 5* персонажи стоят 1850, а 4* — 480 монет. Если ты покупаешь персонажа, который у тебя есть, то ты получаешь на него +1 Эйдолон. Сейчас купи [b]Арсения[/b] — он отлично подойдёт к Вике и Каори в команду!")
+			_set_menu_tut_text("Здесь ты можешь купить любого персонажа, который тебе нравится (если у тебя, конечно, есть на него деньги). Стандартные 5* персонажи стоят 1850, а 4* — 480 монет. Если ты покупаешь персонажа, который у тебя есть, то ты получаешь на него +1 Эйдолон. Сейчас купи [b]Арсения[/b] — он отлично подойдёт к Вике и Каори в команду!", 20, "🛒 Покупка персонажа")
 			_lock_shop_except_arseniy()
 		17:
-			_set_menu_tut_text("Отлично! Арсений — персонаж Гармонии. Он бафает других персонажей в отряде. Теперь выходи и перейдём К ГАЧЕ...")
-			if btn_shop_back:
+			_set_menu_tut_text("Отлично! Арсений — персонаж Гармонии. Он бафает других персонажей в отряде. Теперь выходи и перейдём К ГАЧЕ...", 21, "🛒 Возврат в меню")
+			if btn_shop_back and is_instance_valid(btn_shop_back):
 				btn_shop_back.disabled = false
-				_show_menu_pointer(btn_shop_back.global_position + Vector2(100, -50))
+				_show_menu_pointer_for_control(btn_shop_back, "up")
 		18:
-			_set_menu_tut_text("Жми на [b]Гачу[/b]!")
-			btn_menu_gacha.disabled = false
-			_show_menu_pointer_for_control(btn_menu_gacha)
+			_set_menu_tut_text("Жми на [b]Гачу[/b]!", 22, "✨ Призыв героев")
+			if btn_menu_gacha and is_instance_valid(btn_menu_gacha):
+				_set_hub_card_disabled(btn_menu_gacha, false)
+				_show_menu_pointer_for_control(btn_menu_gacha)
 		19:
 			TeamConfig.shine += 1
 			_update_coins_display()
-			_set_menu_tut_text("Это гача! Здесь ты можешь получить Лимитированных 5* персонажей, которых нельзя получить никаким другим способом. Сверху ты можешь выбрать баннер персонажа, которого хочешь покрутить. Перед тем, как кого-то крутить, рекомендую почитать, что этот персонаж делает. Сейчас я дам тебе один Блеск Свечения — это валюта, за которую можно крутить Баннеры. 1 Блеск Свечения = 1 крутка. Давай посмотрим, что тебе выпадет!")
+			_set_menu_tut_text("Это гача! Здесь ты можешь получить Лимитированных 5* персонажей, которых нельзя получить никаким другим способом. Сверху ты можешь выбрать баннер персонажа, которого хочешь покрутить. Перед тем, как кого-то крутить, рекомендую почитать, что этот персонаж делает. Сейчас я дам тебе один Блеск Свечения — это валюта, за которую можно крутить Баннеры. 1 Блеск Свечения = 1 крутка. Давай посмотрим, что тебе выпадет!", 23, "✨ Испытай удачу")
 			_lock_gacha_except_one_pull()
 		20:
-			_set_menu_tut_text("Отлично! Тебе выпала [b]Сара[/b]. Сара — хиллер. Она может лечить союзников. Более того — она может блокировать смерть и оставлять союзников живыми на 1 ед. ХП. Она точно будет тебе полезна!\n\nКогда ты пройдёшь 5 уровень, то бесплатно получишь сразу [b]10 Блесков Свечения[/b] и сможешь погрузиться в гачу на полную катушку! Так что быстрее — я жду тебя на пятом уровне!")
-			menu_tut_btn.text = "Вперед! ⚔"
-			menu_tut_btn.visible = true
-			
+			var finish_txt := "Отлично! Тебе выпала [b]Сара[/b]. Сара — хиллер. Она может лечить союзников. Более того — она может блокировать смерть и оставлять союзников живыми на 1 ед. ХП. Она точно будет тебе полезна!\n\nКогда ты пройдёшь 5 уровень, то бесплатно получишь сразу [b]10 Блесков Свечения[/b] и сможешь погрузиться в гачу на полную катушку! Так что быстрее — я жду тебя на пятом уровне!"
+			if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
+				menu_guide_overlay.hide_pointer()
+				menu_guide_overlay.set_dialog("🎉 Поздравляем!", finish_txt, "ФИНАЛ", true, "Вперед! ⚔", _on_menu_tut_next_pressed)
+			else:
+				_set_menu_tut_text(finish_txt, 24, "🎉 Поздравляем!")
+				if menu_tut_btn:
+					menu_tut_btn.text = "Вперед! ⚔"
+					menu_tut_btn.visible = true
+
 func _on_menu_tut_next_pressed() -> void:
 	match menu_tut_step:
 		20:
 			is_menu_tutorial = false
 			TeamConfig.menu_tutorial_completed = true
 			TeamConfig.save_game()
-			menu_tut_overlay.queue_free()
-			menu_tut_pointer.queue_free()
+			if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
+				menu_guide_overlay.queue_free()
+				menu_guide_overlay = null
+			elif menu_tut_overlay and is_instance_valid(menu_tut_overlay):
+				menu_tut_overlay.queue_free()
+			if menu_tut_pointer and is_instance_valid(menu_tut_pointer):
+				menu_tut_pointer.queue_free()
+
+			# 1. Разблокируем все элементы экрана гачи
+			if gacha_screen and is_instance_valid(gacha_screen):
+				var btn_b: Button = gacha_screen.find_child("BtnGachaBack", true, false)
+				if btn_b: btn_b.disabled = false
+				var btn_1: Button = gacha_screen.find_child("BtnPull1", true, false)
+				if btn_1: btn_1.disabled = false
+				var btn_10: Button = gacha_screen.find_child("BtnPull10", true, false)
+				if btn_10: btn_10.disabled = false
+
+			# 2. Разблокируем магазин и инвентарь
+			if btn_shop_back: btn_shop_back.disabled = false
+			if btn_inv_back: btn_inv_back.disabled = false
+			for child in shop_grid.get_children():
+				var btn: Button = child.find_child("Button", true, false)
+				if btn: btn.disabled = false
+
+			# 3. Возвращаемся в хаб (Главное меню)
+			_show_screen("hub")
 			_lock_hub_buttons(false)
+
+			# 4. Гарантированно разблокируем ВСЕ разделы меню
+			_set_hub_card_disabled(btn_menu_levels, false)
+			_set_hub_card_disabled(btn_menu_chars, false)
+			_set_hub_card_disabled(btn_menu_relics, false)
+			_set_hub_card_disabled(btn_menu_db, false)
+			_set_hub_card_disabled(btn_menu_inv, false)
+			_set_hub_card_disabled(btn_menu_shop, false)
+			_set_hub_card_disabled(btn_menu_gacha, false)
+
 			if hub_overview_panel:
 				hub_overview_panel.visible = true
 				_refresh_hub_overview()
+			if notification_label:
+				notification_label.text = "✓ Обучение завершено! Все разделы меню открыты."
 
-func _set_menu_tut_text(txt: String) -> void:
-	menu_tut_label.text = txt
+func _set_menu_tut_text(txt: String, step_num: int = 0, title: String = "🧭 Обучение в Меню") -> void:
+	if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
+		var badge := ("ШАГ %d / 20" % step_num) if step_num > 0 else "✦ ОБУЧЕНИЕ ✦"
+		menu_guide_overlay.set_dialog(title, txt, badge)
+	elif menu_tut_label and is_instance_valid(menu_tut_label):
+		menu_tut_label.text = txt
 
 func _set_text_or_tut(txt: String) -> void:
-	menu_tut_label.text = txt
+	_set_menu_tut_text(txt)
 
 func _show_menu_pointer(pos: Vector2) -> void:
-	menu_tut_pointer.global_position = pos
-	menu_tut_pointer.visible = true
+	if menu_tut_pointer and is_instance_valid(menu_tut_pointer):
+		menu_tut_pointer.global_position = pos
+		menu_tut_pointer.visible = true
 
-func _show_menu_pointer_for_control(ctrl: Control) -> void:
+func _show_menu_pointer_for_control(ctrl: Control, arrow_dir: String = "auto") -> void:
 	if not ctrl or not is_instance_valid(ctrl):
 		return
-	var w: float = ctrl.size.x if ctrl.size.x > 10.0 else ctrl.custom_minimum_size.x
-	var px: float = ctrl.global_position.x + (w - 36.0) * 0.5
-	var py: float = ctrl.global_position.y - 65.0
-	_show_menu_pointer(Vector2(px, py))
+	if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
+		menu_guide_overlay.point_at(ctrl, arrow_dir)
+	elif menu_tut_pointer and is_instance_valid(menu_tut_pointer):
+		var w: float = ctrl.size.x if ctrl.size.x > 10.0 else ctrl.custom_minimum_size.x
+		var px: float = ctrl.global_position.x + (w - 36.0) * 0.5
+		var py: float = ctrl.global_position.y - 65.0
+		_show_menu_pointer(Vector2(px, py))
 
 func _lock_hub_buttons(locked: bool) -> void:
-	if btn_menu_chars: btn_menu_chars.disabled = locked
-	if btn_menu_relics:
-		btn_menu_relics.disabled = locked or (TeamConfig.current_level_progress < 5)
-	if btn_menu_db: btn_menu_db.disabled = locked
-	if btn_menu_inv: btn_menu_inv.disabled = locked
-	if btn_menu_shop: btn_menu_shop.disabled = locked
-	if btn_menu_gacha: btn_menu_gacha.disabled = locked
+	var lock_levels: bool = locked and is_menu_tutorial and (menu_tut_step > 1)
+	_set_hub_card_disabled(btn_menu_levels, lock_levels)
+	_set_hub_card_disabled(btn_menu_chars, locked)
+	_set_hub_card_disabled(btn_menu_relics, locked and not TeamConfig.menu_tutorial_completed)
+	_set_hub_card_disabled(btn_menu_db, locked)
+	_set_hub_card_disabled(btn_menu_inv, locked)
+	_set_hub_card_disabled(btn_menu_shop, locked)
+	_set_hub_card_disabled(btn_menu_gacha, locked)
 
 func _lock_shop_except_arseniy() -> void:
+	var target_btn: Button = null
 	for child in shop_grid.get_children():
 		var btn: Button = child.find_child("Button", true, false)
 		if btn:
 			btn.disabled = true
-			if "arseniy" in child.name or "Арсений" in child.to_string():
+			if "arseniy" in child.name.to_lower():
 				btn.disabled = false
-				_show_menu_pointer(btn.global_position + Vector2(40, -40))
+				target_btn = btn
+	if btn_shop_back:
+		btn_shop_back.disabled = true
+	if target_btn:
+		_show_menu_pointer_for_control(target_btn, "up")
 
 func _lock_gacha_except_one_pull() -> void:
-	var btn_1: Button = gacha_screen.find_child("Button", true, false)
+	var btn_1: Button = gacha_screen.find_child("BtnPull1", true, false)
+	if not btn_1:
+		btn_1 = gacha_screen.find_child("Button", true, false)
+	var btn_10: Button = gacha_screen.find_child("BtnPull10", true, false)
+	var btn_back: Button = gacha_screen.find_child("BtnGachaBack", true, false)
+	if btn_10:
+		btn_10.disabled = true
+	if btn_back:
+		btn_back.disabled = true
 	if btn_1:
-		_show_menu_pointer(btn_1.global_position + Vector2(40, -40))
+		btn_1.disabled = false
+		_show_menu_pointer_for_control(btn_1, "down")
+
+func _show_skip_menu_tutorial_dialog() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 200
+	add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(460, 280)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.10, 0.16, 0.98)
+	sb.border_color = Color(1.0, 0.85, 0.25, 1.0)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(14)
+	sb.set_content_margin_all(20)
+	panel.add_theme_stylebox_override("panel", sb)
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 14)
+	panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "⏩ Пропустить обучение в меню?"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 20)
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.25))
+	vbox.add_child(title)
+
+	var desc := RichTextLabel.new()
+	desc.bbcode_enabled = true
+	desc.custom_minimum_size = Vector2(0, 130)
+	desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	desc.text = "Вы действительно хотите пропустить обучение в меню?\n\n[b]Вы автоматически получите:[/b]\n• Персонажей [b]Арсений[/b] и [b]Сара[/b]\n• Комплект 4★ реликвий Хаоса и 30 🔮 Осколков\n• 500 монет и 1 ✨ Блеск Свечения\n• Полную свободу действий во всех разделах меню!"
+	vbox.add_child(desc)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	vbox.add_child(btn_row)
+
+	var btn_confirm := Button.new()
+	btn_confirm.text = "Да, пропустить"
+	btn_confirm.custom_minimum_size = Vector2(160, 42)
+	var c_sb := StyleBoxFlat.new()
+	c_sb.bg_color = Color(0.20, 0.50, 0.85, 1.0)
+	c_sb.set_corner_radius_all(8)
+	btn_confirm.add_theme_stylebox_override("normal", c_sb)
+	btn_confirm.pressed.connect(func():
+		overlay.queue_free()
+		_execute_skip_menu_tutorial()
+	)
+	btn_row.add_child(btn_confirm)
+
+	var btn_cancel := Button.new()
+	btn_cancel.text = "Отмена"
+	btn_cancel.custom_minimum_size = Vector2(120, 42)
+	var can_sb := StyleBoxFlat.new()
+	can_sb.bg_color = Color(0.25, 0.25, 0.30, 1.0)
+	can_sb.set_corner_radius_all(8)
+	btn_cancel.add_theme_stylebox_override("normal", can_sb)
+	btn_cancel.pressed.connect(func(): overlay.queue_free())
+	btn_row.add_child(btn_cancel)
+
+func _execute_skip_menu_tutorial() -> void:
+	is_menu_tutorial = false
+	TeamConfig.menu_tutorial_completed = true
+
+	# Разблокируем Арсения и Сару, если ещё не открыты
+	if not ("arseniy" in TeamConfig.unlocked_characters):
+		TeamConfig.unlocked_characters.append("arseniy")
+		TeamConfig.set_saved_build("arseniy", {"light_cone": "", "eidolon": 0})
+	if not ("sara" in TeamConfig.unlocked_characters):
+		TeamConfig.unlocked_characters.append("sara")
+		TeamConfig.set_saved_build("sara", {"light_cone": "", "eidolon": 0})
+
+	# Награды
+	TeamConfig.relic_shards = max(TeamConfig.relic_shards, 30)
+	TeamConfig.coins = max(TeamConfig.coins, 500)
+	TeamConfig.shine = max(TeamConfig.shine, 1)
+
+	# Выдадим 4★ реликвии Хаоса (Голова и Руки), если их ещё нет
+	var has_chaos_head := false
+	var has_chaos_hands := false
+	for r in TeamConfig.relic_inventory:
+		if r.get("set_id", "") == "chaos":
+			if r.get("slot", "") == "head": has_chaos_head = true
+			if r.get("slot", "") == "hands": has_chaos_hands = true
+	if not has_chaos_head:
+		var head_r := RelicSystem.generate_relic("chaos", "head", 4)
+		TeamConfig.relic_inventory.append(head_r)
+	if not has_chaos_hands:
+		var hands_r := RelicSystem.generate_relic("chaos", "hands", 4)
+		TeamConfig.relic_inventory.append(hands_r)
+
+	TeamConfig.save_game()
+
+	if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
+		menu_guide_overlay.queue_free()
+		menu_guide_overlay = null
+
+	_lock_hub_buttons(false)
+	_show_screen("hub")
+	if hub_overview_panel:
+		hub_overview_panel.visible = true
+		_refresh_hub_overview()
+	if notification_label:
+		notification_label.text = "✓ Обучение в меню пропущено. Все разделы разблокированы!"
 
 # Проверка выбора Тела на %ХП и Ног на %ХП
 func _check_tut_body_feet_step() -> void:
@@ -4637,7 +4909,7 @@ func _refresh_level_initiator_options() -> void:
 	var idx := 0
 	for slot in _level_team:
 		if slot != null:
-			if slot.id in ["pusenkov", "kaori", "shoji", "dasha", "vika", "rimes", "musienko", "joan", "joan_spirit", "isaac_admin", "shoji_swan"]:
+			if slot.id in ["pusenkov", "kaori", "shoji", "dasha", "vika", "rimes", "musienko", "joan", "joan_spirit", "isaac_admin", "shoji_swan", "lenskaya_antimatter"]:
 				var data := CharacterRegistry.get_character(slot.id)
 				level_initiator_option.add_item(data.get("name", slot.id))
 				level_initiator_option.set_item_metadata(idx, slot.id)
@@ -5453,7 +5725,7 @@ func _refresh_relic_farming_ui() -> void:
 				TeamConfig.save_game()
 				_show_dungeon_rewards_popup(drops, "Добыча: " + d.name)
 			)
-			if is_menu_tutorial and menu_tut_step == 201 and (d.id == "dungeon_academy" or d.id == "academy"):
+			if is_menu_tutorial and (menu_tut_step == 201 or menu_tut_step == 2) and (d.id == "dungeon_academy" or d.id == "academy"):
 				tut_academy_instant_btn = btn_instant
 
 		btn_row.add_child(btn_fight)
@@ -5801,6 +6073,9 @@ func _confirm_dismantle_relic(r: Dictionary) -> void:
 	)
 	btn_row.add_child(btn_confirm)
 
+	if is_menu_tutorial and menu_tut_step == 13:
+		_show_menu_pointer_for_control(btn_confirm, "down")
+
 	var btn_cancel := Button.new()
 	btn_cancel.text = "Отмена"
 	btn_cancel.custom_minimum_size = Vector2(120, 42)
@@ -5847,9 +6122,6 @@ func _show_relic_upgrade_modal(target_relic: Dictionary) -> void:
 	_upgrade_target_relic = target_relic
 	_upgrade_selected_fodder_uids.clear()
 	_upgrade_selected_shards_count = 0
-
-	if is_menu_tutorial and menu_tut_step == 6:
-		_run_menu_tut_step(7)
 
 	if _upgrade_overlay and is_instance_valid(_upgrade_overlay):
 		_upgrade_overlay.queue_free()
@@ -6106,6 +6378,9 @@ func _show_relic_upgrade_modal(target_relic: Dictionary) -> void:
 
 	_refresh_upgrade_dialog_ui()
 
+	if is_menu_tutorial and menu_tut_step == 6:
+		_run_menu_tut_step(7)
+
 # Изменение количества выбранных осколков
 func _add_shards_selection(delta: int) -> void:
 	var total_avail: int = TeamConfig.relic_shards
@@ -6175,7 +6450,13 @@ func _select_shards_for_upgrade() -> void:
 	_refresh_upgrade_dialog_ui()
 	if is_menu_tutorial and menu_tut_step == 7:
 		if _upgrade_btn_apply and is_instance_valid(_upgrade_btn_apply):
-			_show_menu_pointer(_upgrade_btn_apply.global_position + Vector2(100, -45))
+			if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
+				menu_guide_overlay.set_dialog(
+					"⚡ Прокачка реликвии",
+					"Отлично! Осколки выбраны. Теперь нажми [b]«⚡ Прокачать»[/b]!",
+					"ШАГ 10 / 20"
+				)
+			_show_menu_pointer_for_control(_upgrade_btn_apply, "up")
 
 # Обновление состояния окна прокачки реликвии
 func _refresh_upgrade_dialog_ui() -> void:
@@ -6974,6 +7255,7 @@ func _show_slot_relic_picker_modal(char_id: String, slot: String) -> void:
 	scroll.add_child(grid)
 
 	var count := 0
+	var first_card: Control = null
 	var select_cb := func(picked_r: Dictionary):
 		TeamConfig.equip_relic(char_id, slot, picked_r.get("uid", ""))
 		TeamConfig.save_game()
@@ -6990,7 +7272,16 @@ func _show_slot_relic_picker_modal(char_id: String, slot: String) -> void:
 				continue
 			var card := _create_relic_card_widget(r, false, select_cb)
 			grid.add_child(card)
+			if first_card == null:
+				first_card = card
 			count += 1
+
+	if is_menu_tutorial and (menu_tut_step == 4 or menu_tut_step == 5) and first_card:
+		var sel_btn: Button = first_card.find_child("Button", true, false)
+		if sel_btn:
+			_show_menu_pointer_for_control(sel_btn, "down")
+		else:
+			_show_menu_pointer_for_control(first_card, "down")
 
 	if count == 0:
 		var empty_lbl := Label.new()

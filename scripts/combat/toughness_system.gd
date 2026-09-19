@@ -10,22 +10,27 @@ static func apply_weakness_hit(
 	attacker: CombatUnit,
 	target: CombatUnit,
 	battle: BattleManager,
-	multiplier: float = 1.0
+	multiplier: float = 1.0,
+	ignore_weakness: bool = false
 ) -> bool:
 	if target == null or attacker == null:
 		return false 
+	if target.has_meta("pending_phase_transition") and bool(target.get_meta("pending_phase_transition")):
+		return false
 	if target.has_meta("rimes_isolation_source") and attacker.id != "rimes":
 		return false 
 	if not target.is_ally and target.max_toughness <= 0.0:
 		return false
 	if target.toughness <= 0.0:
 		return false
-	if not CombatConstants.element_matches_weakness(attacker.element, target.weaknesses):
+	if not ignore_weakness and not CombatConstants.element_matches_weakness(attacker.element, target.weaknesses):
 		return false
 
 	# Учитываем множитель конкретного умения при срезе стойкости
 	# (новое значение stats.weakness_efficiency автоматически учтено здесь)
 	var reduction: float = BASE_TGH_REDUCTION * (1.0 + attacker.stats.weakness_efficiency) * multiplier
+	if target.has_meta("lenskaya_radiance_enemy_turns") and int(target.get_meta("lenskaya_radiance_enemy_turns", 0)) > 0:
+		reduction *= 1.50
 	
 	target.toughness = maxf(target.toughness - reduction, 0.0)
 
@@ -37,6 +42,10 @@ static func apply_weakness_hit(
 # === ЗАМЕНИТЬ МЕТОД _trigger_break В TOUGHNESS_SYSTEM.GD ===
 static func _trigger_break(attacker: CombatUnit, target: CombatUnit, battle: BattleManager) -> void:
 	var break_dmg: float = DamageCalculator.calc_break_damage(attacker, target)
+
+	# Бонус фракции Свечение (Ленская • Хранитель небес): урон пробития команды +30% (или +45% при 3+)
+	if battle != null and battle.get_radiance_count() >= 2 and battle.get_chosen_star_guide() == "lenskaya_sky_guardian":
+		break_dmg *= (1.45 if battle.get_radiance_count() >= 3 else 1.30)
 
 	# Аномалия Уровня 13: Урон Пробития и Суперпробития +50%
 	if battle.battle_mode == "level_13":
@@ -93,6 +102,10 @@ static func _trigger_break(attacker: CombatUnit, target: CombatUnit, battle: Bat
 		target.delay_action(CombatConstants.SUPPRESSION_BREAK_EXTRA_DELAY * 100.0)
 
 	_apply_break_status(attacker.element, target, battle, attacker)
+	if battle.has_method("on_enemy_toughness_broken"):
+		battle.on_enemy_toughness_broken(target)
+	if battle.has_method("on_debuff_applied_to_enemy") and attacker != null and attacker.is_ally:
+		battle.on_debuff_applied_to_enemy(target, attacker)
 
 	# --- ИСПРАВЛЕНО: ГЛОБАЛЬНОЕ НАЛОЖЕНИЕ СРЕЗА ЗАЩИТЫ ЖЕРТВЫ СИМБИОЗА (4 части) ПРИ ПРОБОЕ ---
 	if attacker.has_meta("set_symbiosis_4"):
@@ -252,6 +265,20 @@ static func process_turn_start_dots(target: CombatUnit, battle: BattleManager) -
 		if target.statuses.break_status_turns <= 0:
 			target.statuses.break_status = ""
 			target.statuses.break_status_source = ""
+
+	# 4. Обработка Кровотечения от Взломанных Чистильщиков (до 5 стаков)
+	if target.has_meta("hacked_bleed_stacks") and int(target.get_meta("hacked_bleed_stacks", 0)) > 0:
+		var stacks: int = int(target.get_meta("hacked_bleed_stacks", 0))
+		var turns: int = int(target.get_meta("hacked_bleed_turns", 0))
+		var dot := DamageCalculator.calc_dot_damage(battle._get_last_attacker_or_default(), 0.30 * float(stacks))
+		var actual_dmg: float = battle.deal_damage(target, dot, battle._get_last_attacker_or_default(), CombatConstants.Element.PHYSICAL, false, "DoT")
+		battle.log_message("🩸 Кровотечение [Взлом] x%d на %s: %d физ. урона!" % [stacks, target.display_name, int(actual_dmg)])
+		turns -= 1
+		target.set_meta("hacked_bleed_turns", turns)
+		if turns <= 0:
+			target.remove_meta("hacked_bleed_stacks")
+			target.remove_meta("hacked_bleed_turns")
+			target.remove_meta("hacked_bleed_source")
 								
 static func tick_imaginary_debuff(target: CombatUnit) -> void:
 	if target.statuses.imaginary_spd_debuff_turns > 0:

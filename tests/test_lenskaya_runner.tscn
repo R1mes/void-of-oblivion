@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://test_runner_lenskaya"]
+
+[ext_resource type="Script" path="res://tests/test_lenskaya_sky_guardian.gd" id="1_test"]
+
+[node name="TestLenskayaRunner" type="Node"]
+script = ExtResource("1_test")

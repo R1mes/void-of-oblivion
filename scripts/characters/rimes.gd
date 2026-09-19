@@ -36,6 +36,9 @@ static func apply_traces(unit: CombatUnit) -> void:
 static func execute_target(target: CombatUnit, attacker: CombatUnit, bm: BattleManager) -> void:
 	if not target.is_alive():
 		return
+	if bool(target.get_meta("cannot_be_executed", false)):
+		bm.log_message("🛡 %s не может быть Казнён!" % target.display_name)
+		return
 		
 	bm.log_message("⚔ КАЗНЬ! %s хладнокровно казнит %s чистым уроном!" % [attacker.display_name, target.display_name])
 	var max_hp := target.stats.max_hp
@@ -44,7 +47,7 @@ static func execute_target(target: CombatUnit, attacker: CombatUnit, bm: BattleM
 	bm.deal_damage(target, max_hp, attacker, CombatConstants.Element.QUANTUM, false, "rimes_execution")
 	
 	# Если цель казнена в Изоляции, снимаем её
-	if attacker.get_meta("rimes_isolation_target") == target:
+	if attacker.has_meta("rimes_isolation_target") and attacker.get_meta("rimes_isolation_target") == target:
 		remove_eternal_isolation(attacker, target, bm, true)
 
 # Накопление зарядов Таланта

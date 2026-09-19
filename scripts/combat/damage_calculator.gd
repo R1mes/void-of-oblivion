@@ -1,10 +1,99 @@
 class_name DamageCalculator
 extends RefCounted
 
-const BASE_BREAK_VALUE := 6.14
+const LEVEL_MULTIPLIER := 1640.0
+const BASE_BREAK_VALUE := 1640.0
 
 static func calc_def_multiplier(target_def: float) -> float:
 	return 1.0 - target_def / (target_def + 300.0)
+
+static func get_def_multiplier(attacker: CombatUnit, target: CombatUnit) -> float:
+	if target == null:
+		return 1.0
+	var level_atk: float = float(attacker.get_meta("level", 80.0)) if attacker != null else 80.0
+	var level_def: float = float(target.get_meta("level", 80.0))
+
+	var def_shred: float = 0.0
+	var def_ignore: float = 0.0
+
+	# 1. Срезы защиты на цели (def_reductions)
+	if target.has_meta("def_reductions"):
+		var reductions: Dictionary = target.get_meta("def_reductions")
+		for src in reductions:
+			var data: Dictionary = reductions[src]
+			if int(data.get("turns", 0)) > 0:
+				def_shred += float(data.get("percent", 0.0))
+	if target.has_meta("cleaner_def_reduction_turns") and int(target.get_meta("cleaner_def_reduction_turns", 0)) > 0:
+		def_shred += float(target.get_meta("cleaner_def_reduction_pct", 0.20))
+	if target.has_meta("naama_kiss_turns") and int(target.get_meta("naama_kiss_turns", 0)) > 0:
+		def_shred += 0.15
+	if target.has_meta("naama_intox_stacks") and int(target.get_meta("naama_intox_stacks", 0)) >= 20:
+		def_shred += 0.20
+
+	# 2. Игнорирование защиты атакующим (def_ignore)
+	if attacker != null:
+		if attacker.has_meta("talent_ignore_20_def"):
+			def_ignore += 0.20
+		if attacker.has_meta("valramors_tech_ignore_turns") and int(attacker.get_meta("valramors_tech_ignore_turns", 0)) > 0:
+			def_ignore += 0.15
+		if attacker.id == "lenskaya_antimatter":
+			var am_st: String = String(attacker.get_meta("lenskaya_am_stance", "none"))
+			if am_st in ["keeper", "warrior"]:
+				def_ignore += 0.10
+			if attacker.has_meta("lenskaya_am_ignore_20_def"):
+				def_ignore += 0.20
+			if attacker.eidolon >= 6 and attacker.has_meta("lenskaya_am_supernova_100_zero"):
+				def_ignore += 0.30
+
+	var total_shred_ignore: float = clampf(def_shred + def_ignore, 0.0, 1.0)
+	var numerator: float = level_atk + 20.0
+	var denominator: float = (level_def + 20.0) * (1.0 - total_shred_ignore) + level_atk + 20.0
+	if denominator <= 0.0:
+		return 1.0
+	return numerator / denominator
+
+static func get_vuln_multiplier(target: CombatUnit) -> float:
+	if target == null:
+		return 1.0
+	var vuln_mult: float = 1.0
+	if target.has_meta("lenskaya_radiance_enemy_turns") and int(target.get_meta("lenskaya_radiance_enemy_turns", 0)) > 0:
+		var has_e2: bool = bool(target.get_meta("lenskaya_radiance_enemy_e2", false))
+		vuln_mult += (0.45 if has_e2 else 0.30)
+	if target.has_meta("ego_reality_vuln_turns") and int(target.get_meta("ego_reality_vuln_turns", 0)) > 0:
+		vuln_mult += 0.30
+	if target.has_meta("valramors_ult_vuln_turns") and int(target.get_meta("valramors_ult_vuln_turns", 0)) > 0:
+		vuln_mult += 0.20
+	if target.has_meta("joan_tech_vuln_turns") and int(target.get_meta("joan_tech_vuln_turns", 0)) > 0:
+		vuln_mult += 0.20
+	if target.has_meta("katarina_vuln_turns") and int(target.get_meta("katarina_vuln_turns", 0)) > 0:
+		vuln_mult += 0.20
+	if target.has_meta("shoji_swan_dance_vuln_turns") and int(target.get_meta("shoji_swan_dance_vuln_turns", 0)) > 0:
+		vuln_mult += float(target.get_meta("shoji_swan_dance_vuln_pct", 0.20))
+	if target.has_meta("admin_vuln_turns") and int(target.get_meta("admin_vuln_turns", 0)) > 0:
+		vuln_mult += float(target.get_meta("admin_vuln_pct", 0.30))
+	return vuln_mult
+
+static func get_dmg_reduction_multiplier(target: CombatUnit) -> float:
+	if target == null:
+		return 1.0
+	var red_mult: float = 1.0
+	if target.has_meta("dmg_reduction"):
+		red_mult *= maxf(0.0, 1.0 - float(target.get_meta("dmg_reduction", 0.0)))
+	if target.has_meta("boss_dmg_reduction"):
+		red_mult *= maxf(0.0, 1.0 - float(target.get_meta("boss_dmg_reduction", 0.0)))
+	return red_mult
+
+static func get_element_break_multiplier(element: int) -> float:
+	match element:
+		CombatConstants.Element.PHYSICAL, CombatConstants.Element.FIRE:
+			return 2.0
+		CombatConstants.Element.WIND:
+			return 1.5
+		CombatConstants.Element.LIGHTNING, CombatConstants.Element.ICE:
+			return 1.0
+		CombatConstants.Element.QUANTUM, CombatConstants.Element.IMAGINARY:
+			return 0.5
+	return 1.0
 
 static func roll_crit(attacker: CombatUnit) -> bool:
 	return randf() < attacker.stats.crit_rate
@@ -16,9 +105,16 @@ static func get_target_res_shred(target: CombatUnit, element: int) -> float:
 		CombatConstants.Element.PHYSICAL:
 			if target.has_meta("phys_res_reduced_turns") and int(target.get_meta("phys_res_reduced_turns", 0)) > 0:
 				shred += 0.20
+			elif target.has_meta("katarina_phys_res_reduction") and int(target.get_meta("katarina_vuln_turns", 0)) > 0:
+				shred += float(target.get_meta("katarina_phys_res_reduction", 0.20))
 		CombatConstants.Element.FIRE:
 			if target.has_meta("shoji_fire_res_reduced_turns") and int(target.get_meta("shoji_fire_res_reduced_turns", 0)) > 0:
 				shred += 0.40
+		CombatConstants.Element.QUANTUM:
+			if target.has_meta("quantum_res_reduced_turns") and int(target.get_meta("quantum_res_reduced_turns", 0)) > 0:
+				shred += 0.12
+	if target.has_meta("katarina_all_res_reduction") and int(target.get_meta("katarina_vuln_turns", 0)) > 0:
+		shred += float(target.get_meta("katarina_all_res_reduction", 0.20))
 	return shred
 
 # Получение множителя Сопротивления (RES) для атаки (возвращает строго float)
@@ -27,19 +123,27 @@ static func get_res_multiplier(attacker: CombatUnit, target: CombatUnit) -> floa
 	var base_res := 0.20
 	if attacker.element in target.weaknesses:
 		base_res = 0.0
+	if attacker.element == CombatConstants.Element.ICE and target.has_meta("ice_res_bonus"):
+		base_res = float(target.get_meta("ice_res_bonus", 0.40))
+	if attacker.element == CombatConstants.Element.IMAGINARY and target.has_meta("imaginary_res_bonus"):
+		base_res = float(target.get_meta("imaginary_res_bonus", 0.40))
 		
 	# 2. Срез сопротивления (дебафф на цели)
 	var res_shred := get_target_res_shred(target, attacker.element)
 	
 	var e1_pen := 0.0
 	if attacker.has_meta("milena_e1_res_pen"):
-		e1_pen = float(attacker.get_meta("milena_e1_res_pen", 0.0))
+		e1_pen += float(attacker.get_meta("milena_e1_res_pen", 0.0))
+
+	# Е6 Ленской: 20% пробития сопротивлений
+	if attacker.id == "lenskaya" and attacker.eidolon >= 6:
+		e1_pen += 0.20
 	
 	# 3. Пробитие сопротивления / Игнор (бафф на атакующем)
 	var res_pen := float(attacker.get_meta("res_pen_bonus", 0.0))
 	
 	# Формула HSR: 1 - (RES - Shred - RES_PEN)
-	return 1.0 - (base_res - res_shred - res_pen)
+	return 1.0 - (base_res - res_shred - res_pen - e1_pen)
 
 # Полная и строго типизированная версия calc_damage с поддержкой легендарных конусов
 # Полная и строго типизированная версия calc_damage с поддержкой конусов
@@ -54,6 +158,8 @@ static func calc_damage(
 ) -> Dictionary:
 	var crit_dmg_val := attacker.stats.get_effective_crit_dmg(attacker.statuses, extra_crit_dmg)
 	var dmg_bonus := 1.0 + attacker.stats.damage_bonus + element_bonus + extra_damage_bonus
+	if attacker.has_meta("ice_reflection_bonus") and int(attacker.get_meta("ice_reflection_buff_turns", 0)) > 0 and (attacker.element == CombatConstants.Element.ICE or element_bonus > 0.0):
+		dmg_bonus += float(attacker.get_meta("ice_reflection_bonus", 0.15))
 	
 	if target.statuses.toughness_broken:
 		dmg_bonus += CombatConstants.BREAK_DAMAGE_BONUS
@@ -76,6 +182,12 @@ static func calc_damage(
 	var extra_cr := 0.0
 	if target and target.has_meta("cant_kill_you_crit_boost_" + attacker.id) and target.get_meta("cant_kill_you_crit_boost_" + attacker.id, false):
 		extra_cr += 0.30
+
+	# След 1 Ленской • Хранитель небес: КШ +10% от ЭП (макс +30%), КУ +50% от ЭП (макс +150%)
+	if attacker.id == "lenskaya_sky_guardian":
+		var eff_be := attacker.get_effective_be()
+		extra_cr += minf(eff_be * 0.10, 0.30)
+		crit_dmg_val += minf(eff_be * 0.50, 1.50)
 		
 	var old_cr := attacker.stats.crit_rate
 	attacker.stats.crit_rate += extra_cr
@@ -97,14 +209,30 @@ static func calc_damage(
 	
 	return {"damage": final, "crit": crit}
 
-static func calc_break_damage(attacker: CombatUnit, target: CombatUnit = null) -> float:
-	var target_max_toughness := 150.0 
-	if target:
+static func calc_raw_break_damage(attacker: CombatUnit, target: CombatUnit = null) -> float:
+	var elem_mult: float = 1.0
+	if attacker != null:
+		elem_mult = get_element_break_multiplier(attacker.element)
+	var target_max_toughness := 60.0
+	if target != null and target.max_toughness > 0.0:
 		target_max_toughness = target.max_toughness
-		
-	# ИСПРАВЛЕНО: Считываем эффективный BE через новый метод (с учетом баффа Милены)
-	var break_effect_val := attacker.get_effective_be()
-	return BASE_BREAK_VALUE * (target_max_toughness + 2.0) * (1.0 + break_effect_val)
+	var toughness_mult: float = 0.5 + (target_max_toughness / 120.0)
+	return LEVEL_MULTIPLIER * elem_mult * toughness_mult
+
+static func calc_break_damage(attacker: CombatUnit, target: CombatUnit = null, ability_mult: float = 1.0) -> float:
+	if attacker == null:
+		return 0.0
+	var base_break := calc_raw_break_damage(attacker, target)
+	var be_mult := 1.0 + attacker.get_effective_be()
+	var break_boost_mult := 1.0 + float(attacker.get_meta("break_dmg_boost", 0.0))
+	var def_mult := get_def_multiplier(attacker, target)
+	var res_mult := get_res_multiplier(attacker, target) if target != null else 1.0
+	var vuln_mult := get_vuln_multiplier(target)
+	var dmg_red_mult := get_dmg_reduction_multiplier(target)
+	# Множитель пробития цели: 0.9 если стойкость не была истощена (включая первичный урон пробития)
+	var broken_mult := 0.9 if (target == null or not target.statuses.toughness_broken) else 1.0
+
+	return base_break * ability_mult * be_mult * break_boost_mult * def_mult * res_mult * vuln_mult * dmg_red_mult * broken_mult
 
 static func calc_dot_damage(attacker: CombatUnit, multiplier: float) -> float:
 	var base_dot := attacker.stats.atk * multiplier
@@ -119,15 +247,40 @@ static func calc_dot_damage(attacker: CombatUnit, multiplier: float) -> float:
 			
 	return base_dot
 
-static func calc_super_break_damage(attacker: CombatUnit, target: CombatUnit, base_tgh_reduction: float) -> float:
-	# Рассчитываем силу истощения стойкости атаки
-	var tgh_reduction_term := base_tgh_reduction * (1.0 + attacker.stats.weakness_efficiency) / 30.0
-	
-	# Считываем урон пробития, который масштабируется от макс. стойкости врага и эффекта пробития атакующего
-	var base_break_dmg := calc_break_damage(attacker, target)
-	
-	# Применяем множитель защиты цели
-	var def_mult := calc_def_multiplier(target.stats.def)
-	
-	# Итоговый урон суперпробития
-	return tgh_reduction_term * base_break_dmg * def_mult
+static func calc_super_break_damage(attacker: CombatUnit, target: CombatUnit, base_tgh_reduction: float, ability_mult: float = 1.0) -> float:
+	if attacker == null or target == null:
+		return 0.0
+
+	# 1. Уменьшение стойкости / 10 с учетом эффективности пробития атакующего
+	var effective_tgh_reduction: float = base_tgh_reduction * (1.0 + attacker.stats.weakness_efficiency)
+	var tgh_reduction_term: float = effective_tgh_reduction / 10.0
+
+	# 2. Множитель уровня и способности
+	var base_super_break: float = tgh_reduction_term * LEVEL_MULTIPLIER * ability_mult
+
+	# 3. (1 + Эффект пробития)
+	var break_effect_mult: float = 1.0 + attacker.get_effective_be()
+
+	# 4. (1 + Повышение урона пробития)
+	var break_boost_mult: float = 1.0 + float(attacker.get_meta("break_dmg_boost", 0.0))
+
+	# 5. (1 + Повышение урона суперпробития)
+	var extra_sb_mult: float = float(attacker.get_meta("super_break_mult", 0.0))
+	# След 3 Ленской: Урон Суперпробития Усиленной базовой атаки повышается на 30%
+	if attacker.id == "lenskaya_sky_guardian" and (attacker.get_meta("is_enhanced_basic", false) or (base_tgh_reduction >= 30.0 and int(attacker.get_meta("lenskaya_enhanced_basic_turns", 0)) > 0)):
+		extra_sb_mult += 0.30
+	var super_break_boost_mult: float = 1.0 + extra_sb_mult
+
+	# 6. Множитель защиты
+	var def_mult: float = get_def_multiplier(attacker, target)
+
+	# 7. Множитель сопротивления
+	var res_mult: float = get_res_multiplier(attacker, target)
+
+	# 8. Множитель получаемого урона (Vulnerability)
+	var vuln_mult: float = get_vuln_multiplier(target)
+
+	# 9. Множитель уменьшения урона цели
+	var dmg_red_mult: float = get_dmg_reduction_multiplier(target)
+
+	return base_super_break * break_effect_mult * break_boost_mult * super_break_boost_mult * def_mult * res_mult * vuln_mult * dmg_red_mult

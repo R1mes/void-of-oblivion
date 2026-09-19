@@ -41,23 +41,6 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "Ход: —"
 
-[node name="SkillPointsLabel" type="Label" parent="TopBar" unique_id=1823413968]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 22
-text = "ОН: 3 / 5"
-
-[node name="EnergyLabel" type="Label" parent="TopBar" unique_id=1795441677]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "ЭН: 0 / 100"
-
-[node name="EnergyBar" type="ProgressBar" parent="TopBar" unique_id=807426159]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 24)
-layout_mode = 2
-
 [node name="AryaLabel" type="Label" parent="TopBar" unique_id=207278433]
 unique_name_in_owner = true
 layout_mode = 2
@@ -99,32 +82,44 @@ theme_override_constants/separation = 4
 [node name="SkillsPanel" type="PanelContainer" parent="." unique_id=1943784094]
 unique_name_in_owner = true
 visible = false
+z_index = 80
 layout_mode = 1
-anchors_preset = 11
-anchor_left = 1.0
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -400.0
-offset_top = 170.0
-offset_right = -16.0
-offset_bottom = -100.0
-grow_horizontal = 0
+offset_left = 50.0
+offset_top = 50.0
+offset_right = -50.0
+offset_bottom = -50.0
+grow_horizontal = 2
 grow_vertical = 2
 
 [node name="SkillsMargin" type="MarginContainer" parent="SkillsPanel" unique_id=767741385]
 layout_mode = 2
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 12
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
 
 [node name="SkillsVBox" type="VBoxContainer" parent="SkillsPanel/SkillsMargin" unique_id=814546394]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="SkillsTitle" type="Label" parent="SkillsPanel/SkillsMargin/SkillsVBox" unique_id=866685757]
+[node name="SkillsHeader" type="HBoxContainer" parent="SkillsPanel/SkillsMargin/SkillsVBox"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "Способности"
+
+[node name="SkillsTitle" type="Label" parent="SkillsPanel/SkillsMargin/SkillsVBox/SkillsHeader" unique_id=866685757]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 20
+text = "📖 Описание Способностей"
+horizontal_alignment = 1
+
+[node name="BtnCloseSkills" type="Button" parent="SkillsPanel/SkillsMargin/SkillsVBox/SkillsHeader" unique_id=866685758]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 36)
+layout_mode = 2
+text = "✕"
 
 [node name="SkillsText" type="RichTextLabel" parent="SkillsPanel/SkillsMargin/SkillsVBox" unique_id=1755818601]
 unique_name_in_owner = true
@@ -132,6 +127,7 @@ layout_mode = 2
 size_flags_vertical = 3
 theme_override_font_sizes/normal_font_size = 15
 bbcode_enabled = true
+scroll_active = true
 
 [node name="Battlefield" type="VBoxContainer" parent="." unique_id=1324822486]
 layout_mode = 1
@@ -140,9 +136,9 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -540.0
+offset_left = -740.0
 offset_top = -250.0
-offset_right = 540.0
+offset_right = 740.0
 offset_bottom = 250.0
 grow_horizontal = 2
 grow_vertical = 2
@@ -176,6 +172,7 @@ alignment = 1
 
 [node name="ActionPanel" type="PanelContainer" parent="." unique_id=1173385643]
 unique_name_in_owner = true
+z_index = 15
 layout_mode = 1
 anchors_preset = 7
 anchor_left = 0.5
@@ -191,66 +188,195 @@ grow_vertical = 0
 
 [node name="ActionButtons" type="HBoxContainer" parent="ActionPanel" unique_id=1636594461]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 12
 alignment = 1
 
-[node name="BtnBasic" type="Button" parent="ActionPanel/ActionButtons" unique_id=2120329375]
+[node name="VBoxBasic" type="VBoxContainer" parent="ActionPanel/ActionButtons" unique_id=1636594491]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="BtnBasic" type="Button" parent="ActionPanel/ActionButtons/VBoxBasic" unique_id=2120329375]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
 theme_override_font_sizes/font_size = 15
 text = "⚔ Базовая"
 
-[node name="BtnEnhancedBasic" type="Button" parent="ActionPanel/ActionButtons" unique_id=1866495955]
+[node name="BtnEnhancedBasic" type="Button" parent="ActionPanel/ActionButtons/VBoxBasic" unique_id=1866495955]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(0, 44)
+custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
 theme_override_font_sizes/font_size = 15
 text = "⚔ Усил. базовая (1 ОН)"
 
-[node name="BtnSkill" type="Button" parent="ActionPanel/ActionButtons" unique_id=616124906]
+[node name="LblHotkeyBasic" type="Label" parent="ActionPanel/ActionButtons/VBoxBasic"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.65, 0.8, 0.95, 0.9)
+text = "[W]"
+horizontal_alignment = 1
+
+[node name="VBoxSkillQ" type="VBoxContainer" parent="ActionPanel/ActionButtons" unique_id=1636594492]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="BtnSkill" type="Button" parent="ActionPanel/ActionButtons/VBoxSkillQ" unique_id=616124906]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
 theme_override_font_sizes/font_size = 15
 text = "🔷 Навык Q (1 ОН)"
 
-[node name="BtnSkillE" type="Button" parent="ActionPanel/ActionButtons" unique_id=822441066]
+[node name="LblHotkeySkillQ" type="Label" parent="ActionPanel/ActionButtons/VBoxSkillQ"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.65, 0.8, 0.95, 0.9)
+text = "[Q]"
+horizontal_alignment = 1
+
+[node name="VBoxSkillE" type="VBoxContainer" parent="ActionPanel/ActionButtons" unique_id=1636594493]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="BtnSkillE" type="Button" parent="ActionPanel/ActionButtons/VBoxSkillE" unique_id=822441066]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
 theme_override_font_sizes/font_size = 15
 text = "🔹 Навык E (2 ОН)"
 
+[node name="LblHotkeySkillE" type="Label" parent="ActionPanel/ActionButtons/VBoxSkillE"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.65, 0.8, 0.95, 0.9)
+text = "[E]"
+horizontal_alignment = 1
+
 [node name="BtnUlt" type="Button" parent="ActionPanel/ActionButtons" unique_id=335906262]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 44)
+visible = false
+custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
 theme_override_font_sizes/font_size = 15
 text = "✨ Сверхспособность"
 
 [node name="LogPanel" type="PanelContainer" parent="." unique_id=677057898]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
-offset_top = -280.0
-offset_right = 420.0
+offset_top = -52.0
+offset_right = 240.0
 offset_bottom = -16.0
 grow_vertical = 0
 
-[node name="LogList" type="RichTextLabel" parent="LogPanel" unique_id=32946336]
-unique_name_in_owner = true
+[node name="LogVBox" type="VBoxContainer" parent="LogPanel"]
 layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BtnToggleLog" type="Button" parent="LogPanel/LogVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+text = "📜 Лог боя ▲"
+
+[node name="LogList" type="RichTextLabel" parent="LogPanel/LogVBox" unique_id=32946336]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
 theme_override_font_sizes/normal_font_size = 14
 bbcode_enabled = true
 scroll_following = true
 
+[node name="SupportPanel" type="PanelContainer" parent="." unique_id=293817264]
+unique_name_in_owner = true
+visible = false
+z_index = 20
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -230.0
+offset_top = -70.0
+offset_right = -20.0
+offset_bottom = 35.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="SupportVBox" type="VBoxContainer" parent="SupportPanel"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BtnSupportAction" type="Button" parent="SupportPanel/SupportVBox" unique_id=293817265]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 68)
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Помощь:\nХор Человечества (0/12)"
+
+[node name="SkillPointsPanel" type="PanelContainer" parent="." unique_id=1823413968]
+unique_name_in_owner = true
+z_index = 10
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -220.0
+offset_top = -96.0
+offset_right = -20.0
+offset_bottom = -16.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="SkillPointsVBox" type="VBoxContainer" parent="SkillPointsPanel"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 4
+
+[node name="SkillPointsLabel" type="Label" parent="SkillPointsPanel/SkillPointsVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Очки навыков: 3 / 5"
+horizontal_alignment = 1
+
+[node name="SkillPointsPips" type="HBoxContainer" parent="SkillPointsPanel/SkillPointsVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 8
+
+[node name="ChorusDarkOverlay" type="ColorRect" parent="." unique_id=293817266]
+unique_name_in_owner = true
+visible = false
+z_index = 95
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.6)
+
 [node name="InspectOverlay" type="ColorRect" parent="." unique_id=1431103639]
 unique_name_in_owner = true
 visible = false
+z_index = 100
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -336,6 +462,7 @@ text = "Закрыть"
 [node name="ResultPanel" type="PanelContainer" parent="." unique_id=2056656387]
 unique_name_in_owner = true
 visible = false
+z_index = 110
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5

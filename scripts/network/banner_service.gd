@@ -11,8 +11,10 @@ var current_banners: Array[Dictionary] = []
 
 # Локальные баннеры по умолчанию (из main_menu.gd)
 const DEFAULT_BANNERS: Array[Dictionary] = [
+	{"id": "velzebul", "name": "Вельзевул", "title": "🩸 Вельзевул (5★)", "type": "character"},
 	{"id": "katarina", "name": "Катарина", "title": "⚔ Катарина (5★)", "type": "character"},
 	{"id": "dotseva_crimson_tears", "name": "Доцева • Багровые слёзы", "title": "🩸 Доцева • Багровые слёзы (5★)", "type": "character"},
+	{"id": "lenskaya_antimatter", "name": "Ленская • Явление антиматерии", "title": "🌌 Ленская • Явление антиматерии (5★)", "type": "character"},
 	{"id": "dotseva", "name": "Юлия Доцева", "title": "🌟 Юлия Доцева (5★)", "type": "character"},
 	{"id": "shoji", "name": "Сёдзи", "title": "🔥 Сёдзи (5★)", "type": "character"},
 	{"id": "lenskaya", "name": "Ленская", "title": "❄ Ленская (5★)", "type": "character"},
@@ -31,7 +33,10 @@ const DEFAULT_BANNERS: Array[Dictionary] = [
 	{"id": "corrupted_save", "type": "weapon", "title": "⚔ Повреждённое сохранение (5★ Конус)"},
 	{"id": "server_crash_moment", "type": "weapon", "title": "⚔ Момент, когда падают сервера (5★ Конус)"},
 	{"id": "history_soaked_in_blood", "type": "weapon", "title": "🩸 История, вымоченная в крови (5★ Конус)"},
-	{"id": "why_did_you_remember_me", "type": "weapon", "title": "⚔ Почему ты вспомнила меня? (5★ Конус)"}
+	{"id": "why_did_you_remember_me", "type": "weapon", "title": "⚔ Почему ты вспомнила меня? (5★ Конус)"},
+	{"id": "behind_the_curtains", "type": "weapon", "title": "🎭 Выход из-за кулис (5★ Конус)"},
+	{"id": "i_will_become_god", "type": "weapon", "title": "👑 Я стану богом (5★ Конус)"},
+	{"id": "let_past_stay_behind", "type": "weapon", "title": "⚔ Пусть прошлое остаётся позади (5★ Конус)"}
 ]
 
 func _ready() -> void:

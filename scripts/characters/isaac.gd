@@ -17,7 +17,7 @@ static func create_unit(eidolon: int = 0) -> CombatUnit:
 		"max_energy": MAX_ENERGY,
 		"stats": {
 			"hp": 2600,
-			"atk": 1350,
+			"atk": 1150,
 			"def": 750,
 			"spd": 103,
 			"crit_rate": 0.45 if eidolon >= 1 else 0.05, # E1: КШ повышен на +40%
@@ -46,10 +46,9 @@ static func add_theory_stacks(unit: CombatUnit, count: int, bm: BattleManager) -
 	bm.unit_updated.emit(unit)
 	bm.action_order_changed.emit()
 
-# БАЗОВАЯ АТАКА (80% СА, След 3: Продвижение действия на 20%)
-# === НАЙДИТЕ И ОБНОВИТЕ ЭТОТ МЕТОД В ISAAC.GD ===
+# БАЗОВАЯ АТАКА (70% СА, След 3: Продвижение действия на 20%)
 static func execute_basic_attack(attacker: CombatUnit, target: CombatUnit, bm: BattleManager) -> void:
-	var res := bm.calc_dmg(attacker, target, 0.80, 0.0, false, 0.0, 0.0, false, true, "Basic")
+	var res := bm.calc_dmg(attacker, target, 0.70, 0.0, false, 0.0, 0.0, false, true, "Basic")
 	bm.deal_damage(target, res.damage, attacker, attacker.element, res.crit, "Basic")
 	ToughnessSystem.apply_weakness_hit(attacker, target, bm)
 	
@@ -61,13 +60,13 @@ static func execute_basic_attack(attacker: CombatUnit, target: CombatUnit, bm: B
 	bm.gain_energy_with_err(attacker, 20.0)
 	bm.action_order_changed.emit()
 	
-# НАВЫК Q (Обычный AoE / Улучшенный - Продвижение союзника на 100% и бафф урона +80%)
+# НАВЫК Q (Обычный AoE / Улучшенный - Продвижение союзника на 100% и бафф урона +50%)
 static func execute_skill_q(attacker: CombatUnit, target: CombatUnit, extra_targets: Array, bm: BattleManager) -> void:
 	var stacks: int = int(attacker.get_meta("isaac_theory_stacks", 0))
 	var is_enhanced: bool = stacks >= 8
 	
 	if is_enhanced:
-		# Улучшенный Q: продвигает союзника и увеличивает его урон на 80% на 1 ход
+		# Улучшенный Q: продвигает союзника и увеличивает его урон на 50% на 1 ход
 		target.advance_action(100.0)
 		target.set_meta("isaac_dmg_buff_turns", 1)
 		target.set_meta("isaac_dmg_buff_skip_tick", true)
@@ -79,12 +78,12 @@ static func execute_skill_q(attacker: CombatUnit, target: CombatUnit, extra_targ
 			
 		# Сбрасывает стаки до 0
 		attacker.set_meta("isaac_theory_stacks", 0)
-		bm.log_message("Улучшенный Q Айзека: действие %s продвинуто на 100%%, урон повышен на +80%% на 1 ход." % target.display_name)
+		bm.log_message("Улучшенный Q Айзека: действие %s продвинуто на 100%%, урон повышен на +50%% на 1 ход." % target.display_name)
 	else:
-		# Обычный Q: 90% СА всем врагам и +2 уровня Теории на практике
+		# Обычный Q: 75% СА всем врагам и +2 уровня Теории на практике
 		var living := bm.get_living_enemies()
 		for enemy in living:
-			var res := bm.calc_dmg(attacker, enemy, 0.90, 0.0, false, 0.0, 0.0, false, true, "Skill")
+			var res := bm.calc_dmg(attacker, enemy, 0.75, 0.0, false, 0.0, 0.0, false, true, "Skill")
 			bm.deal_damage(enemy, res.damage, attacker, attacker.element, res.crit, "Skill")
 			ToughnessSystem.apply_weakness_hit(attacker, enemy, bm, 1.0)
 			
@@ -96,12 +95,12 @@ static func execute_skill_q(attacker: CombatUnit, target: CombatUnit, extra_targ
 		bm.unit_updated.emit(target)
 	bm.action_order_changed.emit()
 
-# НАВЫК E (120% СА цели, 60% соседям, накладывает +50% получаемого КУ и -30% наносимого урона на 3 хода)
+# НАВЫК E (100% СА цели, 50% соседям, накладывает +35% получаемого КУ и -20% наносимого урона на 3 хода)
 static func execute_skill_e(attacker: CombatUnit, target: CombatUnit, bm: BattleManager) -> void:
 	var adjacent := bm.get_adjacent_enemies(target)
 	
 	# Урон по главной цели
-	var res_c := bm.calc_dmg(attacker, target, 1.20, 0.0, false, 0.0, 0.0, false, true, "Skill")
+	var res_c := bm.calc_dmg(attacker, target, 1.00, 0.0, false, 0.0, 0.0, false, true, "Skill")
 	bm.deal_damage(target, res_c.damage, attacker, attacker.element, res_c.crit, "Skill")
 	ToughnessSystem.apply_weakness_hit(attacker, target, bm, 1.0)
 	
@@ -109,34 +108,33 @@ static func execute_skill_e(attacker: CombatUnit, target: CombatUnit, bm: Battle
 	if NaamaAbilities.roll_debuff(1.00, attacker, target, bm):
 		target.set_meta("isaac_crit_dmg_taken_turns", 3)
 		target.set_meta("isaac_dmg_reduce_turns", 3)
-		bm.log_message("Дебафф Айзека на %s: Получаемый КУ +50%%, наносимый урон −30%% на 3 хода." % target.display_name)
+		bm.log_message("Дебафф Айзека на %s: Получаемый КУ +35%%, наносимый урон −20%% на 3 хода." % target.display_name)
 		
 	# Урон и дебаффы по соседям
 	for adj in adjacent:
 		if adj.is_alive():
-			var res_a := bm.calc_dmg(attacker, adj, 0.60, 0.0, false, 0.0, 0.0, false, true, "Skill")
+			var res_a := bm.calc_dmg(attacker, adj, 0.50, 0.0, false, 0.0, 0.0, false, true, "Skill")
 			bm.deal_damage(adj, res_a.damage, attacker, attacker.element, res_a.crit, "Skill")
 			ToughnessSystem.apply_weakness_hit(attacker, adj, bm, 0.5)
 			
 			if NaamaAbilities.roll_debuff(1.00, attacker, adj, bm):
 				adj.set_meta("isaac_crit_dmg_taken_turns", 3)
 				adj.set_meta("isaac_dmg_reduce_turns", 3)
-				bm.log_message("Дебафф Айзека на соседа %s: Получаемый КУ +50%%, наносимый урон −30%% на 3 хода." % adj.display_name)
+				bm.log_message("Дебафф Айзека на соседа %s: Получаемый КУ +35%%, наносимый урон −20%% на 3 хода." % adj.display_name)
 				
 	bm.gain_energy_with_err(attacker, 30.0)
 
-# СВЕРХСПОСОБНОСТЬ (Бафф КУ союзника на +100% и скорости на +20 на 2 хода)
+# СВЕРХСПОСОБНОСТЬ (Бафф КУ союзника на +60% и скорости на +16 на 2 хода)
 static func execute_ultimate(attacker: CombatUnit, target: CombatUnit, bm: BattleManager) -> void:
 	target.set_meta("isaac_ult_buff_turns", 2)
 	target.set_meta("isaac_ult_buff_skip_tick", true)
 	
-	# Начисляем +20 плоской скорости
-	target.add_speed_modifier(0.0, 20.0)
-	target.set_meta("isaac_ult_spd_bonus", 20.0)
+	# Начисляем +16 плоской скорости
+	target.add_speed_modifier(0.0, 16.0)
+	target.set_meta("isaac_ult_spd_bonus", 16.0)
 	
-	bm.log_message("Сверхспособность Айзека: Крит. урон %s повышен на +100%%, скорость на +20 ед. на 2 хода!" % target.display_name)
+	bm.log_message("Сверхспособность Айзека: Крит. урон %s повышен на +60%%, скорость на +16 ед. на 2 хода!" % target.display_name)
 	
-	target.recalculate_action_value()
 	bm.gain_energy_with_err(attacker, 5.0)
 	bm.unit_updated.emit(target)
 	bm.action_order_changed.emit()

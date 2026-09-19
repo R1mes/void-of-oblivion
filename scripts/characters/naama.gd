@@ -41,7 +41,8 @@ static func get_effect_res(unit: CombatUnit) -> float:
 		return float(unit.get_meta("relic_effect_res", 0.0)) + unit.statuses.effect_resist_bonus
 		
 	# Безопасный дефолтный fallback на основе прописанных в шаблонах коэффициентов
-	match unit.id:
+	var base_id: String = unit.id.trim_suffix("_clone")
+	match base_id:
 		"void_soldier": return 0.10
 		"void_elite": return 0.15
 		"void_armored": return 0.15
@@ -52,6 +53,15 @@ static func get_effect_res(unit: CombatUnit) -> float:
 		"ortho_mutant": return 0.20
 		"infected": return 0.10
 		"ortho_spore": return 0.10
+		"citadel_cleaner": return 0.15
+		"ortofetamin_horror": return 0.25
+		"shoji_vz": return 0.30
+		"velzebul_boss": return 0.35
+		"rimes_final_boss": return 0.40
+		"your_memories": return 0.25
+		"void_paws": return 0.15
+	if unit.stats and "effect_res" in unit.stats and unit.stats.effect_res > 0.0:
+		return unit.stats.effect_res
 	return 0.10
 
 # Метод математического расчета наложения дебаффа по формуле HSR
@@ -72,6 +82,8 @@ static func roll_debuff(base_chance: float, attacker: CombatUnit, target: Combat
 		roll * 100.0,
 		"[color=green]УСПЕХ[/color]" if success else "[color=red]ПРОМАХ[/color]"
 	])
+	if success and bm != null and target.id == "your_memories" and attacker != null and attacker.is_ally:
+		bm.on_debuff_applied_to_enemy(target, attacker)
 	return success
 
 # Вспомогательный метод добавления стаков Опьянения

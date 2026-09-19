@@ -20,3 +20,7 @@ godot.log
 # OS files
 .DS_Store
 Thumbs.db
+
+# User runtime data
+user/
+user_data/

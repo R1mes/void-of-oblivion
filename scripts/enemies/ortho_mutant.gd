@@ -107,7 +107,14 @@ static func _execute_spore_summon(enemy: CombatUnit, allies: Array, bm: BattleMa
 			var res: Dictionary = bm.calc_dmg(enemy, ally, 0.80)
 			bm.deal_damage(ally, float(res.get("damage", 0.0)), enemy, enemy.element, bool(res.get("crit", false)))
 
-	# Удаляем мертвых врагов из массива перед спавном новых, чтобы освободить место для новых карточек
+	# Сначала удаляем мёртвых врагов, чтобы освободить карточки на поле боя
+	var to_remove: Array[CombatUnit] = []
+	for e in bm.enemies:
+		if e is CombatUnit and not e.is_alive():
+			to_remove.append(e)
+	for dead_e in to_remove:
+		bm.enemies.erase(dead_e)
+
 	var occupied_slots: Array[int] = []
 	for e in bm.enemies:
 		if e is CombatUnit and e.is_alive():
@@ -116,15 +123,10 @@ static func _execute_spore_summon(enemy: CombatUnit, allies: Array, bm: BattleMa
 	var living_count := occupied_slots.size()
 	var spawn_limit := mini(2, 5 - living_count)
 	if spawn_limit <= 0:
+		if not to_remove.is_empty():
+			bm.enemies_reshuffled.emit()
+			bm.action_order_changed.emit()
 		return
-
-	# Если есть мёртвые враги, удаляем их из bm.enemies, чтобы освободить карточки на поле боя
-	var to_remove: Array[CombatUnit] = []
-	for e in bm.enemies:
-		if e is CombatUnit and not e.is_alive():
-			to_remove.append(e)
-	for dead_e in to_remove:
-		bm.enemies.erase(dead_e)
 
 	var spawned := 0
 	for s in range(5):
@@ -139,7 +141,7 @@ static func _execute_spore_summon(enemy: CombatUnit, allies: Array, bm: BattleMa
 			spawned += 1
 			bm.log_message("🌱 На поле боя прорастает %s в слоте %d!" % [spore.display_name, s + 1])
 
-	if spawned > 0:
+	if spawned > 0 or not to_remove.is_empty():
 		bm.enemies_reshuffled.emit()
 		bm.action_order_changed.emit()
 

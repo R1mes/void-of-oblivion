@@ -41,6 +41,7 @@ var saved_teams: Dictionary = {}
 var saved_teams_admin: Dictionary = {}
 var last_used_team: Array[Dictionary] = []
 var relic_inventory: Array[Dictionary] = []
+var is_admin_battle: bool = false
 
 const SAVE_PATH := "user://save_game.json"
 const PRESETS_DIR := "user://team_presets/"
@@ -57,6 +58,7 @@ func reset() -> void:
 	enemy_members.clear()
 	battle_initiator_id = "vika"
 	battle_mode = "custom"
+	is_admin_battle = false
 
 func reset_all_progress() -> void:
 	coins = 300

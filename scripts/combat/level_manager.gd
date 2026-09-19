@@ -8,11 +8,13 @@ static var is_tutorial: bool = false
 static var tut_step: int = 0
 
 # UI-элементы обучения
-static var tut_overlay: ColorRect
-static var tut_panel: PanelContainer
-static var tut_label: RichTextLabel
-static var tut_next_btn: Button
-static var tut_pointer: Label
+const TutorialGuideOverlayScript = preload("res://scripts/ui/tutorial_guide_overlay.gd")
+static var guide_overlay: Control = null
+static var tut_overlay: Control = null
+static var tut_panel: Control = null
+static var tut_label: Control = null
+static var tut_next_btn: Control = null
+static var tut_pointer: Control = null
 
 # --- 1. ИНИЦИАЛИЗАЦИЯ И НАСТРОЙКА УРОВНЕЙ ---
 
@@ -228,6 +230,40 @@ static func setup_level_battle(level_id: String, bm: BattleManager) -> void:
 					ally.stats.break_effect += 0.50
 				bm.log_message("🏙 Детройт | Аномалия «Другая сторона»: Эффект пробития +50%, поверженный враг продвигает отряд на 25% и восстанавливает 20 энергии!")
 
+			"dungeon_detroit_airfield":
+				var elite: CombatUnit = OrtofetaminHorror.create_unit()
+				elite.display_name = "Ужас ортофетамина"
+				elite.stats.max_hp = 135000.0 * hp_scale
+				elite.stats.hp = elite.stats.max_hp
+				elite.stats.atk = 2500.0 * atk_scale
+				bm.enemies.append(elite)
+
+				for i in 2:
+					var inf: CombatUnit = Infected.create_unit()
+					inf.display_name = "Заражённый %d" % (i + 1)
+					inf.stats.max_hp = 42000.0 * hp_scale
+					inf.stats.hp = inf.stats.max_hp
+					inf.stats.atk = 1600.0 * atk_scale
+					bm.enemies.append(inf)
+				bm.log_message("🛫 Аэродром Детройта | Аномалия «Звёздный распад»: Крит. урон +30%, Бинарный урон игнорирует 20% защиты, урон по ослабленным целям +25%!")
+
+			"planar_server":
+				var boss: CombatUnit = ShojiVz.create_unit()
+				boss.display_name = "Сёдзи ВЗ"
+				boss.stats.max_hp = 240000.0 * hp_scale
+				boss.stats.hp = boss.stats.max_hp
+				boss.stats.atk = 2500.0 * atk_scale
+				bm.enemies.append(boss)
+
+				for i in 2:
+					var cleaner: CombatUnit = CitadelCleaner.create_unit(i + 1, true)
+					cleaner.display_name = "Чистильщик Цитадели %d" % (i + 1)
+					cleaner.stats.max_hp = 38000.0 * hp_scale
+					cleaner.stats.hp = cleaner.stats.max_hp
+					cleaner.stats.atk = 1500.0 * atk_scale
+					bm.enemies.append(cleaner)
+				bm.log_message("🖥 Сервер | Аномалия «Глубины реальности»: Скорость отряда +15%, подрыв DoT восстанавливает 5 энергии и 1 Вектор!")
+
 			_:
 				var elite_def: CombatUnit = VoidElite.create_unit()
 				elite_def.stats.max_hp = 85000.0 * hp_scale
@@ -251,9 +287,9 @@ static func setup_level_battle(level_id: String, bm: BattleManager) -> void:
 		bm.enemies.clear()
 		for i in 3:
 			var soldier: CombatUnit = VoidSoldier.create_unit()
-			soldier.stats.max_hp = 1755.0
-			soldier.stats.hp = 1755.0
-			soldier.stats.atk = 3300.0
+			soldier.stats.max_hp = 3200.0
+			soldier.stats.hp = 3200.0
+			soldier.stats.atk = 600.0
 			bm.enemies.append(soldier)
 		bm.log_message("⚔ Уровень 1: Обучение бою с 3 Солдатами Пустоты")
 
@@ -265,7 +301,7 @@ static func setup_level_battle(level_id: String, bm: BattleManager) -> void:
 			var soldier: CombatUnit = VoidSoldier.create_unit()
 			soldier.stats.max_hp = 3500.0
 			soldier.stats.hp = 3500.0
-			soldier.stats.atk = 2200.0
+			soldier.stats.atk = 1100.0
 			bm.enemies.append(soldier)
 		bm.log_message("⚔ Уровень 2: Обучение Уязвимостям и Щитам Данилла")
 
@@ -276,6 +312,8 @@ static func setup_level_battle(level_id: String, bm: BattleManager) -> void:
 		var elite: CombatUnit = VoidElite.create_unit()
 		elite.stats.max_hp *= 0.70
 		elite.stats.hp = elite.stats.max_hp
+		elite.max_toughness = 90.0
+		elite.toughness = 90.0
 		bm.enemies.append(elite)
 		bm.log_message("⚔ Уровень 3: Фракции и Пробитие Каори против Элитного Стража (70% ХП)")
 
@@ -334,8 +372,10 @@ static func setup_level_battle(level_id: String, bm: BattleManager) -> void:
 		bm.enemies.clear()
 		for i in 3:
 			var elite: CombatUnit = VoidElite.create_unit()
+			elite.stats.max_hp *= 0.75
+			elite.stats.hp = elite.stats.max_hp
 			bm.enemies.append(elite)
-		bm.log_message("⚔ Уровень 7: 3 Элитных Стража (Аномалия: Крит. Шанс +50% на 3 хода)")
+		bm.log_message("⚔ Уровень 7: 3 Элитных Стража (75% ХП, Аномалия: Крит. Шанс +50% на 3 хода)")
 
 	elif level_id == "level_8":
 		is_tutorial = false
@@ -537,7 +577,37 @@ static func setup_level_battle(level_id: String, bm: BattleManager) -> void:
 		var s2: CombatUnit = VoidSoldier.create_unit()
 		s2.stats.max_hp = 70200.0; s2.stats.hp = s2.stats.max_hp; s2.stats.atk = 2800.0
 		bm.enemies.append(s2)
-		bm.log_message("⚔ Уровень 20 (ФИНАЛЬНЫЙ БОСС): Силуэт в Маске и Солдаты Бездны")
+		bm.log_message("⚔ Уровень 20: Силуэт в Маске и Солдаты Бездны")
+	elif level_id == "level_21":
+		is_tutorial = false
+		bm.skill_points = 3
+		bm.skill_points_changed.emit(3)
+		bm.enemies.clear()
+		var cleaner1: CombatUnit = CitadelCleaner.create_unit(0, true)
+		cleaner1.stats.max_hp = 45000.0; cleaner1.stats.hp = cleaner1.stats.max_hp; cleaner1.stats.atk = 1800.0
+		bm.enemies.append(cleaner1)
+		var shoji_boss: CombatUnit = ShojiVz.create_unit()
+		shoji_boss.stats.max_hp = 240000.0; shoji_boss.stats.hp = shoji_boss.stats.max_hp; shoji_boss.stats.atk = 2600.0
+		bm.enemies.append(shoji_boss)
+		var cleaner2: CombatUnit = CitadelCleaner.create_unit(2, true)
+		cleaner2.stats.max_hp = 45000.0; cleaner2.stats.hp = cleaner2.stats.max_hp; cleaner2.stats.atk = 1800.0
+		bm.enemies.append(cleaner2)
+		bm.log_message("⚔ Уровень 21 (БОСС): Сёдзи ВЗ и Взломанные Чистильщики Цитадели")
+	elif level_id == "level_22" or level_id == "boss_velzebul":
+		is_tutorial = false
+		bm.skill_points = 3
+		bm.skill_points_changed.emit(3)
+		bm.enemies.clear()
+		var velz: CombatUnit = VelzebulBoss.create_unit()
+		velz.stats.max_hp = 320000.0; velz.stats.hp = velz.stats.max_hp; velz.stats.atk = 2700.0
+		bm.enemies.append(velz)
+		var inf1: CombatUnit = Infected.create_unit()
+		inf1.stats.max_hp = 50000.0; inf1.stats.hp = inf1.stats.max_hp; inf1.stats.atk = 1800.0
+		bm.enemies.append(inf1)
+		var inf2: CombatUnit = Infected.create_unit()
+		inf2.stats.max_hp = 50000.0; inf2.stats.hp = inf2.stats.max_hp; inf2.stats.atk = 1800.0
+		bm.enemies.append(inf2)
+		bm.log_message("⚔ Уровень 22 (ВЕЛИКИЙ БОСС): Вельзевул — Повелительница Антиматерии")
 # --- 2. ПОДПИСКА И УПРАВЛЕНИЕ ОБУЧЕНИЕМ В UI ---
 
 static func init_tutorial_ui(battle_ui: Control) -> void:
@@ -548,62 +618,21 @@ static func init_tutorial_ui(battle_ui: Control) -> void:
 		battle_ui.battle_manager.skill_points = 0
 		battle_ui.battle_manager.skill_points_changed.emit(0)
 
-	tut_overlay = ColorRect.new()
-	tut_overlay.color = Color(0, 0, 0, 0.2)
-	tut_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	tut_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	battle_ui.add_child(tut_overlay)
+	if guide_overlay and is_instance_valid(guide_overlay):
+		guide_overlay.queue_free()
+		guide_overlay = null
 
-	tut_panel = PanelContainer.new()
-	tut_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	tut_panel.custom_minimum_size = Vector2(380, 280)
-	tut_panel.offset_left = -410
-	tut_panel.offset_right = -30
-	tut_panel.offset_top = -140
-	tut_panel.offset_bottom = 140
+	guide_overlay = TutorialGuideOverlayScript.new()
+	battle_ui.add_child(guide_overlay)
 	
-	var panel_sb := StyleBoxFlat.new()
-	panel_sb.bg_color = Color(0.08, 0.10, 0.16, 0.95)
-	panel_sb.border_color = Color(0.9, 0.75, 0.3, 1.0)
-	panel_sb.set_border_width_all(2)
-	panel_sb.set_corner_radius_all(12)
-	panel_sb.set_content_margin_all(14)
-	tut_panel.add_theme_stylebox_override("panel", panel_sb)
-	
-	tut_overlay.add_child(tut_panel)
+	# Для обратной совместимости со старыми ссылками
+	tut_overlay = guide_overlay
+	tut_panel = guide_overlay.dialog_panel
+	tut_label = guide_overlay.text_label
+	tut_next_btn = guide_overlay.btn_next
+	tut_pointer = guide_overlay.pointer_label
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
-	tut_panel.add_child(vbox)
-
-	tut_label = RichTextLabel.new()
-	tut_label.custom_minimum_size = Vector2(0, 180)
-	tut_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	tut_label.bbcode_enabled = true
-	tut_label.add_theme_font_size_override("normal_font_size", 16)
-	vbox.add_child(tut_label)
-
-	tut_next_btn = Button.new()
-	tut_next_btn.text = "Далее ➔"
-	tut_next_btn.custom_minimum_size = Vector2(180, 44)
-	tut_next_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
-	
-	var btn_sb := StyleBoxFlat.new()
-	btn_sb.bg_color = Color(0.15, 0.55, 0.95, 1.0)
-	btn_sb.set_corner_radius_all(8)
-	tut_next_btn.add_theme_stylebox_override("normal", btn_sb)
-	tut_next_btn.add_theme_font_size_override("font_size", 16)
-	tut_next_btn.pressed.connect(func(): _on_next_pressed(battle_ui))
-	vbox.add_child(tut_next_btn)
-
-	tut_pointer = Label.new()
-	tut_pointer.text = "⬇"
-	tut_pointer.add_theme_font_size_override("font_size", 56)
-	tut_pointer.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2))
-	tut_pointer.add_theme_color_override("font_outline_color", Color.BLACK)
-	tut_pointer.add_theme_constant_override("outline_size", 10)
-	tut_pointer.visible = false
-	battle_ui.add_child(tut_pointer)
+	guide_overlay.set_skip_callback(func(): _show_skip_confirmation(battle_ui))
 
 	if current_level_id == "level_1": _run_step_l1(1, battle_ui)
 	elif current_level_id == "level_2": _run_step_l2(1, battle_ui)
@@ -612,207 +641,474 @@ static func init_tutorial_ui(battle_ui: Control) -> void:
 
 # --- 3. ПОШАГОВЫЕ СЦЕНАРИИ ОБУЧЕНИЯ ---
 
-# Сценарий Уровня 1
+# Сценарий Уровня 1 (Основы, Очки навыков, Взрывной урон, Баффы и Ульта)
 static func _run_step_l1(step: int, battle_ui: Control) -> void:
 	tut_step = step
-	tut_next_btn.visible = false
-	tut_pointer.visible = false
+	if not guide_overlay or not is_instance_valid(guide_overlay):
+		return
+	guide_overlay.hide_pointer()
 	_lock_all_buttons(battle_ui, true)
 
 	match step:
 		1:
-			_set_text("ПРИВЕТ! Готов погрузиться в мир Рунтэрры?\n\nЭта игра — пошаговая боевая система. Ты и враги ходите по очереди. Вот тут можно посмотреть, в каком порядке кто ходит. При наведении покажется полное имя.")
-			_show_pointer(battle_ui.action_bar.global_position + Vector2(200, -55))
-			tut_next_btn.text = "Далее ➔"
-			tut_next_btn.visible = true
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"ПРИВЕТ! Готов погрузиться в тактические битвы?\n\nЭта игра — пошаговая боевая система. Вверху отображается [b]очередность ходов[/b] твоих бойцов и противников. При наведении на иконку видно полное имя.",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 1/13 ✦",
+				true,
+				"Далее ➔",
+				func(): _on_next_pressed(battle_ui),
+				true
+			)
+			if battle_ui.action_bar:
+				guide_overlay.point_at(battle_ui.action_bar)
 		2:
-			_set_text("Сейчас твой ход! Стандартно у персонажей есть 4 умения: Базовая атака, Навык Q, Навык E и Сверхспособность.\n\nСейчас у тебя нет Очков навыков, но не волнуйся — использование Базовой атаки восстанавливает 1 Очко навыков. Нажми на [b]«Базовую атаку»[/b]!")
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Сейчас твой ход! У персонажа есть 4 умения: Базовая атака, Навык Q, Навык E и Сверхспособность.\n\nСейчас у тебя [b]0 Очков Навыков (ОН)[/b]. Базовая атака не требует очков и [b]восстанавливает +1 ОН[/b]!\n\nНажми [b]«Базовую атаку»[/b]!",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 2/13 ✦",
+				false
+			)
 			battle_ui.btn_basic.disabled = false
-			_show_pointer(battle_ui.btn_basic.global_position + Vector2(60, -60))
+			guide_overlay.point_at(battle_ui.btn_basic)
 		3:
-			_set_text("Базовая атака, зачастую — Одиночное умение, и бьёт лишь по одной цели. Выбери, какого противника ты хочешь поразить!")
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Базовая атака — Одиночное умение, поражающее одну цель.\n\nНажми [b]«🎯 Выбрать целью»[/b] у центрального Солдата Пустоты!\n\n💡 [color=gold][b]Горячие клавиши:[/b][/color] переключать цели можно на клавиши [b]A[/b] и [b]D[/b] (или стрелочками), подтверждать на [b]Пробел/Enter[/b], а выбирать способности — на [b]Q, W, E, R[/b]!",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 3/13 ✦",
+				false
+			)
+			var center_enemy: CombatUnit = battle_ui.battle_manager.enemies[1] if battle_ui.battle_manager.enemies.size() > 1 else battle_ui.battle_manager.enemies[0]
+			_unlock_target_only(battle_ui, center_enemy)
 		4:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("Ты нанёс противнику урон. Нанесение урона восстанавливает тебе Энергию, которая нужна для использования Сверхспособности.")
-			_show_pointer(battle_ui.energy_bar.global_position + Vector2(100, -55))
-			tut_next_btn.text = "Далее ➔"
-			tut_next_btn.visible = true
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Ты нанёс противнику урон! Каждая успешная атака накапливает [b]Энергию[/b], необходимую для применения мощной Сверхспособности.",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 4/13 ✦",
+				true,
+				"Далее ➔",
+				func(): _on_next_pressed(battle_ui)
+			)
+			var vika: CombatUnit = battle_ui.battle_manager.allies[0]
+			var vika_p = battle_ui._unit_panels.get(vika)
+			if vika_p:
+				guide_overlay.point_at(vika_p)
 		5:
-			_set_text("Теперь ходят противники.")
-			_show_pointer(battle_ui.action_bar.global_position + Vector2(200, -55))
-			tut_next_btn.text = "Понятно (пуск) ➔"
-			tut_next_btn.visible = true
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Теперь наступает ход противников. При получении ударов твой персонаж также накапливает энергию!",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 5/13 ✦",
+				true,
+				"Понятно (пуск) ➔",
+				func(): _on_next_pressed(battle_ui)
+			)
+			if battle_ui.action_bar:
+				guide_overlay.point_at(battle_ui.action_bar)
 		6:
-			_set_text("Противники сходили друг за другом, поэтому ты получил урон 3 раза. Каждый из ударов восстановил тебе энергию.\n\nТеперь нажми [b]Навык Q[/b], для того, чтобы нанести урон сразу трём противникам!")
+			guide_overlay.dialog_panel.show()
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Противники нанесли урон, и шкала энергии почти полная! Благодаря прошлой базовой атаке у тебя есть [b]1 Очко Навыков[/b].\n\nНажми [b]Навык Q[/b], чтобы атаковать сразу группу врагов!",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 6/13 ✦",
+				false
+			)
 			battle_ui.btn_skill.disabled = false
-			_show_pointer(battle_ui.btn_skill.global_position + Vector2(60, -60))
+			guide_overlay.point_at(battle_ui.btn_skill)
 		7:
-			_set_text("Навык Q Вики — Взрывная атака. Это такой тип атак, которые бьют сильно по центральной цели, и слабее по тем, что её окружают. Выбери центральную цель, чтобы нанести удар!")
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Навык Q Вики — [b]Взрывная атака[/b]. Она бьёт сильно по центру и слабее по соседним целям.\n\nВыбери [b]центральную цель[/b], чтобы задеть всех троих!",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 7/13 ✦",
+				false
+			)
+			var center_enemy: CombatUnit = battle_ui.battle_manager.enemies[1] if battle_ui.battle_manager.enemies.size() > 1 else battle_ui.battle_manager.enemies[0]
+			_unlock_target_only(battle_ui, center_enemy)
 		8:
+			guide_overlay.dialog_panel.show()
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			var vika: CombatUnit = battle_ui.battle_manager.allies[0]
+			battle_ui.battle_manager.current_unit = vika
+			battle_ui.battle_manager._waiting_for_player = true
+			vika.energy = vika.max_energy
+			battle_ui._refresh_unit_panel(vika)
 			battle_ui.battle_manager.skill_points = mini(battle_ui.battle_manager.skill_points + 2, CombatConstants.MAX_SKILL_POINTS)
 			battle_ui.battle_manager.skill_points_changed.emit(battle_ui.battle_manager.skill_points)
-			_set_text("Отлично! У тебя доступна Сверхспособность, но перед её применением давай сначала используем [b]Навык E[/b] для того, чтобы получить бафф. У тебя не хватает Очков навыков, но я тебе дам парочку.\n\nНавык Е Вики тратит её ХП, но даёт взамен много Силы атаки. Нажми [b]Навык E[/b]!")
+			battle_ui._update_action_buttons(vika)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Превосходно! У тебя зарядилась Сверхспособность, но перед её ударом давай усилим Вику. Я добавил тебе Очки Навыков.\n\nНавык E Вики тратит её ХП, но даёт взамен огромный [b]бонус Силы Атаки[/b]!\n\nНажми [b]Навык E[/b]!",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 8/13 ✦",
+				false
+			)
 			battle_ui.btn_skill_e.disabled = false
-			_show_pointer(battle_ui.btn_skill_e.global_position + Vector2(60, -60))
+			guide_overlay.point_at(battle_ui.btn_skill_e)
 		9:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("Супер! Ты получил бафф силы атаки. Чтобы посмотреть свои характеристики, эффекты и описания умений, нажми на [b]«Инфо»[/b] на карточке персонажа!")
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			var vika: CombatUnit = battle_ui.battle_manager.allies[0]
+			vika.energy = vika.max_energy
+			battle_ui._refresh_unit_panel(vika)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Супер! Вика получила бафф силы атаки. Чтобы посмотреть текущие параметры, длительность эффектов и умения, нажми [b]«Инфо»[/b] на карточке Вики!",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 9/13 ✦",
+				false
+			)
 			_unlock_card_button(battle_ui, "vika", "InfoButton")
 		10:
-			_set_text("Это инфо. Здесь можно отслеживать длительность статусов на своих персонажах и на врагах.\n\nСмотри — твой бафф Навыка Е длится всего 3 хода. Каждый ход Вики его длительность будет уменьшаться на 1. Всё. Выходи отсюда.")
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Это окно характеристик и статусов. Бафф Навыка E длится [b]3 хода[/b] Вики и уменьшается каждый её ход.\n\nЗакрой окно инфо, нажав на крестик (✕)!",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 10/13 ✦",
+				false
+			)
+			if battle_ui._btn_inspect_header_close:
+				battle_ui._btn_inspect_header_close.disabled = false
+				guide_overlay.point_at(battle_ui._btn_inspect_header_close)
+			elif battle_ui.btn_close_inspect:
+				battle_ui.btn_close_inspect.disabled = false
+				guide_overlay.point_at(battle_ui.btn_close_inspect)
 		11:
-			_set_text("Смотри! У тебя доступна [b]Сверхспособность[/b]. Сверхспособность можно применить В ЛЮБОЕ ВРЕМЯ. Она не считается полноценным ходом, поэтому её можно применять, не боясь, что снимутся баффы. Жми! Жми!")
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			var vika: CombatUnit = battle_ui.battle_manager.allies[0]
+			vika.energy = vika.max_energy
+			battle_ui._refresh_unit_panel(vika)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Смотри! Сверхспособность готова к бою! Её можно применить [b]В ЛЮБОЙ МОМЕНТ[/b], даже во время хода противника, и она не тратит ходы баффов.\n\nЖми [b]Сверхспособность[/b] на карточке Вики!\n\n💡 [color=gold][b]Горячие клавиши:[/b][/color] Сверхспособности персонажей можно активировать на клавиши [b]1, 2, 3, 4[/b] (по номеру позиции в отряде)!",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 11/13 ✦",
+				false
+			)
 			_unlock_card_button(battle_ui, "vika", "UltButtonOnCard")
 		12:
-			_set_text("Сверхспособность Вики — тоже Взрывная атака. Выбери центральную цель!")
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Сверхспособность Вики — мощнейшая Взрывная атака. Выбери [b]центральную цель[/b]!",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 12/13 ✦",
+				false
+			)
+			var center_enemy: CombatUnit = battle_ui.battle_manager.enemies[1] if battle_ui.battle_manager.enemies.size() > 1 else battle_ui.battle_manager.enemies[0]
+			_unlock_target_only(battle_ui, center_enemy)
 		13:
-			_set_text("Супер! Вика вошла в состояние «Пробуждение». В этом состоянии она наносит чуть меньше урона, но восстанавливает ХП в начале каждого своего хода!\n\nТвоя задача — добить врагов. [b]УНИЧТОЖЬ ИХ![/b]")
-			tut_next_btn.text = "В бой! ⚔"
-			tut_next_btn.visible = true
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			guide_overlay.hide_pointer()
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Потрясающе! Вика вошла в состояние [b]«Пробуждение»[/b]: теперь она восстанавливает здоровье в начале каждого своего хода!\n\nТвоя задача — добить оставшихся врагов. [b]В БОЙ![/b]",
+				"✦ ОБУЧЕНИЕ 1 • ЭТАП 13/13 ✦",
+				true,
+				"В бой! ⚔",
+				func(): _on_next_pressed(battle_ui)
+			)
 
-# Сценарий Уровня 2 (Данилл)
+# Сценарий Уровня 2 (Данилл, Стойкость, Уязвимости и Щиты)
 static func _run_step_l2(step: int, battle_ui: Control) -> void:
 	tut_step = step
-	tut_next_btn.visible = false
-	tut_pointer.visible = false
+	if not guide_overlay or not is_instance_valid(guide_overlay):
+		return
+	guide_overlay.hide_pointer()
 	_lock_all_buttons(battle_ui, true)
 
 	match step:
 		1:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("У каждого персонажа есть свой Путь, по которому он следует, и Элемент, которым он атакует.\n\nОт Пути зависит его роль в отряде, а от Элемента — уязвимости, которые он пробивает.\n\nЭто — полоска Стойкости врага. Посмотреть Уязвимости врага можно в его [b]Инфо[/b]!")
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"У каждого персонажа свой [b]Путь[/b] (роль) и [b]Элемент[/b] атаки. У противников над шкалой ХП отображается белая полоса — [b]Стойкость[/b].\n\nПосмотри уязвимости врага в его [b]Инфо[/b]!",
+				"✦ ОБУЧЕНИЕ 2 • ЭТАП 1/11 ✦",
+				false,
+				"Далее ➔",
+				Callable(),
+				true
+			)
 			_unlock_enemy_info_button(battle_ui)
 		2:
-			_set_text("Прокрути характеристики вниз, чтобы увидеть Уязвимости противника. Элементы, к которым у врага НЕТ уязвимости, наносят ему меньше урона. Собирай отряд под элементы врагов!\n\nВыходи отсюда.")
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Внизу показаны [b]Уязвимости[/b] противника (Огонь, Лед, Электро). У Вики — Квантовый элемент, у Данилла — Огненный. Элементы, к которым нет уязвимости, не снижают стойкость и наносят меньше урона!\n\nЗакрой окно инфо.",
+				"✦ ОБУЧЕНИЕ 2 • ЭТАП 2/11 ✦",
+				false
+			)
+			if battle_ui._btn_inspect_header_close:
+				battle_ui._btn_inspect_header_close.disabled = false
+				guide_overlay.point_at(battle_ui._btn_inspect_header_close)
+			elif battle_ui.btn_close_inspect:
+				battle_ui.btn_close_inspect.disabled = false
+				guide_overlay.point_at(battle_ui.btn_close_inspect)
 		3:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-			tut_overlay.show()
-			_set_text("Нажми [b]Базовую атаку Вики[/b] на этого Солдата Пустоты!")
+			battle_ui.battle_manager.remove_meta("tutorial_paused")
+			var vika_unit: CombatUnit = battle_ui.battle_manager.allies[0]
+			battle_ui.battle_manager.current_unit = vika_unit
+			battle_ui.battle_manager._waiting_for_player = true
+			battle_ui._update_action_buttons(vika_unit)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Сходи Базовой атакой на первого Солдата Пустоты!\n\n💡 [color=gold][b]Управление:[/b][/color]\n• Выбрать Базовую атаку можно клавишей [b]W[/b] (или кликом мышью).\n• Подтвердить атаку по цели: клавиша [b]Пробел[/b] или [b]Enter[/b]!\n• Переключать цели: клавиши [b]A[/b] и [b]D[/b].",
+				"✦ ОБУЧЕНИЕ 2 • ЭТАП 3/11 ✦",
+				false
+			)
 			battle_ui.btn_basic.disabled = false
-			_show_pointer(battle_ui.btn_basic.global_position + Vector2(60, -60))
+			guide_overlay.point_at(battle_ui.btn_basic)
 		4:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("Видишь — ничего не произошло. Это потому что у Вики Квантовый элемент, а враг не имеет Квантовой Уязвимости.\n\nТеперь сходи [b]Базовой атакой Данилла[/b] на этого Солдата Пустоты!")
-			tut_next_btn.text = "Далее ➔"
-			tut_next_btn.visible = true
-		5:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("Смотри — Стойкость врага снизилась! Это потому что у него есть огненная Уязвимость. А Элемент Данилла — как раз огненный! Когда стойкость станет равна 0, враг получит урон Пробития, а его ход будет отложен!")
-			tut_next_btn.text = "Понятно (пуск) ➔"
-			tut_next_btn.visible = true
-		6:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("Теперь нажми [b]Навык Е Вики[/b] и усиль её!")
-			battle_ui.btn_skill_e.disabled = false
-			_show_pointer(battle_ui.btn_skill_e.global_position + Vector2(60, -60))
-		7:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("Навык Е Вики расходует её здоровье. Это делает её уязвимой для врагов. Хорошо, что у тебя в отряде есть Данилл.\n\nДанилл следует Пути Сохранения — его умения заточены на то, чтобы защищать союзников, накладывая на них щиты. Своей Техникой Данилл уже наложил щит на союзников в начале боя, однако Вике нужен новый.\n\nНажми [b]Навык Q Данилла[/b] на Вику, чтобы наложить на неё мощный Щит!")
-			tut_next_btn.text = "Далее ➔"
-			tut_next_btn.visible = true
-		8:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("Отлично! Смотри — Щит Данилла защищает союзников от урона противника. Но у Данилла осталась ещё одна способность — Навык Е.\n\nСходи за Вику [b]Базовой атакой[/b], чтобы сохранить Очки навыков для Навыка Е Данилла!")
+			battle_ui.battle_manager.remove_meta("tutorial_paused")
+			var danill_unit: CombatUnit = battle_ui.battle_manager.allies[1] if battle_ui.battle_manager.allies.size() > 1 else battle_ui.battle_manager.allies[0]
+			battle_ui.battle_manager.current_unit = danill_unit
+			battle_ui.battle_manager._waiting_for_player = true
+			battle_ui._update_action_buttons(danill_unit)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Стойкость врага не изменилась, ведь у него нет Квантовой уязвимости!\n\nТеперь ход Данилла. Его элемент — [b]Огонь[/b]!\nВыбери атаку клавишей [b]W[/b] и подтверди удар по этому же врагу клавишей [b]Пробел[/b] или [b]Enter[/b]!",
+				"✦ ОБУЧЕНИЕ 2 • ЭТАП 4/11 ✦",
+				false
+			)
 			battle_ui.btn_basic.disabled = false
-			_show_pointer(battle_ui.btn_basic.global_position + Vector2(60, -60))
+			guide_overlay.point_at(battle_ui.btn_basic)
+		5:
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			guide_overlay.hide_pointer()
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Смотри — Стойкость врага снизилась! Данилл пробил её огнём. Когда стойкость падает до 0, враг получает [b]урон Пробития[/b], а его ход откладывается!",
+				"✦ ОБУЧЕНИЕ 2 • ЭТАП 5/11 ✦",
+				true,
+				"Далее ➔",
+				func(): _on_next_pressed(battle_ui)
+			)
+		6:
+			battle_ui.battle_manager.remove_meta("tutorial_paused")
+			var vika_unit: CombatUnit = battle_ui.battle_manager.allies[0]
+			battle_ui.battle_manager.current_unit = vika_unit
+			battle_ui.battle_manager._waiting_for_player = true
+			battle_ui._update_action_buttons(vika_unit)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Теперь нажми [b]Навык E Вики[/b], чтобы усилить её атаку перед следующим ударом!",
+				"✦ ОБУЧЕНИЕ 2 • ЭТАП 6/11 ✦",
+				false
+			)
+			battle_ui.btn_skill_e.disabled = false
+			guide_overlay.point_at(battle_ui.btn_skill_e)
+		7:
+			battle_ui.battle_manager.remove_meta("tutorial_paused")
+			var danill_unit: CombatUnit = battle_ui.battle_manager.allies[1] if battle_ui.battle_manager.allies.size() > 1 else battle_ui.battle_manager.allies[0]
+			battle_ui.battle_manager.current_unit = danill_unit
+			battle_ui.battle_manager._waiting_for_player = true
+			battle_ui._update_action_buttons(danill_unit)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Вика потратила здоровье. Данилл следует [b]Пути Сохранения[/b] — он защищает союзников щитами.\n\nНажми [b]Навык Q Данилла[/b]!",
+				"✦ ОБУЧЕНИЕ 2 • ЭТАП 7/11 ✦",
+				false
+			)
+			battle_ui.btn_skill.disabled = false
+			guide_overlay.point_at(battle_ui.btn_skill)
+		8:
+			battle_ui.battle_manager.remove_meta("tutorial_paused")
+			var vika_unit: CombatUnit = battle_ui.battle_manager.allies[0]
+			battle_ui.battle_manager.current_unit = vika_unit
+			battle_ui.battle_manager._waiting_for_player = true
+			battle_ui._update_action_buttons(vika_unit)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Вика под щитом! Сходи за Вику Базовой атакой ([b]W[/b] + [b]Пробел/Enter[/b]), чтобы восстановить Очки навыков для Данилла!",
+				"✦ ОБУЧЕНИЕ 2 • ЭТАП 8/11 ✦",
+				false
+			)
+			battle_ui.btn_basic.disabled = false
+			guide_overlay.point_at(battle_ui.btn_basic)
 		9:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
+			battle_ui.battle_manager.remove_meta("tutorial_paused")
+			var danill_unit: CombatUnit = battle_ui.battle_manager.allies[1] if battle_ui.battle_manager.allies.size() > 1 else battle_ui.battle_manager.allies[0]
+			battle_ui.battle_manager.current_unit = danill_unit
+			battle_ui.battle_manager._waiting_for_player = true
+			battle_ui._update_action_buttons(danill_unit)
 			battle_ui.battle_manager.skill_points = mini(battle_ui.battle_manager.skill_points + 2, CombatConstants.MAX_SKILL_POINTS)
 			battle_ui.battle_manager.skill_points_changed.emit(battle_ui.battle_manager.skill_points)
-			_set_text("Навык Е Данилла [b]Провоцирует[/b] всех врагов. Это заставляет их выбирать Данилла в качестве цели для своих умений, что позволяет остальным персонажам отдохнуть от бесконечных атак врагов. Теперь они будут атаковать только Данилла на протяжении 3х ходов. Однако, у врагов могут быть атаки по нескольким целям, поэтому Навык Е Данилла защищает не полностью. Для этого есть Сверхспособность.\n\nНажми [b]Навык E Данилла[/b]!")
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Навык E Данилла накладывает [b]Провокацию[/b] на всех врагов на 3 хода. Враги будут бить только Данилла, сохраняя жизнь союзникам!\n\nНажми [b]Навык E Данилла[/b]!",
+				"✦ ОБУЧЕНИЕ 2 • ЭТАП 9/11 ✦",
+				false
+			)
 			battle_ui.btn_skill_e.disabled = false
-			_show_pointer(battle_ui.btn_skill_e.global_position + Vector2(60, -60))
+			guide_overlay.point_at(battle_ui.btn_skill_e)
 		10:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
 			for ally in battle_ui.battle_manager.allies:
 				if ally.id == "danill":
 					ally.energy = ally.max_energy
 					battle_ui._refresh_unit_panel(ally)
-			_set_text("Теперь, ты можешь активировать [b]Сверхспособность Данилла[/b], чтобы защитить ВСЕХ союзников за раз. Жми!")
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Сверхспособность Данилла накладывает мощный щит на [b]ВСЕХ союзников разом[/b]!\n\nНажми [b]Сверхспособность Данилла[/b] на его карточке!\n\n💡 [color=gold][b]Горячие клавиши:[/b][/color] Нажми [b]2[/b] для мгновенной активации!",
+				"✦ ОБУЧЕНИЕ 2 • ЭТАП 10/11 ✦",
+				false
+			)
 			_unlock_card_button(battle_ui, "danill", "UltButtonOnCard")
 		11:
-			_set_text("Супер! Все союзники в безопасности. Продолжай сражаться и победи противника, чтобы бесплатно получить Данилла в команду!")
-			tut_next_btn.text = "В бой! ⚔"
-			tut_next_btn.visible = true
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			guide_overlay.hide_pointer()
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Супер! Вся команда защищена, а враги заблокированы провокацией. Победи противников, чтобы принять Данилла в команду!",
+				"✦ ОБУЧЕНИЕ 2 • ЭТАП 11/11 ✦",
+				true,
+				"В бой! ⚔",
+				func(): _on_next_pressed(battle_ui)
+			)
 
-# Сценарий Уровня 3 (Каори и Синергии)
+# Сценарий Уровня 3 (Каори, Путь Охоты, Фракции и Пробитие)
 static func _run_step_l3(step: int, battle_ui: Control) -> void:
 	tut_step = step
-	tut_next_btn.visible = false
-	tut_pointer.visible = false
+	if not guide_overlay or not is_instance_valid(guide_overlay):
+		return
+	guide_overlay.hide_pointer()
 	_lock_all_buttons(battle_ui, true)
 
 	match step:
 		1:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("Это Каори. Она следует Пути Охоты, и поэтому её умения бьют сосредоточенным уроном только по одной цели. Персонажи Пути Охоты полезны против Боссов и Одиночных противников.\n\nТеперь нажми на [b]«Синергии»[/b]!")
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Это Каори! Она следует [b]Пути Охоты[/b] — её умения бьют сосредоточенным уроном по одиночным целям.\n\nНажми на кнопку [b]«Синергии»[/b] вверху экрана!",
+				"✦ ОБУЧЕНИЕ 3 • ЭТАП 1/7 ✦",
+				false,
+				"Далее ➔",
+				Callable(),
+				true
+			)
 			_unlock_top_button(battle_ui, "btn_factions")
 		2:
-			_set_text("Каждый персонаж имеет свои «Фракции». Когда в отряде есть несколько персонажей из одной Фракции, они получают бонусы. Так, например, Каори и Данилл оба состоят во Фракции «Рассвет хаоса». Из-за того, что они в одной команде, их Сила атаки и Макс. ХП увеличились на 15%.\n\nТакже, Вика состоит во Фракции «Академия» (1 участник дает +1 ОН на старте боя).\n\nЗакрой меню Фракций.")
-			_unlock_top_button(battle_ui, "btn_factions")
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Персонажи из одной [b]Фракции[/b] усиливают друг друга. Каори и Данилл — из «Рассвета хаоса» (+15% СА и ХП). Вика — из «Академии» (+1 ОН на старте боя).\n\nЗакрой окно Синергий.",
+				"✦ ОБУЧЕНИЕ 3 • ЭТАП 2/7 ✦",
+				false
+			)
+			if battle_ui.factions_panel:
+				var f_close = battle_ui.factions_panel.find_child("Button", true, false)
+				if f_close:
+					f_close.disabled = false
+					guide_overlay.point_at(f_close)
+				else:
+					_unlock_top_button(battle_ui, "btn_factions")
+			else:
+				_unlock_top_button(battle_ui, "btn_factions")
 		3:
-			_set_text("Теперь о Каори. В отличие от других персонажей, её основной урон завязан на механике Пробития уязвимости. Её способности наносят Дополнительный урон, когда пробивают стойкость врага. Поэтому старайся наносить решающий удар по Стойкости именно Каори!\n\nНажми Базовую атаку на противника, и ходи Базовыми атаками других союзников, чтобы припасти Очки Навыков!")
-			tut_next_btn.text = "Далее ➔"
-			tut_next_btn.visible = true
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			guide_overlay.hide_pointer()
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Основной урон Каори раскрывается при [b]Пробитии уязвимости[/b]. Её способности наносят огромный Дополнительный урон по пробитой стойкости врага!\n\nДавай подготовим пробитие!",
+				"✦ ОБУЧЕНИЕ 3 • ЭТАП 3/7 ✦",
+				true,
+				"Далее ➔",
+				func(): _on_next_pressed(battle_ui)
+			)
 		4:
+			battle_ui.battle_manager.remove_meta("tutorial_paused")
+			var kaori_unit: CombatUnit = null
+			for a in battle_ui.battle_manager.allies:
+				if a.id == "kaori":
+					kaori_unit = a
+					break
+			if kaori_unit == null and not battle_ui.battle_manager.allies.is_empty():
+				kaori_unit = battle_ui.battle_manager.allies[0]
+			battle_ui.battle_manager.current_unit = kaori_unit
+			battle_ui.battle_manager._waiting_for_player = true
+			kaori_unit.action_value = 0.0
+			battle_ui._update_action_buttons(kaori_unit)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Сходи Базовой атакой Каори на Элитного Стража!\n\n💡 [color=gold][b]Управление:[/b][/color]\n• Выбрать атаку: клавиша [b]W[/b] (или клик мышью).\n• Подтвердить удар: клавиша [b]Пробел[/b] или [b]Enter[/b]!",
+				"✦ ОБУЧЕНИЕ 3 • ЭТАП 4/7 ✦",
+				false
+			)
 			battle_ui.btn_basic.disabled = false
-			_show_pointer(battle_ui.btn_basic.global_position + Vector2(60, -60))
+			guide_overlay.point_at(battle_ui.btn_basic)
 		5:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			
+			battle_ui.battle_manager.remove_meta("tutorial_paused")
+			var kaori_unit: CombatUnit = null
+			for a in battle_ui.battle_manager.allies:
+				if a.id == "kaori":
+					kaori_unit = a
+					break
+			if kaori_unit == null and not battle_ui.battle_manager.allies.is_empty():
+				kaori_unit = battle_ui.battle_manager.allies[0]
+			battle_ui.battle_manager.current_unit = kaori_unit
+			battle_ui.battle_manager._waiting_for_player = true
+			kaori_unit.action_value = 0.0
 			for ally in battle_ui.battle_manager.allies:
 				if ally.id == "kaori":
 					ally.set_meta("weakness_concentration", true)
 					battle_ui._refresh_unit_panel(ally)
-					
-			_set_text("Смотри — Базовая атака Каори улучшилась до Улучшенной Базовой атаки! Это Талант Каори: Нанесение урона улучшает её следующую Базовую атаку. Используй Улучшенную Базовую атаку на противнике!")
+			battle_ui._update_action_buttons(kaori_unit)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Базовая атака Каори превратилась в [b]Улучшенную Базовую атаку[/b]! Это Талант Каори: нанесение урона усиливает её следующую атаку.\n\nАтакуй Элитного Стража клавишей [b]W[/b] (или кликом) и подтверди на [b]Пробел/Enter[/b]!",
+				"✦ ОБУЧЕНИЕ 3 • ЭТАП 5/7 ✦",
+				false
+			)
 			battle_ui.btn_basic.disabled = false
-			_show_pointer(battle_ui.btn_basic.global_position + Vector2(60, -60))
+			battle_ui.btn_enhanced_basic.disabled = false
+			var btn_target = battle_ui.btn_enhanced_basic if battle_ui.btn_enhanced_basic.visible else battle_ui.btn_basic
+			guide_overlay.point_at(btn_target)
 		6:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("Молодец! Теперь твоя задача — пробить уязвимость этого противника для реализации урона Каори.")
-			tut_next_btn.text = "В бой! ⚔"
-			tut_next_btn.visible = true
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			guide_overlay.hide_pointer()
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Стойкость врага [b]ПРОБИТА[/b]! Пока действует пробитие, получаемый им урон увеличен. Враг восстановит стойкость в свой следующий ход, поэтому атакуй на максимуме!",
+				"✦ ОБУЧЕНИЕ 3 • ЭТАП 6/7 ✦",
+				true,
+				"Далее ➔",
+				func(): _on_next_pressed(battle_ui)
+			)
 		7:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("Уязвимость врага была пробита! Получаемый им урон увеличен до восстановления Стойкости. Враг восстановит стойкость в свой следующий ход, поэтому поторопись! Убей врага, чтобы получить Каори!")
-			tut_next_btn.text = "Уничтожить! ⚔"
-			tut_next_btn.visible = true
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			guide_overlay.hide_pointer()
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Добей Элитного Стража, чтобы принять Каори в отряд!",
+				"✦ ОБУЧЕНИЕ 3 • ЭТАП 7/7 ✦",
+				true,
+				"В бой! ⚔",
+				func(): _on_next_pressed(battle_ui)
+			)
 
 # Сценарий Уровня 4 (Боевой Экзамен)
 static func _run_step_l4(step: int, battle_ui: Control) -> void:
 	tut_step = step
-	tut_next_btn.visible = false
-	tut_pointer.visible = false
+	if not guide_overlay or not is_instance_valid(guide_overlay):
+		return
+	guide_overlay.hide_pointer()
 	_lock_all_buttons(battle_ui, true)
 
 	match step:
 		1:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", true)
-			tut_overlay.show()
-			_set_text("На этом всё. Теперь давай проверим твои силы.\n\nПобеди этого Элитного стража и Солдатов Пустоты за [b]10 Циклов[/b] (посмотреть текущий цикл можно здесь)!")
-			_show_pointer(battle_ui.turn_label.global_position + Vector2(100, 20))
-			tut_next_btn.text = "Далее ➔"
-			tut_next_btn.visible = true
+			battle_ui.battle_manager.set_meta("tutorial_paused", true)
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"Финальный боевой экзамен! Победи этого Элитного стража и Солдатов Пустоты не более чем за [b]10 Циклов[/b]!\n\nСчетчик текущего цикла находится здесь.",
+				"✦ ОБУЧЕНИЕ 4 • ЭТАП 1/2 ✦",
+				true,
+				"Далее ➔",
+				func(): _on_next_pressed(battle_ui),
+				true
+			)
+			if battle_ui.turn_label:
+				guide_overlay.point_at(battle_ui.turn_label)
 		2:
-			_set_text("Более точно посмотреть динамику урона отряда можно в [b]Графиках урона[/b].\n\nНа этом всё! Удачи!")
+			guide_overlay.set_dialog(
+				"🧭 Наставник",
+				"В правом верхнем углу доступны [b]«Графики урона»[/b] для подробной аналитики боя.\n\nПокажи всё, чему научился! Удачи!",
+				"✦ ОБУЧЕНИЕ 4 • ЭТАП 2/2 ✦",
+				true,
+				"В бой! ⚔",
+				func(): _on_next_pressed(battle_ui)
+			)
 			_unlock_top_button(battle_ui, "btn_graphs")
-			tut_next_btn.text = "В бой! ⚔"
-			tut_next_btn.visible = true
 
 static func _on_next_pressed(battle_ui: Control) -> void:
 	if current_level_id == "level_1":
@@ -820,54 +1116,54 @@ static func _on_next_pressed(battle_ui: Control) -> void:
 			1: _run_step_l1(2, battle_ui)
 			4: _run_step_l1(5, battle_ui)
 			5:
-				tut_overlay.hide()
-				battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
+				if guide_overlay:
+					guide_overlay.hide_pointer()
+					guide_overlay.dialog_panel.hide()
+				battle_ui.battle_manager.remove_meta("tutorial_paused")
 			13:
-				is_tutorial = false
-				battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-				tut_overlay.queue_free()
-				tut_pointer.queue_free()
-				_lock_all_buttons(battle_ui, false)
+				_finish_tutorial(battle_ui)
 
 	elif current_level_id == "level_2":
 		match tut_step:
 			5:
-				tut_overlay.hide()
-				battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
+				battle_ui.battle_manager.remove_meta("tutorial_paused")
+				_run_step_l2(6, battle_ui)
 			11:
-				is_tutorial = false
-				battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-				tut_overlay.queue_free()
-				tut_pointer.queue_free()
-				_lock_all_buttons(battle_ui, false)
+				_finish_tutorial(battle_ui)
 
 	elif current_level_id == "level_3":
 		match tut_step:
 			3:
-				tut_overlay.hide()
-				battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
+				battle_ui.battle_manager.remove_meta("tutorial_paused")
 				_run_step_l3(4, battle_ui)
 			6:
-				tut_overlay.hide()
-				battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-				_lock_all_buttons(battle_ui, false)
+				_run_step_l3(7, battle_ui)
 			7:
-				is_tutorial = false
-				battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-				tut_overlay.queue_free()
-				tut_pointer.queue_free()
-				_lock_all_buttons(battle_ui, false)
+				_finish_tutorial(battle_ui)
 
 	elif current_level_id == "level_4":
 		match tut_step:
 			1:
 				_run_step_l4(2, battle_ui)
 			2:
-				is_tutorial = false
-				battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-				tut_overlay.queue_free()
-				tut_pointer.queue_free()
-				_lock_all_buttons(battle_ui, false)
+				_finish_tutorial(battle_ui)
+
+static func _finish_tutorial(battle_ui: Control) -> void:
+	is_tutorial = false
+	tut_step = 0
+	battle_ui.battle_manager.remove_meta("tutorial_paused")
+	if guide_overlay and is_instance_valid(guide_overlay):
+		guide_overlay.queue_free()
+		guide_overlay = null
+	_lock_all_buttons(battle_ui, false)
+	for unit in battle_ui._unit_panels:
+		var panel: PanelContainer = battle_ui._unit_panels[unit]
+		var vbox: VBoxContainer = panel.get_child(0)
+		var target_btn: Button = vbox.get_node_or_null("TargetButton")
+		if target_btn:
+			target_btn.disabled = false
+	if battle_ui.battle_manager.current_unit:
+		battle_ui._update_action_buttons(battle_ui.battle_manager.current_unit)
 
 # --- 4. РЕАКЦИИ НА ДЕЙСТВИЯ ИГРОКА ---
 
@@ -876,9 +1172,9 @@ static func on_turn_started(unit: CombatUnit, battle_ui: Control) -> void:
 	
 	if current_level_id == "level_1":
 		if unit.is_ally:
-			if tut_step == 5: tut_overlay.show(); _run_step_l1(6, battle_ui)
-			elif tut_step == 7: tut_overlay.show(); _run_step_l1(8, battle_ui)
-			elif tut_step == 12: tut_overlay.show(); _run_step_l1(13, battle_ui)
+			if tut_step == 5: _run_step_l1(6, battle_ui)
+			elif tut_step == 7: _run_step_l1(8, battle_ui)
+			elif tut_step == 12: _run_step_l1(13, battle_ui)
 
 	elif current_level_id == "level_2":
 		if unit.is_ally:
@@ -897,47 +1193,82 @@ static func on_action_pressed(action_type: String, battle_ui: Control) -> void:
 	if not is_tutorial: return
 	
 	if current_level_id == "level_1":
-		if action_type == "basic" and tut_step == 2: _run_step_l1(3, battle_ui)
-		elif action_type == "basic_target_selected" and tut_step == 3: _run_step_l1(4, battle_ui)
-		elif action_type == "skill_q" and tut_step == 6: _run_step_l1(7, battle_ui)
-		elif action_type == "skill_e" and tut_step == 8: _run_step_l1(9, battle_ui)
-		elif action_type == "inspect_open" and tut_step == 9: _run_step_l1(10, battle_ui)
-		elif action_type == "inspect_close" and tut_step == 10: _run_step_l1(11, battle_ui)
-		elif action_type == "ult_card" and tut_step == 11: _run_step_l1(12, battle_ui)
+		if action_type == "basic" and tut_step == 2:
+			_run_step_l1(3, battle_ui)
+		elif action_type == "basic_target_selected" and tut_step == 3:
+			_run_step_l1(4, battle_ui)
+		elif action_type == "skill_q" and tut_step == 6:
+			_run_step_l1(7, battle_ui)
+		elif action_type == "skill_q_target_selected" and tut_step == 7:
+			_run_step_l1(8, battle_ui)
+		elif action_type == "skill_e" and tut_step == 8:
+			_run_step_l1(9, battle_ui)
+		elif action_type == "inspect_open" and tut_step == 9:
+			_run_step_l1(10, battle_ui)
+		elif action_type == "inspect_close" and tut_step == 10:
+			_run_step_l1(11, battle_ui)
+		elif action_type == "ult_card" and tut_step == 11:
+			_run_step_l1(12, battle_ui)
+		elif action_type == "ult_target_selected" and tut_step == 12:
+			_run_step_l1(13, battle_ui)
 
 	elif current_level_id == "level_2":
-		if action_type == "inspect_open" and tut_step == 1: _run_step_l2(2, battle_ui)
-		elif action_type == "inspect_close" and tut_step == 2: _run_step_l2(3, battle_ui)
+		if action_type == "inspect_open" and tut_step == 1:
+			_run_step_l2(2, battle_ui)
+		elif action_type == "inspect_close" and tut_step == 2:
+			_run_step_l2(3, battle_ui)
 		elif action_type == "basic" and tut_step == 3:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-			tut_overlay.hide()
+			var target_enemy: CombatUnit = battle_ui.battle_manager.enemies[0]
+			_unlock_target_only(battle_ui, target_enemy)
+		elif action_type == "basic_target_selected" and tut_step == 3:
+			pass
 		elif action_type == "basic" and tut_step == 4:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-			tut_overlay.hide()
+			var target_enemy: CombatUnit = battle_ui.battle_manager.enemies[0]
+			_unlock_target_only(battle_ui, target_enemy)
+		elif action_type == "basic_target_selected" and tut_step == 4:
 			_run_step_l2(5, battle_ui)
 		elif action_type == "skill_e" and tut_step == 6:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-			tut_overlay.hide()
+			pass
 		elif action_type == "skill_q" and tut_step == 7:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-			tut_overlay.hide()
+			var vika_unit: CombatUnit = battle_ui.battle_manager.allies[0]
+			_unlock_target_only(battle_ui, vika_unit)
+		elif action_type == "skill_q_target_selected" and tut_step == 7:
+			pass
 		elif action_type == "basic" and tut_step == 8:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-			tut_overlay.hide()
-		elif action_type == "skill_e" and tut_step == 9: _run_step_l2(10, battle_ui)
-		elif action_type == "ult_card" and tut_step == 10: _run_step_l2(11, battle_ui)
+			var target_enemy: CombatUnit = battle_ui.battle_manager.enemies[0]
+			_unlock_target_only(battle_ui, target_enemy)
+		elif action_type == "basic_target_selected" and tut_step == 8:
+			pass
+		elif action_type == "skill_e" and tut_step == 9:
+			_run_step_l2(10, battle_ui)
+		elif action_type == "ult_card" and tut_step == 10:
+			_run_step_l2(11, battle_ui)
 
 	elif current_level_id == "level_3":
-		if action_type == "factions_toggle" and tut_step == 1: _run_step_l3(2, battle_ui)
-		elif action_type == "factions_toggle" and tut_step == 2: _run_step_l3(3, battle_ui)
-		elif action_type == "basic" and tut_step == 5:
-			battle_ui.battle_manager.set_meta("is_selecting_ult_target", false)
-			tut_overlay.hide()
-			_run_step_l3(6, battle_ui)
+		if action_type == "factions_toggle" and tut_step == 1:
+			_run_step_l3(2, battle_ui)
+		elif action_type == "factions_toggle" and tut_step == 2:
+			_run_step_l3(3, battle_ui)
+		elif action_type == "basic" and tut_step == 4:
+			var elite = battle_ui.battle_manager.enemies[0]
+			_unlock_target_only(battle_ui, elite)
+		elif action_type == "basic_target_selected" and tut_step == 4:
+			battle_ui.get_tree().create_timer(0.6).timeout.connect(func():
+				if is_tutorial and current_level_id == "level_3" and tut_step == 4:
+					_run_step_l3(5, battle_ui)
+			)
+		elif (action_type == "basic" or action_type == "enhanced_basic") and tut_step == 5:
+			var elite = battle_ui.battle_manager.enemies[0]
+			_unlock_target_only(battle_ui, elite)
+		elif (action_type == "basic_target_selected" or action_type == "enhanced_basic_target_selected") and tut_step == 5:
+			battle_ui.get_tree().create_timer(0.7).timeout.connect(func():
+				if is_tutorial and current_level_id == "level_3" and tut_step == 5:
+					_run_step_l3(6, battle_ui)
+			)
 
 # Реакция на пробитие стойкости (принимает любой Узел без ошибок типизации)
 static func on_toughness_broken(caller_node = null) -> void:
-	if is_tutorial and current_level_id == "level_3" and tut_step == 6:
+	if is_tutorial and current_level_id == "level_3" and (tut_step == 5 or tut_step == 6):
 		var battle_ui: Control = null
 		if caller_node is Control:
 			battle_ui = caller_node
@@ -945,7 +1276,7 @@ static func on_toughness_broken(caller_node = null) -> void:
 			battle_ui = caller_node.get_parent() as Control
 			
 		if battle_ui:
-			_run_step_l3(7, battle_ui)
+			_run_step_l3(6, battle_ui)
 
 # --- 5. ВЫДАЧА НАГРАД ПРИ ПОБЕДЕ ---
 
@@ -1064,14 +1395,18 @@ static func _process_star_rewards(level_id: String, cycles: int, c3: int, c2: in
 		if TeamConfig.current_level_progress < next_prog:
 			TeamConfig.current_level_progress = next_prog
 			
-# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ГЛОБАЛЬНОЙ БЛОКИРОВКИ ---
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ГЛОБАЛЬНОЙ БЛОКИРОВКИ И НАВИГАЦИИ ---
 
 static func _set_text(txt: String) -> void:
-	tut_label.text = txt
+	if guide_overlay:
+		guide_overlay.text_label.text = txt
+	elif tut_label:
+		tut_label.text = txt
 
 static func _show_pointer(pos: Vector2) -> void:
-	tut_pointer.global_position = pos
-	tut_pointer.visible = true
+	if tut_pointer and is_instance_valid(tut_pointer):
+		tut_pointer.global_position = pos
+		tut_pointer.visible = true
 
 static func _lock_all_buttons(battle_ui: Control, locked: bool) -> void:
 	battle_ui.btn_basic.disabled = locked
@@ -1092,8 +1427,42 @@ static func _lock_all_buttons(battle_ui: Control, locked: bool) -> void:
 			var ult_btn: Button = vbox.get_node("UltButtonOnCard")
 			ult_btn.disabled = locked
 
-	if battle_ui.btn_skills_help:
+		if vbox.has_node("TargetButton"):
+			var target_btn: Button = vbox.get_node("TargetButton")
+			if not locked:
+				target_btn.disabled = false
+
+	if "btn_skills_help" in battle_ui and battle_ui.btn_skills_help:
 		battle_ui.btn_skills_help.disabled = locked
+	if "btn_factions" in battle_ui and battle_ui.btn_factions:
+		battle_ui.btn_factions.disabled = locked
+	if "btn_graphs" in battle_ui and battle_ui.btn_graphs:
+		battle_ui.btn_graphs.disabled = locked
+
+	var give_up = battle_ui.find_child("BtnGiveUp", true, false)
+	if give_up is Button:
+		give_up.disabled = locked
+
+static func _unlock_target_only(battle_ui: Control, target_unit: CombatUnit) -> void:
+	var target_btn: Button = null
+	var is_targeting_ally: bool = (target_unit != null and target_unit.is_ally)
+	for u in battle_ui._unit_panels:
+		var panel: PanelContainer = battle_ui._unit_panels[u]
+		var vbox: VBoxContainer = panel.get_child(0)
+		var btn: Button = vbox.get_node_or_null("TargetButton")
+		if btn:
+			var can_target: bool = (u.is_ally == is_targeting_ally and u.is_alive())
+			btn.visible = can_target
+			btn.disabled = false
+			if u == target_unit:
+				target_btn = btn
+	if target_unit:
+		battle_ui._selected_target_unit = target_unit
+		battle_ui._update_targeting_visuals()
+	if target_btn and guide_overlay:
+		guide_overlay.point_at(target_btn)
+	elif target_btn:
+		_show_pointer(target_btn.global_position + Vector2(20, -50))
 
 static func _unlock_card_button(battle_ui: Control, unit_id: String, btn_name: String) -> void:
 	for unit in battle_ui._unit_panels:
@@ -1102,7 +1471,10 @@ static func _unlock_card_button(battle_ui: Control, unit_id: String, btn_name: S
 			var vbox: VBoxContainer = panel.get_child(0)
 			var btn: Button = vbox.get_node(btn_name)
 			btn.disabled = false
-			_show_pointer(btn.global_position + Vector2(50, -50))
+			if guide_overlay:
+				guide_overlay.point_at(btn)
+			else:
+				_show_pointer(btn.global_position + Vector2(50, -50))
 
 static func _unlock_enemy_info_button(battle_ui: Control) -> void:
 	for unit in battle_ui._unit_panels:
@@ -1111,11 +1483,110 @@ static func _unlock_enemy_info_button(battle_ui: Control) -> void:
 			var vbox: VBoxContainer = panel.get_child(0)
 			var btn: Button = vbox.get_node("InfoButton")
 			btn.disabled = false
-			_show_pointer(btn.global_position + Vector2(-30, -70))
+			if guide_overlay:
+				guide_overlay.point_at(btn)
+			else:
+				_show_pointer(btn.global_position + Vector2(-30, -70))
 			return
 
 static func _unlock_top_button(battle_ui: Control, btn_var_name: String) -> void:
 	if battle_ui.get(btn_var_name):
 		var btn: Button = battle_ui.get(btn_var_name)
 		btn.disabled = false
-		_show_pointer(btn.global_position + Vector2(40, 40))
+		if guide_overlay:
+			guide_overlay.point_at(btn)
+		else:
+			_show_pointer(btn.global_position + Vector2(40, 40))
+
+# --- ДИАЛОГ И ЛОГИКА ПРОПУСКА ОБУЧЕНИЯ В БОЮ ---
+
+static func _show_skip_confirmation(battle_ui: Control) -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.85)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 200
+	battle_ui.add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(520, 240)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.10, 0.16, 0.98)
+	sb.border_color = Color(1.0, 0.85, 0.3, 1.0)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(14)
+	sb.content_margin_left = 20
+	sb.content_margin_right = 20
+	sb.content_margin_top = 18
+	sb.content_margin_bottom = 18
+	panel.add_theme_stylebox_override("panel", sb)
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 15)
+	panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "⚠ ПРОПУСК БОЕВОГО ОБУЧЕНИЯ"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	vbox.add_child(title)
+
+	var msg := Label.new()
+	msg.text = "Вы уверены, что хотите пропустить боевое обучение? Вы сразу завершите 1–4 уровни, получите персонажей Данилла и Каори, 900 монет и перейдёте к обучению по меню!"
+	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	msg.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(msg)
+
+	var btn_hbox := HBoxContainer.new()
+	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_hbox.add_theme_constant_override("separation", 20)
+	vbox.add_child(btn_hbox)
+
+	var confirm_btn := Button.new()
+	confirm_btn.text = "Да, пропустить"
+	confirm_btn.custom_minimum_size = Vector2(170, 46)
+	confirm_btn.add_theme_font_size_override("font_size", 15)
+	confirm_btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	confirm_btn.pressed.connect(func():
+		overlay.queue_free()
+		_execute_skip_combat_tutorial(battle_ui)
+	)
+	btn_hbox.add_child(confirm_btn)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "Отмена"
+	cancel_btn.custom_minimum_size = Vector2(130, 46)
+	cancel_btn.add_theme_font_size_override("font_size", 15)
+	cancel_btn.pressed.connect(func(): overlay.queue_free())
+	btn_hbox.add_child(cancel_btn)
+
+static func _execute_skip_combat_tutorial(battle_ui: Control) -> void:
+	is_tutorial = false
+	tut_step = 0
+	TeamConfig.tutorial_skipped = true
+	
+	for lvl in ["level_1", "level_2", "level_3", "level_4"]:
+		if not lvl in TeamConfig.completed_levels:
+			TeamConfig.completed_levels.append(lvl)
+	
+	if not "danill" in TeamConfig.unlocked_characters:
+		TeamConfig.unlocked_characters.append("danill")
+	if not "kaori" in TeamConfig.unlocked_characters:
+		TeamConfig.unlocked_characters.append("kaori")
+		
+	TeamConfig.coins += 900
+	if TeamConfig.current_level_progress < 5:
+		TeamConfig.current_level_progress = 5
+	TeamConfig.save_game()
+	
+	if guide_overlay and is_instance_valid(guide_overlay):
+		guide_overlay.queue_free()
+		guide_overlay = null
+		
+	battle_ui.get_tree().change_scene_to_file("res://scenes/main_menu/main_menu.tscn")

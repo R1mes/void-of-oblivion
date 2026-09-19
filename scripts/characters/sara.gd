@@ -91,7 +91,7 @@ static func execute_skill_e(sara: CombatUnit, target: CombatUnit, battle: Battle
 	target.advance_action(30.0)
 	apply_patch(target, sara, 2)
 	battle.log_message(
-		"Навык E: +20% к лечению, ускорение 30%%, «Заплатка» на %s" % target.display_name,
+		"Навык E: +20%% к лечению, ускорение 30%%, «Заплатка» на %s" % target.display_name,
 	)
 	sara.gain_energy(25)
 	battle.action_order_changed.emit()

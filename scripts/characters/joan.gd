@@ -76,9 +76,11 @@ static func execute_skill_q(attacker: CombatUnit, target: CombatUnit, bm: Battle
 # НАВЫК E (Ослабление — Трата 20% ХП, продвижение врага на 100% и наложение дебаффа "Не промахнись")
 static func execute_skill_e(attacker: CombatUnit, target: CombatUnit, bm: BattleManager) -> void:
 	var damage_amt: float = attacker.stats.max_hp * 0.20
+	var old_hp := attacker.stats.hp
 	attacker.stats.hp = maxf(attacker.stats.hp - damage_amt, 1.0)
+	var actual_loss := old_hp - attacker.stats.hp
 	bm.unit_updated.emit(attacker)
-	bm.trigger_accepted_sin_hp_loss(attacker)
+	bm.trigger_accepted_sin_hp_loss(attacker, actual_loss)
 	
 	target.advance_action(100.0)
 	
@@ -125,6 +127,7 @@ static func trigger_talent_fua(unit: CombatUnit, target: CombatUnit, bm: BattleM
 		unit.set_meta("joan_coffee_liqueur_stacks", stacks - 1)
 		bm.log_message("☕ Жоан тратит 1 заряд ликёра! Остаток: %d/2" % (stacks - 1))
 		
+	bm.start_attack_action()
 	bm.advance_fua_sequence()
 	bm.log_message("💥 Жоан проводит БОНУС-АТАКУ по %s!" % target.display_name)
 	
@@ -141,6 +144,7 @@ static func trigger_talent_fua(unit: CombatUnit, target: CombatUnit, bm: BattleM
 		
 	if bm.has_meta("lenskaya_fua_attacker_credited"):
 		bm.remove_meta("lenskaya_fua_attacker_credited")
+	bm.finish_attack_action()
 
 static func trigger_death_trace(unit: CombatUnit, bm: BattleManager) -> void:
 	bm.log_message("⚡ СЛЕД 3 ЖОАНА: Жоан погиб! Нанесение Мнимого урона всем противникам!")

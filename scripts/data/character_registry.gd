@@ -227,6 +227,54 @@ static func get_available_characters() -> Array[Dictionary]:
 			"rarity": 5,
 			"description": "Легендарный щитовик и дебаффер из Эмпирейцев (Ветряной). Разворачивает защитную Зону с перенаправлением урона союзников на себя, ослабляет врагов и накапливает стаки «Закрой глаза».",
 		},
+		{
+			"id": "lenskaya_antimatter",
+			"name": "Ленская • Явление антиматерии",
+			"element": CombatConstants.Element.QUANTUM,
+			"path": CombatConstants.Path.DESTRUCTION,
+			"rarity": 5,
+			"description": "Легендарный мейн ДД Антиматерии (Квантовый). Повелитель ресурса Xaeroh и Сверхновой. Переходит в формы «Хранитель Ничто» и «Воин небытия», казнит врагов из состояния «В изнанке» и обрушивает колоссальный урон Сверхспособности.",
+		},
+		{
+			"id": "velzebul",
+			"name": "Вельзевул",
+			"element": CombatConstants.Element.ICE,
+			"path": CombatConstants.Path.HARMONY,
+			"rarity": 5,
+			"description": "Легендарный саппорт Антиматерии (Ледяной). Собирает Грешные сердца для разблокировки Усиленного Навыка E и Сверхспособности. Накладывает «Печать Вельзевула», разгоняет Зеро, продвигает действия союзников и наделяет команду сокрушительными критами и бонусами урона.",
+		},
+		{
+			"id": "marina_sky_guardian",
+			"name": "Марина • Хранитель небес",
+			"element": CombatConstants.Element.WIND,
+			"path": CombatConstants.Path.REMEMBRANCE,
+			"rarity": 5,
+			"description": "Первый легендарный персонаж Пути Памяти (Ветряной). Стандартный кор команд Памяти, сап-ДД и саппорт. Призывает духа памяти «Эго», разворачивает зону «Элизиум», связывает союзников узами Крит. шанса и пробуждает «Деву луны» Хранителей небес.",
+		},
+		{
+			"id": "lenskaya_sky_guardian",
+			"name": "Ленская • Хранитель небес",
+			"element": CombatConstants.Element.IMAGINARY,
+			"path": CombatConstants.Path.HUNT,
+			"rarity": 4,
+			"description": "Охотница Мнимого урона (4★). ДД и сап-ДД в командах от пробития. Накладывает на врага статус «Враг Свечения» (1.5x эффективность стойкости, +30% урона Пробития и Суперпробития), проводит 6-ударную усиленную базовую атаку и конвертирует атаки команды по пробитым врагам в 60% урона суперпробития.",
+		},
+		{
+			"id": "rimes_ascension",
+			"name": "Раймс • Восхождение",
+			"element": CombatConstants.Element.QUANTUM,
+			"path": CombatConstants.Path.REMEMBRANCE,
+			"rarity": 5,
+			"description": "Легендарный Hyper-carry Пути Памяти (Квантовый, 5★ Limited). Масштабирует урон от макс. ХП, жертвует здоровьем отряда для сокрушительных совместных атак с Духом Памяти «Лапы антиматерии», накапливает заряды «Крещендо» и разворачивает зону «Разрыв» со срезом всех сопротивлений противников.",
+		},
+		{
+			"id": "sanguinia",
+			"name": "Сангиния Ял",
+			"element": CombatConstants.Element.FIRE,
+			"path": CombatConstants.Path.HARMONY,
+			"rarity": 5,
+			"description": "Сап-дд и саппорт Пути Гармонии (Огненный) для команд Бонус-атак и Ленской. Накладывает статус «Особый гость», проводит совместные бонус-атаки, накапливает «Журчание волн», продвигает сильнейшего союзника и призывает существ на шкалу действий.",
+		},
 	]
 
 static func get_character(id: String) -> Dictionary:
@@ -246,3 +294,18 @@ static func get_path_name(path: CombatConstants.Path) -> String:
 		CombatConstants.Path.NIHILITY: return "Небытие"
 		CombatConstants.Path.REMEMBRANCE: return "Память"
 		_: return "?"
+
+static func get_path_icon(path: CombatConstants.Path) -> String:
+	match path:
+		CombatConstants.Path.ERUDITION: return "📖"
+		CombatConstants.Path.HUNT: return "🏹"
+		CombatConstants.Path.DESTRUCTION: return "⚔️"
+		CombatConstants.Path.HARMONY: return "🎵"
+		CombatConstants.Path.ABUNDANCE: return "💖"
+		CombatConstants.Path.PRESERVATION: return "🛡️"
+		CombatConstants.Path.NIHILITY: return "🌌"
+		CombatConstants.Path.REMEMBRANCE: return "❄️"
+		_: return "✦"
+
+static func get_path_full_label(path: CombatConstants.Path) -> String:
+	return "%s %s" % [get_path_icon(path), get_path_name(path)]

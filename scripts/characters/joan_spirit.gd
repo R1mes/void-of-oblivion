@@ -18,7 +18,7 @@ static func create_unit(eidolon: int = 0) -> CombatUnit:
 		"max_energy": 12.0, # Шкала энергии визуализирует уровни «Последнего желания» (0-12)
 		"stats": {
 			"hp": 3200,
-			"atk": 1550,
+			"atk": 1700,
 			"def": 820,
 			"spd": 112,
 			"crit_rate": 0.30,
@@ -183,73 +183,75 @@ static func execute_ultimate(attacker: CombatUnit, bm: BattleManager) -> void:
 		var living := bm.get_living_enemies()
 		var initial_enemy_count := living.size()
 		
-		# МЕХАНИКА РАЗДЕЛЕНИЯ ОДНОГО ВРАГА НА 5 КОПИЙ
+		# МЕХАНИКА РАЗДЕЛЕНИЯ ОДНОГО ВРАГА НА 5 КОПИЙ (Запрещено для Раймса / Недельных боссов)
 		if living.size() == 1:
 			var solo_enemy: CombatUnit = living[0]
-			
-			# Формула: делим текущее ХП на 5 и умножаем на 3 для каждой цели
-			var cur_hp: float = solo_enemy.stats.hp
-			var split_hp: float = maxf(1.0, (cur_hp / 5.0) * 3.0)
-			var split_max_hp: float = maxf(split_hp, (solo_enemy.stats.max_hp / 5.0) * 3.0)
-			
-			bm.log_message("💥 РАЗДЕЛЕНИЕ ДУХА: %s разделяется на 5 сущностей! ХП каждой цели: %d (x3)." % [solo_enemy.display_name, int(split_hp)])
-			
-			# 1. Настройка ОСНОВНОЙ цели (сохраняет все свои умения и дебаффы)
-			solo_enemy.stats.hp = split_hp
-			solo_enemy.stats.max_hp = split_max_hp
-			solo_enemy.set_meta("base_hp_original", split_max_hp)
-			solo_enemy.slot_index = 0
-			
-			# 2. Очищаем старый список врагов (удаляя всех ранее побежденных)
-			bm.enemies.clear()
-			bm.enemies.append(solo_enemy)
-			
-			# 3. Создаем 4 разделённые копии
-			for i in range(1, 5):
-				var clone := CombatUnit.new()
-				clone.setup_from_template({
-					"id": solo_enemy.id + "_clone",
-					"name": "%s (Копия %d)" % [solo_enemy.display_name, i],
-					"element": solo_enemy.element,
-					"is_ally": false,
-					"stats": {
-						"hp": split_hp,
-						"max_hp": split_max_hp,
-						"atk": solo_enemy.stats.atk,
-						"def": solo_enemy.stats.def,
-						"spd": solo_enemy.stats.spd,
-						"crit_rate": solo_enemy.stats.crit_rate,
-						"crit_dmg": solo_enemy.stats.crit_dmg,
-						"effect_hit_rate": solo_enemy.stats.effect_hit_rate,
-						"break_effect": solo_enemy.stats.break_effect,
-					}
-				})
+			if solo_enemy.id == "rimes_final_boss" or bool(solo_enemy.get_meta("cannot_be_split", false)) or bool(solo_enemy.get_meta("is_weekly_boss", false)):
+				bm.log_message("🛡 %s является Недельным боссом и не может быть разделён на копии!" % solo_enemy.display_name)
+			else:
+				# Формула: делим текущее ХП на 5 и умножаем на 3 для каждой цели
+				var cur_hp: float = solo_enemy.stats.hp
+				var split_hp: float = maxf(1.0, (cur_hp / 5.0) * 3.0)
+				var split_max_hp: float = maxf(split_hp, (solo_enemy.stats.max_hp / 5.0) * 3.0)
 				
-				clone.weaknesses = solo_enemy.weaknesses.duplicate()
-				clone.max_toughness = solo_enemy.max_toughness
-				clone.toughness = solo_enemy.max_toughness
-				clone.slot_index = i
+				bm.log_message("💥 РАЗДЕЛЕНИЕ ДУХА: %s разделяется на 5 сущностей! ХП каждой цели: %d (x3)." % [solo_enemy.display_name, int(split_hp)])
 				
-				# Маркер копии (в свой ход наносит 5% СА случайному союзнику, заряжая «Последнее желание» Жоана)
-				clone.set_meta("is_joan_spirit_clone", true)
-				clone.set_meta("base_hp_original", split_max_hp)
-				clone.set_meta("base_atk_original", clone.stats.atk)
-				clone.set_meta("base_def_original", clone.stats.def)
-				clone.set_meta("base_spd_original", clone.stats.spd)
+				# 1. Настройка ОСНОВНОЙ цели (сохраняет все свои умения и дебаффы)
+				solo_enemy.stats.hp = split_hp
+				solo_enemy.stats.max_hp = split_max_hp
+				solo_enemy.set_meta("base_hp_original", split_max_hp)
+				solo_enemy.slot_index = 0
 				
-				# С разделённых копий сбрасываются все усиления и ослабления
-				clone.statuses.cleanse_all()
+				# 2. Очищаем старый список врагов (удаляя всех ранее побежденных)
+				bm.enemies.clear()
+				bm.enemies.append(solo_enemy)
 				
-				# Откладываем действие копии на 100%
-				clone.recalculate_action_value()
-				clone.delay_action(100.0)
-				
-				bm.enemies.append(clone)
-				
-			# Перерисовываем карточки врагов на поле боя
-			bm.enemies_reshuffled.emit.call_deferred()
-			bm.action_order_changed.emit()
-			living = bm.get_living_enemies()
+				# 3. Создаем 4 разделённые копии
+				for i in range(1, 5):
+					var clone := CombatUnit.new()
+					clone.setup_from_template({
+						"id": solo_enemy.id + "_clone",
+						"name": "%s (Копия %d)" % [solo_enemy.display_name, i],
+						"element": solo_enemy.element,
+						"is_ally": false,
+						"stats": {
+							"hp": split_hp,
+							"max_hp": split_max_hp,
+							"atk": solo_enemy.stats.atk,
+							"def": solo_enemy.stats.def,
+							"spd": solo_enemy.stats.spd,
+							"crit_rate": solo_enemy.stats.crit_rate,
+							"crit_dmg": solo_enemy.stats.crit_dmg,
+							"effect_hit_rate": solo_enemy.stats.effect_hit_rate,
+							"break_effect": solo_enemy.stats.break_effect,
+						}
+					})
+					
+					clone.weaknesses = solo_enemy.weaknesses.duplicate()
+					clone.max_toughness = solo_enemy.max_toughness
+					clone.toughness = solo_enemy.max_toughness
+					clone.slot_index = i
+					
+					# Маркер копии (в свой ход наносит 5% СА случайному союзнику, заряжая «Последнее желание» Жоана)
+					clone.set_meta("is_joan_spirit_clone", true)
+					clone.set_meta("base_hp_original", split_max_hp)
+					clone.set_meta("base_atk_original", clone.stats.atk)
+					clone.set_meta("base_def_original", clone.stats.def)
+					clone.set_meta("base_spd_original", clone.stats.spd)
+					
+					# С разделённых копий сбрасываются все усиления и ослабления
+					clone.statuses.cleanse_all()
+					
+					# Откладываем действие копии на 100%
+					clone.recalculate_action_value()
+					clone.delay_action(100.0)
+					
+					bm.enemies.append(clone)
+					
+				# Перерисовываем карточки врагов на поле боя
+				bm.enemies_reshuffled.emit.call_deferred()
+				bm.action_order_changed.emit()
+				living = bm.get_living_enemies()
 			
 		# След 2: Последующие применения Сверхспособности наносят на 30% больше урона, если живых противников <= 3
 		var trace2_bonus := 0.30 if (initial_enemy_count <= 3 or living.size() <= 3) else 0.0

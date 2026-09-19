@@ -18,7 +18,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.08, 0.09, 0.14, 1)
+color = Color(0.07, 0.08, 0.12, 1)
 
 [node name="Margin" type="MarginContainer" parent="." unique_id=2139915851]
 layout_mode = 1
@@ -27,125 +27,346 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 24
-theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 24
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
 
 [node name="VBox" type="VBoxContainer" parent="Margin" unique_id=1397675765]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 10
 
-[node name="Title" type="Label" parent="Margin/VBox" unique_id=288980671]
+[node name="HeaderBar" type="HBoxContainer" parent="Margin/VBox" unique_id=1000000001]
 layout_mode = 2
-theme_override_font_sizes/font_size = 28
-text = "Настройка отряда"
-horizontal_alignment = 1
+theme_override_constants/separation = 14
 
-[node name="Content" type="HBoxContainer" parent="Margin/VBox" unique_id=132474513]
+[node name="BtnBack" type="Button" parent="Margin/VBox/HeaderBar" unique_id=1000000002]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 40)
 layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 20
+theme_override_font_sizes/font_size = 14
+text = "⬅ В главное меню"
 
-[node name="LeftPanel" type="VBoxContainer" parent="Margin/VBox/Content" unique_id=1009794977]
+[node name="Title" type="Label" parent="Margin/VBox/HeaderBar" unique_id=288980671]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 8
+theme_override_colors/font_color = Color(0.95, 0.82, 0.45, 1)
+theme_override_font_sizes/font_size = 20
+text = "⚙ АДМИН-ПАНЕЛЬ: НАСТРОЙКА БОЯ"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="RosterLabel" type="Label" parent="Margin/VBox/Content/LeftPanel" unique_id=294501272]
+[node name="ModeHBox" type="HBoxContainer" parent="Margin/VBox/HeaderBar" unique_id=1000000003]
 layout_mode = 2
-text = "Доступные персонажи"
+theme_override_constants/separation = 6
 
-[node name="RosterList" type="GridContainer" parent="Margin/VBox/Content/LeftPanel" unique_id=1801482432]
+[node name="ModeLabel" type="Label" parent="Margin/VBox/HeaderBar/ModeHBox" unique_id=1000000004]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Режим битвы:"
+vertical_alignment = 1
+
+[node name="ModeOption" type="OptionButton" parent="Margin/VBox/HeaderBar/ModeHBox" unique_id=1000000005]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(250, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+
+[node name="StartButton" type="Button" parent="Margin/VBox/HeaderBar" unique_id=525891620]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "⚔ В БОЙ!"
+
+[node name="AdminTabs" type="TabContainer" parent="Margin/VBox" unique_id=1000000006]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
+current_tab = 0
 
-[node name="DetailPanel" type="PanelContainer" parent="Margin/VBox/Content/LeftPanel" unique_id=989908280]
+[node name="🧙 Отряд союзников" type="MarginContainer" parent="Margin/VBox/AdminTabs" unique_id=1000000007]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+metadata/_tab_index = 0
+
+[node name="AlliesVBox" type="VBoxContainer" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников" unique_id=1000000008]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TeamHeaderRow" type="HBoxContainer" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox" unique_id=1671894198]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TeamLabel" type="Label" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/TeamHeaderRow" unique_id=396919070]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Отряд союзников (до 4 персонажей):"
+
+[node name="Spacer" type="Control" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/TeamHeaderRow" unique_id=1000000009]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BtnSaveTeam" type="Button" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/TeamHeaderRow" unique_id=1427685640]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 36)
+layout_mode = 2
+text = "💾 Сохранить отряд"
+
+[node name="BtnLoadTeam" type="Button" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/TeamHeaderRow" unique_id=1673521952]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 36)
+layout_mode = 2
+text = "📂 Загрузить отряд"
+
+[node name="InitiatorLabel" type="Label" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/TeamHeaderRow" unique_id=1962943117]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Техника:"
+
+[node name="InitiatorOption" type="OptionButton" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/TeamHeaderRow" unique_id=682859474]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 36)
+layout_mode = 2
+
+[node name="TeamSlots" type="HBoxContainer" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox" unique_id=496586281]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_constants/separation = 14
+alignment = 1
 
-[node name="DetailVBox" type="VBoxContainer" parent="Margin/VBox/Content/LeftPanel/DetailPanel" unique_id=1025177878]
+[node name="SepAllies" type="HSeparator" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox" unique_id=1000000010]
 layout_mode = 2
 
-[node name="DetailName" type="Label" parent="Margin/VBox/Content/LeftPanel/DetailPanel/DetailVBox" unique_id=667202634]
+[node name="AlliesSplit" type="HBoxContainer" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox" unique_id=1000000011]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 14
+
+[node name="RosterArea" type="VBoxContainer" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit" unique_id=1000000012]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0
+theme_override_constants/separation = 6
+
+[node name="RosterLabel" type="Label" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/RosterArea" unique_id=294501272]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.88, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "Доступные персонажи (нажмите, чтобы выбрать):"
+
+[node name="ScrollRoster" type="ScrollContainer" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/RosterArea" unique_id=1000000013]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="RosterList" type="GridContainer" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/RosterArea/ScrollRoster" unique_id=1801482432]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+size_flags_horizontal = 3
+size_flags_vertical = 3
+columns = 7
+
+[node name="DetailPanel" type="PanelContainer" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit" unique_id=989908280]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(360, 0)
+layout_mode = 2
+
+[node name="DetailVBox" type="VBoxContainer" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/DetailPanel" unique_id=1025177878]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DetailHeader" type="Label" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/DetailPanel/DetailVBox" unique_id=1000000014]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.7, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "Карточка персонажа"
+
+[node name="DetailName" type="Label" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/DetailPanel/DetailVBox" unique_id=667202634]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
 text = "—"
+autowrap_mode = 2
 
-[node name="DetailDesc" type="Label" parent="Margin/VBox/Content/LeftPanel/DetailPanel/DetailVBox" unique_id=1021562482]
+[node name="DescScroll" type="ScrollContainer" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/DetailPanel/DetailVBox" unique_id=1000000015]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="DetailDesc" type="Label" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/DetailPanel/DetailVBox/DescScroll" unique_id=1021562482]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 text = "Выберите персонажа"
-autowrap_mode = 3
+autowrap_mode = 2
 
-[node name="EidolonRow" type="HBoxContainer" parent="Margin/VBox/Content/LeftPanel/DetailPanel/DetailVBox" unique_id=2125642571]
+[node name="EidolonRow" type="HBoxContainer" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/DetailPanel/DetailVBox" unique_id=2125642571]
+visible = false
 layout_mode = 2
 
-[node name="EidolonLabel" type="Label" parent="Margin/VBox/Content/LeftPanel/DetailPanel/DetailVBox/EidolonRow" unique_id=81297552]
+[node name="EidolonLabel" type="Label" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/DetailPanel/DetailVBox/EidolonRow" unique_id=81297552]
 layout_mode = 2
 text = "Эйдолон:"
 
-[node name="EidolonSpin" type="SpinBox" parent="Margin/VBox/Content/LeftPanel/DetailPanel/DetailVBox/EidolonRow" unique_id=1481564979]
+[node name="EidolonSpin" type="SpinBox" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/DetailPanel/DetailVBox/EidolonRow" unique_id=1481564979]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 6.0
 
-[node name="EnemyRosterList" type="VBoxContainer" parent="Margin/VBox/Content/LeftPanel" unique_id=1131323885]
+[node name="BtnAddSelectedToTeam" type="Button" parent="Margin/VBox/AdminTabs/🧙 Отряд союзников/AlliesVBox/AlliesSplit/DetailPanel/DetailVBox" unique_id=1000000016]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "➕ Добавить в отряд"
 
-[node name="RightPanel" type="VBoxContainer" parent="Margin/VBox/Content" unique_id=1138138413]
+[node name="👾 Противники (Свой бой)" type="MarginContainer" parent="Margin/VBox/AdminTabs" unique_id=1000000017]
+visible = false
 layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 12
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+metadata/_tab_index = 1
 
-[node name="TeamHeaderRow" type="HBoxContainer" parent="Margin/VBox/Content/RightPanel" unique_id=1671894198]
+[node name="EnemiesVBox" type="VBoxContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)" unique_id=1000000018]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="TeamLabel" type="Label" parent="Margin/VBox/Content/RightPanel/TeamHeaderRow" unique_id=396919070]
+[node name="EnemyPresetNotice" type="PanelContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox" unique_id=1000000019]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
-size_flags_horizontal = 3
-text = "Отряд (до 4)"
 
-[node name="BtnSaveTeam" type="Button" parent="Margin/VBox/Content/RightPanel/TeamHeaderRow" unique_id=1427685640]
+[node name="EnemyPresetNoticeLabel" type="Label" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyPresetNotice" unique_id=1000000020]
 unique_name_in_owner = true
 layout_mode = 2
-text = "💾 Сохранить отряд"
+theme_override_colors/font_color = Color(0.95, 0.85, 0.4, 1)
+theme_override_font_sizes/font_size = 16
+text = "В выбранном режиме боя враги генерируются автоматически."
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
 
-[node name="BtnLoadTeam" type="Button" parent="Margin/VBox/Content/RightPanel/TeamHeaderRow" unique_id=1673521952]
-unique_name_in_owner = true
-layout_mode = 2
-text = "📂 Загрузить отряд"
-
-[node name="TeamSlots" type="HBoxContainer" parent="Margin/VBox/Content/RightPanel" unique_id=496586281]
+[node name="EnemyCustomContainer" type="VBoxContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox" unique_id=1000000021]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="EnemyHeaderRow" type="HBoxContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer" unique_id=1000000022]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="EnemyLabel" type="Label" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemyHeaderRow" unique_id=1000000023]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Слоты врагов (до 5 противников для 'Своего боя'):"
+
+[node name="EnemySpacer" type="Control" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemyHeaderRow" unique_id=1000000024]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BtnClearEnemies" type="Button" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemyHeaderRow" unique_id=1000000025]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 36)
+layout_mode = 2
+text = "🗑 Очистить"
+
+[node name="BtnPresetDummies" type="Button" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemyHeaderRow" unique_id=1000000026]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 36)
+layout_mode = 2
+text = "🎯 5 Манекенов"
+
+[node name="BtnPresetBoss" type="Button" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemyHeaderRow" unique_id=1000000027]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 36)
+layout_mode = 2
+text = "👑 Босс + 2 Элиты"
+
+[node name="EnemySlots" type="HBoxContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer" unique_id=1193242997]
+unique_name_in_owner = true
+layout_mode = 2
 theme_override_constants/separation = 12
 alignment = 1
 
-[node name="InitiatorRow" type="HBoxContainer" parent="Margin/VBox/Content/RightPanel" unique_id=345231550]
+[node name="SepEnemies" type="HSeparator" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer" unique_id=1000000028]
 layout_mode = 2
-alignment = 1
 
-[node name="InitiatorLabel" type="Label" parent="Margin/VBox/Content/RightPanel/InitiatorRow" unique_id=1962943117]
+[node name="EnemiesSplit" type="HBoxContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer" unique_id=1000000029]
 layout_mode = 2
-text = "Инициатор боя (Техника):"
+size_flags_vertical = 3
+theme_override_constants/separation = 14
 
-[node name="InitiatorOption" type="OptionButton" parent="Margin/VBox/Content/RightPanel/InitiatorRow" unique_id=682859474]
+[node name="EnemyRosterArea" type="VBoxContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemiesSplit" unique_id=1000000030]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.6
+theme_override_constants/separation = 6
+
+[node name="EnemyRosterLabel" type="Label" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemiesSplit/EnemyRosterArea" unique_id=1000000031]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.8, 0.8, 1)
+theme_override_font_sizes/font_size = 14
+text = "Доступные типы противников (нажмите, чтобы выбрать):"
+
+[node name="EnemyScroll" type="ScrollContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemiesSplit/EnemyRosterArea" unique_id=1000000032]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="EnemyRosterList" type="VBoxContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemiesSplit/EnemyRosterArea/EnemyScroll" unique_id=1131323885]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
 
-[node name="EnemySlots" type="HBoxContainer" parent="Margin/VBox/Content/RightPanel" unique_id=1193242997]
+[node name="EnemyDetailPanel" type="PanelContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemiesSplit" unique_id=1000000033]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(380, 0)
 layout_mode = 2
 
-[node name="StartButton" type="Button" parent="Margin/VBox" unique_id=525891620]
+[node name="EnemyDetailVBox" type="VBoxContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemiesSplit/EnemyDetailPanel" unique_id=1000000034]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EnemyDetailHeader" type="Label" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemiesSplit/EnemyDetailPanel/EnemyDetailVBox" unique_id=1000000035]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 14
+text = "Информация о противнике"
+
+[node name="EnemyDetailName" type="Label" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemiesSplit/EnemyDetailPanel/EnemyDetailVBox" unique_id=1000000036]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "В бой!"
+theme_override_font_sizes/font_size = 18
+text = "—"
+autowrap_mode = 2
+
+[node name="EnemyDescScroll" type="ScrollContainer" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemiesSplit/EnemyDetailPanel/EnemyDetailVBox" unique_id=1000000037]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="EnemyDetailDesc" type="Label" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemiesSplit/EnemyDetailPanel/EnemyDetailVBox/EnemyDescScroll" unique_id=1000000038]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+text = "Выберите противника из списка слева"
+autowrap_mode = 2
+
+[node name="BtnAddSelectedToEnemy" type="Button" parent="Margin/VBox/AdminTabs/👾 Противники (Свой бой)/EnemiesVBox/EnemyCustomContainer/EnemiesSplit/EnemyDetailPanel/EnemyDetailVBox" unique_id=1000000039]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "➕ Добавить врага в отряд"

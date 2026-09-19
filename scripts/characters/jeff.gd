@@ -147,6 +147,7 @@ static func execute_ultimate(attacker: CombatUnit, target: CombatUnit, bm: Battl
 
 # БОНУС-АТАКA ТАЛАНТА (Наносит 30% макс. ХП Джеффа и вешает дебафф)
 static func trigger_talent_fua(unit: CombatUnit, target: CombatUnit, bm: BattleManager) -> void:
+	bm.start_attack_action()
 	bm.log_message("💥 Джефф проводит БОНУС-АТАКУ «Пошумите!» по %s!" % target.display_name)
 	
 	if bm.has_meta("lenskaya_fua_attacker_credited"):
@@ -174,3 +175,4 @@ static func trigger_talent_fua(unit: CombatUnit, target: CombatUnit, bm: BattleM
 		
 	if bm.has_meta("lenskaya_fua_attacker_credited"):
 		bm.remove_meta("lenskaya_fua_attacker_credited")
+	bm.finish_attack_action()

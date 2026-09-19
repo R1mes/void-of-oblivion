@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://test_runner_sanguinia"]
+
+[ext_resource type="Script" path="res://tests/test_sanguinia.gd" id="1_test"]
+
+[node name="TestSanguiniaRunner" type="Node"]
+script = ExtResource("1_test")
