@@ -60,6 +60,9 @@ static func get_effect_res(unit: CombatUnit) -> float:
 		"rimes_final_boss": return 0.40
 		"your_memories": return 0.25
 		"void_paws": return 0.15
+		"antimatter_slave": return 0.15
+		"insurgent": return 0.25
+		"kyle_rebel_leader": return 0.35
 	if unit.stats and "effect_res" in unit.stats and unit.stats.effect_res > 0.0:
 		return unit.stats.effect_res
 	return 0.10

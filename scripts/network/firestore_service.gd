@@ -173,6 +173,41 @@ func set_document(doc_path: String, data: Dictionary, callback: Callable = Calla
 
 	http.request(url, headers, HTTPClient.METHOD_PATCH, json_body)
 
+## Удалить документ из Firestore (DELETE)
+func delete_document(doc_path: String, callback: Callable = Callable(), _retry_count: int = 0) -> void:
+	if not FirebaseConfig.is_configured():
+		if callback.is_valid():
+			callback.call(false)
+		return
+
+	var url := FirebaseConfig.get_firestore_url(doc_path)
+	print("[FirestoreService] delete_document: ", doc_path, " url: ", url)
+	var http := HTTPRequest.new()
+	add_child(http)
+
+	var headers: PackedStringArray = auth.get_auth_header() if auth else PackedStringArray()
+
+	http.request_completed.connect(func(result: int, response_code: int, response_headers: PackedStringArray, body: PackedByteArray):
+		http.queue_free()
+		var success := (response_code >= 200 and response_code < 300)
+		print("[FirestoreService] delete_document response: path=", doc_path, " http_code=", response_code, " success=", success)
+
+		if response_code == 401 and _retry_count < 1 and auth != null and not auth.refresh_token.is_empty():
+			auth.refresh_auth_token(func(refreshed: bool):
+				if refreshed:
+					delete_document(doc_path, callback, _retry_count + 1)
+				else:
+					if callback.is_valid():
+						callback.call(false)
+			)
+			return
+
+		if callback.is_valid():
+			callback.call(success)
+	)
+
+	http.request(url, headers, HTTPClient.METHOD_DELETE)
+
 ## Получить коллекцию документов (например, список баннеров "banners")
 func get_collection(collection_path: String, callback: Callable) -> void:
 	if not FirebaseConfig.is_configured():

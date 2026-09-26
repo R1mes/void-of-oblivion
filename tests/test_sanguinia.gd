@@ -26,6 +26,7 @@ func _ready() -> void:
 		"test_13_battle_info_provider_descriptions",
 		"test_14_dot_does_not_reduce_special_guest",
 		"test_15_all_sanguinia_buffs_increase_damage",
+		"test_16_special_guest_fua_vulnerability",
 	]
 
 	for t_name in tests:
@@ -186,7 +187,7 @@ func test_5_special_guest_charge_reduction_and_fua() -> bool:
 	if bm.skill_points != sp_before + 1: return false
 	return true
 
-# 6. Ультимейт: призыв «Готовьтесь...» (AV 59) и 3x «Заселение!» (AV 60)
+# 6. Ультимейт: призыв «Готовьтесь...» (AV 19) и 3x «Заселение!» (AV 20)
 func test_6_ultimate_summons_creation() -> bool:
 	var bm := _setup_test_bm()
 	var sanguinia := SanguiniaAbilities.create_unit(0)
@@ -201,10 +202,10 @@ func test_6_ultimate_summons_creation() -> bool:
 	for s in bm.sanguinia_summons:
 		if s.id == "sanguinia_prep":
 			prep_count += 1
-			if s.action_value != 59.0: return false
+			if s.action_value != 19.0: return false
 		elif s.id == "sanguinia_settlement":
 			pop_count += 1
-			if s.action_value != 60.0: return false
+			if s.action_value != 20.0: return false
 
 	if prep_count != 1: return false
 	if pop_count != 3: return false
@@ -273,7 +274,9 @@ func test_9_talent_waves_stacking_sync_with_lenskaya() -> bool:
 	var bm := _setup_test_bm()
 	var sanguinia := SanguiniaAbilities.create_unit(0)
 	var lenskaya := LenskayaAbilities.create_unit(0)
+	var enemy := _create_dummy_enemy()
 	bm.allies = [sanguinia, lenskaya]
+	bm.enemies = [enemy]
 	
 	# При бонус-атаке союзника обе получают по 2 стака
 	SanguiniaAbilities.add_waves_stacks(2, bm)
@@ -290,29 +293,58 @@ func test_9_talent_waves_stacking_sync_with_lenskaya() -> bool:
 	s_waves = int(sanguinia.get_meta("sanguinia_waves", 0))
 	l_man = int(lenskaya.get_meta("lenskaya_manipulation", 0))
 	if s_waves != 4 or l_man != 4: return false
+
+	# Трата стаков: когда Ленская использует Навык E, стаки Манипуляции И Журчания волн синхронно сбрасываются до 0
+	LenskayaAbilities.execute_skill_e(lenskaya, enemy, bm)
+	s_waves = int(sanguinia.get_meta("sanguinia_waves", 0))
+	l_man = int(lenskaya.get_meta("lenskaya_manipulation", 0))
+	if s_waves != 0 or l_man != 0: return false
+
 	return true
 
-# 10. Талант при 47 стаках: продвижение сильнейшего на 100%, +50% урона, сброс до 0, След 3 (+1 SP)
+# 10. Талант при 47 стаках: продвижение сильнейшего на 100%, +100% урона, принудительный Навык E без траты ОН, сброс до 0, След 3 (+1 SP)
 func test_10_talent_47_stacks_threshold_and_reset() -> bool:
 	var bm := _setup_test_bm()
 	var sanguinia := SanguiniaAbilities.create_unit(0)
 	var lenskaya := LenskayaAbilities.create_unit(0)
+	var enemy := _create_dummy_enemy()
 	bm.allies = [sanguinia, lenskaya]
+	bm.enemies = [enemy]
 	bm.skill_points = 2
 	lenskaya.action_value = 60.0
 	
-	# Доводим до 47 стаков
+	# Случай 1: Набор 47 стаков вне хода Ленской
+	# Моментальный advance_action (100%), принудительное применение Навыка E по врагу с наивысшим ХП без траты ОН
+	SanguiniaAbilities.add_waves_stacks(47, bm)
+	if lenskaya.action_value != 0.0: return false
+	# После успешного применения Навыка E стаки обеих сбрасываются до 0
+	if int(sanguinia.get_meta("sanguinia_waves", 0)) != 0: return false
+	if int(lenskaya.get_meta("lenskaya_manipulation", 0)) != 0: return false
+	if lenskaya.has_meta("sanguinia_talent_dmg_boost"): return false
+	# ОН не должны были потратиться на Навык E, а След 3 дает +1 ОН при сбросе (2 + 1 = 3)
+	if bm.skill_points != 3: return false
+
+	# Случай 2: Набор 47 стаков, когда сильнейший союзник заморожен (skip_next_turn)
+	# Принудительный Навык E откладывается, стаки НЕ сбрасываются!
+	lenskaya.statuses.skip_next_turn = true
+	lenskaya.action_value = 50.0
 	SanguiniaAbilities.add_waves_stacks(47, bm)
 	if int(sanguinia.get_meta("sanguinia_waves", 0)) != 47: return false
-	if lenskaya.action_value != 0.0: return false
-	if not lenskaya.has_meta("sanguinia_talent_dmg_boost"): return false
-	if float(lenskaya.get_meta("sanguinia_talent_dmg_boost", 0.0)) != 1.00: return false
-	
-	# После следующего действия Ленской стаки сбрасываются и дается 1 SP (След 3)
-	SanguiniaAbilities.check_reset_waves_stacks(lenskaya, bm)
-	if int(sanguinia.get_meta("sanguinia_waves", 0)) != 0: return false
-	if lenskaya.has_meta("sanguinia_talent_dmg_boost"): return false
+	if not sanguinia.has_meta("sanguinia_pending_forced_skill_unit"): return false
+	# Стаки не сбросились, так как Ленская не смогла применить Навык E
+	if int(lenskaya.get_meta("lenskaya_manipulation", 0)) != 47: return false
+	# ОН не изменились
 	if bm.skill_points != 3: return false
+
+	# Теперь Ленская размораживается (получает возможность действовать)
+	lenskaya.statuses.skip_next_turn = false
+	bm.check_sanguinia_pending_forced_skill()
+	# Теперь принудительный Навык E выполнен, стаки сброшены, +1 ОН получен (3 + 1 = 4)
+	if int(sanguinia.get_meta("sanguinia_waves", 0)) != 0: return false
+	if int(lenskaya.get_meta("lenskaya_manipulation", 0)) != 0: return false
+	if sanguinia.has_meta("sanguinia_pending_forced_skill_unit"): return false
+	if bm.skill_points != 4: return false
+
 	return true
 
 # 11. Эйдолоны E1, E2, E4, E6
@@ -439,6 +471,8 @@ func test_15_all_sanguinia_buffs_increase_damage() -> bool:
 	var bm := _setup_test_bm()
 	var sanguinia := SanguiniaAbilities.create_unit(2)
 	var ally := LenskayaAbilities.create_unit(0)
+	sanguinia.stats.crit_rate = 0.0
+	ally.stats.crit_rate = 0.0
 	var enemy := _create_dummy_enemy()
 	bm.allies = [sanguinia, ally]
 	bm.enemies = [enemy]
@@ -490,6 +524,65 @@ func test_15_all_sanguinia_buffs_increase_damage() -> bool:
 	sanguinia.set_meta("sanguinia_e2_dmg_buff", 0.60)
 	var res_s_e2 := bm.calc_dmg(sanguinia, enemy, 1.0, 0.0, false, 0.0, 0.0, false, false, "Basic")
 	var dmg_s_e2: float = float(res_s_e2.get("damage", 0.0))
+	if dmg_q <= dmg_base: return false
+	if dmg_prep <= dmg_base: return false
+	if dmg_fua_10 <= dmg_fua_0: return false
+	if dmg_boost <= dmg_base: return false
 	if dmg_s_e2 <= dmg_s_base: return false
 	
 	return true
+
+# 16. Получаемый Особым гостем урон бонус-атак повышается на 70% (пока действует этот статус)
+func test_16_special_guest_fua_vulnerability() -> bool:
+	var bm := _setup_test_bm()
+	var sanguinia := SanguiniaAbilities.create_unit(0)
+	var ally := LenskayaAbilities.create_unit(0)
+	var enemy_guest := _create_dummy_enemy()
+	var enemy_other := _create_dummy_enemy()
+	bm.allies = [sanguinia, ally]
+	bm.enemies = [enemy_guest, enemy_other]
+	
+	# 1. Накладываем «Особый гость» на enemy_guest
+	SanguiniaAbilities.execute_skill_e(sanguinia, enemy_guest, bm)
+	if not enemy_guest.has_meta("sanguinia_special_guest_charges"): return false
+	if not enemy_guest.statuses.debuffs.has("sanguinia_special_guest"): return false
+	
+	# 2. Обычная атака ("Basic") НЕ должна получать +70% бонуса
+	var res_basic_guest := bm.calc_dmg(ally, enemy_guest, 1.0, 0.0, false, 0.0, 0.0, false, false, "Basic")
+	var res_basic_other := bm.calc_dmg(ally, enemy_other, 1.0, 0.0, false, 0.0, 0.0, false, false, "Basic")
+	var dmg_basic_guest: float = float(res_basic_guest.get("damage", 0.0))
+	var dmg_basic_other: float = float(res_basic_other.get("damage", 0.0))
+	if not is_equal_approx(dmg_basic_guest, dmg_basic_other):
+		printerr("Базовая атака не должна получать бафф уязвимости бонус-атак!")
+		return false
+		
+	# 3. Бонус-атака ("Бонус-атака") по enemy_guest должна наносить ровно на 70% больше урона, чем по enemy_other
+	var res_fua_other := bm.calc_dmg(ally, enemy_other, 1.0, 0.0, false, 0.0, 0.0, false, false, "Бонус-атака")
+	var res_fua_guest := bm.calc_dmg(ally, enemy_guest, 1.0, 0.0, false, 0.0, 0.0, false, false, "Бонус-атака")
+	var dmg_fua_other: float = float(res_fua_other.get("damage", 0.0))
+	var dmg_fua_guest: float = float(res_fua_guest.get("damage", 0.0))
+	if not is_equal_approx(dmg_fua_guest, dmg_fua_other * 1.70):
+		printerr("Бонус-атака по Особому гостю должна быть усилена ровно на 70%! Получено: ", dmg_fua_guest, " против базового: ", dmg_fua_other)
+		return false
+
+	# 4. Чистый урон бонус-атаки (deal_damage с "lenskaya_true_fua" или "sanguinia_true_fua")
+	var hp_before := enemy_guest.stats.hp
+	bm.deal_damage(enemy_guest, 1000.0, sanguinia, CombatConstants.Element.FIRE, false, "sanguinia_true_fua")
+	var dealt_guest: float = hp_before - enemy_guest.stats.hp
+	if not is_equal_approx(dealt_guest, 1700.0):
+		printerr("Чистый урон бонус-атаки по Особому гостю должен быть усилен на 70%! Получено: ", dealt_guest)
+		return false
+		
+	# 5. После снятия статуса «Особый гость» урон бонус-атак возвращается к норме
+	sanguinia.set_meta("sanguinia_waves", 0)
+	ally.set_meta("lenskaya_manipulation", 0)
+	enemy_guest.remove_meta("sanguinia_special_guest_charges")
+	enemy_guest.statuses.debuffs.erase("sanguinia_special_guest")
+	var res_fua_cleared := bm.calc_dmg(ally, enemy_guest, 1.0, 0.0, false, 0.0, 0.0, false, false, "Бонус-атака")
+	var dmg_fua_cleared: float = float(res_fua_cleared.get("damage", 0.0))
+	if not is_equal_approx(dmg_fua_cleared, dmg_fua_other):
+		printerr("После снятия статуса урон бонус-атак должен вернуться к стандартному значению! Получено: ", dmg_fua_cleared, " против базового: ", dmg_fua_other)
+		return false
+
+	return true
+

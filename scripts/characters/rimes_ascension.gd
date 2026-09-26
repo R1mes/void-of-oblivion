@@ -50,7 +50,7 @@ static func create_paws_definition(owner: CombatUnit) -> MemospriteDefinition:
 	def.path = CombatConstants.Path.REMEMBRANCE
 	
 	def.hp_mode = MemospriteDefinition.HpMode.OWNER_SCALING
-	def.hp_coefficient = 1.50
+	def.hp_coefficient = 1.20
 	def.hp_flat = 0.0
 	
 	def.speed_mode = MemospriteDefinition.SpeedMode.FIXED
@@ -93,9 +93,9 @@ static func get_paws_sprite(owner: CombatUnit, bm: BattleManager) -> Memosprite:
 static func recalculate_paws_max_hp(paws: Memosprite, owner: CombatUnit) -> void:
 	if paws == null or owner == null:
 		return
-	var base_hp := owner.stats.max_hp * 1.50
+	var base_hp := owner.stats.max_hp * 1.20
 	var charges := paws.get_charge() if paws.charge_comp != null else 1.0
-	var bonus_mult := maxf(0.0, charges - 1.0) * 0.75
+	var bonus_mult := maxf(0.0, charges - 1.0) * 0.20
 	var new_max := base_hp * (1.0 + bonus_mult)
 	var gained := new_max - paws.stats.max_hp
 	paws.stats.max_hp = new_max
@@ -123,9 +123,9 @@ static func on_ally_hp_lost(rimes: CombatUnit, ally: CombatUnit, hp_lost: float,
 	if ally.stats.max_hp <= 0.0:
 		return
 	
-	# Конверсия 1% потерянного ХП = 1% Крещендо
+	# Конверсия 1% потерянного ХП = 0.2% Крещендо
 	var pct_lost := (hp_lost / ally.stats.max_hp) * 100.0
-	add_crescendo(rimes, pct_lost, bm)
+	add_crescendo(rimes, pct_lost * 0.20, bm)
 	
 	# Талант: +20% наносимого урона Раймсу и Лапам, стакается до 3 раз на 3 хода
 	var cur_stacks: int = int(rimes.get_meta("talent_dmg_stacks", 0))
@@ -185,11 +185,11 @@ static func execute_skill_q(attacker: CombatUnit, bm: BattleManager) -> void:
 		
 	var skill_dmg_mult: float = 1.20 if zero_boost else 1.0
 	
-	# Слив ХП союзников (15% текущего, Лапы 30%)
+	# Слив ХП союзников (25% текущего, Лапы 35%)
 	for ally in bm.allies:
 		if not ally.is_alive():
 			continue
-		var drain_pct := 0.30 if (ally == paws) else 0.15
+		var drain_pct := 0.35 if (ally == paws) else 0.25
 		var drain_amount := ally.stats.hp * drain_pct
 		var actual_drain := minf(drain_amount, maxf(0.0, ally.stats.hp - 1.0))
 		if actual_drain > 0.0:
@@ -201,7 +201,7 @@ static func execute_skill_q(attacker: CombatUnit, bm: BattleManager) -> void:
 			bm.unit_updated.emit(ally)
 			
 	if paws_alive and not (paws in bm.allies):
-		var drain_amount := paws.stats.hp * 0.30
+		var drain_amount := paws.stats.hp * 0.35
 		var actual_drain := minf(drain_amount, maxf(0.0, paws.stats.hp - 1.0))
 		if actual_drain > 0.0:
 			paws.stats.hp = maxf(1.0, paws.stats.hp - actual_drain)
@@ -385,27 +385,27 @@ static func execute_paws_sforzando(paws: Memosprite, bm: BattleManager) -> void:
 		
 	bm.log_message("🎶 Лапы антиматерии активируют «Sforzando» (Групповая атака)!")
 	
-	# 3 удара по 50% макс. ХП Лап всем врагам
+	# 3 удара по 30% макс. ХП Лап всем врагам
 	for hit_idx in range(3):
 		var t3_st: int = int(paws.get_meta("paws_trace3_stacks", 0))
 		paws.set_meta("paws_trace3_stacks", mini(t3_st + 1, 6))
 		living = bm.get_living_enemies()
 		for enemy in living:
 			if enemy.is_alive():
-				var res := bm.calc_dmg(paws, enemy, 0.50, 0.0, false, 0.0, 0.0, false, true, "MemospriteSkill")
+				var res := bm.calc_dmg(paws, enemy, 0.30, 0.0, false, 0.0, 0.0, false, true, "MemospriteSkill")
 				var dmg: float = float(res.get("damage", 0.0))
 				dmg = _apply_e1_mult(enemy, dmg, owner)
 				var ignore_w: bool = owner != null and owner.eidolon >= 6
 				bm.deal_damage(enemy, dmg, paws, paws.element, bool(res.get("crit", false)), "MemospriteSkill")
 				ToughnessSystem.apply_weakness_hit(paws, enemy, bm, 0.6, ignore_w)
 				
-	# 4-й удар: 90% макс. ХП Лап всем врагам
+	# 4-й удар: 45% макс. ХП Лап всем врагам
 	var t3_st_4: int = int(paws.get_meta("paws_trace3_stacks", 0))
 	paws.set_meta("paws_trace3_stacks", mini(t3_st_4 + 1, 6))
 	living = bm.get_living_enemies()
 	for enemy in living:
 		if enemy.is_alive():
-			var res := bm.calc_dmg(paws, enemy, 0.90, 0.0, false, 0.0, 0.0, false, true, "MemospriteSkill")
+			var res := bm.calc_dmg(paws, enemy, 0.45, 0.0, false, 0.0, 0.0, false, true, "MemospriteSkill")
 			var dmg: float = float(res.get("damage", 0.0))
 			dmg = _apply_e1_mult(enemy, dmg, owner)
 			var ignore_w: bool = owner != null and owner.eidolon >= 6
@@ -415,11 +415,11 @@ static func execute_paws_sforzando(paws: Memosprite, bm: BattleManager) -> void:
 	# Если Зеро >= 60: тратит 20 Зеро и повторяет 4-й удар
 	if bm.get_xaeroh() >= 60:
 		bm.spend_xaeroh(20)
-		bm.log_message("🌌 Sforzando: Потрачено 20 Зеро -> повтор 4-го сокрушительного удара (90%%)!")
+		bm.log_message("🌌 Sforzando: Потрачено 20 Зеро -> повтор 4-го сокрушительного удара (45%%)!")
 		living = bm.get_living_enemies()
 		for enemy in living:
 			if enemy.is_alive():
-				var res := bm.calc_dmg(paws, enemy, 0.90, 0.0, false, 0.0, 0.0, false, true, "MemospriteSkill")
+				var res := bm.calc_dmg(paws, enemy, 0.45, 0.0, false, 0.0, 0.0, false, true, "MemospriteSkill")
 				var dmg: float = float(res.get("damage", 0.0))
 				dmg = _apply_e1_mult(enemy, dmg, owner)
 				var ignore_w: bool = owner != null and owner.eidolon >= 6

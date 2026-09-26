@@ -36,7 +36,9 @@ const DEFAULT_BANNERS: Array[Dictionary] = [
 	{"id": "why_did_you_remember_me", "type": "weapon", "title": "⚔ Почему ты вспомнила меня? (5★ Конус)"},
 	{"id": "behind_the_curtains", "type": "weapon", "title": "🎭 Выход из-за кулис (5★ Конус)"},
 	{"id": "i_will_become_god", "type": "weapon", "title": "👑 Я стану богом (5★ Конус)"},
-	{"id": "let_past_stay_behind", "type": "weapon", "title": "⚔ Пусть прошлое остаётся позади (5★ Конус)"}
+	{"id": "let_past_stay_behind", "type": "weapon", "title": "⚔ Пусть прошлое остаётся позади (5★ Конус)"},
+	{"id": "last_summer", "type": "weapon", "title": "🌸 Последнее лето (5★ Конус)"},
+	{"id": "alone_again", "type": "weapon", "title": "🕊️ И вновь я один (5★ Конус)"}
 ]
 
 func _ready() -> void:

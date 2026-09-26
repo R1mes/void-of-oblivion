@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://test_runner_rimes_boss_bgm"]
+
+[ext_resource type="Script" path="res://tests/test_rimes_boss_bgm.gd" id="1_bgm_test"]
+
+[node name="TestRimesBossBgmRunner" type="Node"]
+script = ExtResource("1_bgm_test")

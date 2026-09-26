@@ -37,6 +37,10 @@ static func apply_traces(_unit: CombatUnit) -> void:
 # Хелперы
 # -------------------------------------------------------------------------
 static func get_highest_atk_ally(bm: BattleManager, ignore_sanguinia: bool = false) -> CombatUnit:
+	var lenskaya := bm.get_lenskaya_unit()
+	if lenskaya != null and lenskaya.is_alive():
+		return lenskaya
+		
 	var best_ally: CombatUnit = null
 	var best_atk: float = -1.0
 	for ally in bm.get_living_allies():
@@ -82,6 +86,7 @@ static func execute_skill_q(attacker: CombatUnit, target: CombatUnit, bm: Battle
 # -------------------------------------------------------------------------
 # Навык E - 2 SP [Ослабление]
 # Помечает выбранного врага статусом "Особый гость" (12 зарядов).
+# Получаемый Особым гостем урон бонус-атак повышается на 70% (пока действует этот статус).
 # -------------------------------------------------------------------------
 static func execute_skill_e(attacker: CombatUnit, target: CombatUnit, bm: BattleManager) -> void:
 	# Снимаем старую метку с других врагов
@@ -98,7 +103,7 @@ static func execute_skill_e(attacker: CombatUnit, target: CombatUnit, bm: Battle
 	if not target.statuses.debuffs.has("sanguinia_special_guest"):
 		target.statuses.debuffs.append("sanguinia_special_guest")
 	bm.gain_energy_with_err(attacker, 30.0)
-	bm.log_message("🍸 %s использует Навык E: на %s наложен статус «Особый гость» (12 зарядов)!" % [
+	bm.log_message("🍸 %s использует Навык E: на %s наложен статус «Особый гость» (12 зарядов)! Получаемый урон бонус-атак цели повышен на 70%%." % [
 		attacker.display_name, target.display_name
 	])
 	bm.unit_updated.emit(target)
@@ -106,7 +111,7 @@ static func execute_skill_e(attacker: CombatUnit, target: CombatUnit, bm: Battle
 
 # -------------------------------------------------------------------------
 # Сверхспособность (150 Energy) [Усиление]
-# Создаёт «Готовьтесь...» (AV 59) и три «Заселение!» (AV 60).
+# Создаёт «Готовьтесь...» (AV 19) и три «Заселение!» (AV 20).
 # -------------------------------------------------------------------------
 static func execute_ultimate(attacker: CombatUnit, bm: BattleManager) -> void:
 	bm.gain_energy_with_err(attacker, 5.0)
@@ -126,8 +131,8 @@ static func execute_ultimate(attacker: CombatUnit, bm: BattleManager) -> void:
 	prep.stats.hp = 1.0
 	prep.stats.spd = 100.0
 	prep._base_spd = 100.0
-	prep.action_value = 59.0
-	prep.base_action_value = 59.0
+	prep.action_value = 19.0
+	prep.base_action_value = 19.0
 	prep.set_meta("sanguinia_owner", attacker)
 	bm.sanguinia_summons.append(prep)
 
@@ -141,18 +146,18 @@ static func execute_ultimate(attacker: CombatUnit, bm: BattleManager) -> void:
 		pop.stats.hp = 1.0
 		pop.stats.spd = 100.0
 		pop._base_spd = 100.0
-		pop.action_value = 60.0
-		pop.base_action_value = 60.0
+		pop.action_value = 20.0
+		pop.base_action_value = 20.0
 		pop.set_meta("sanguinia_owner", attacker)
 		pop.set_meta("sanguinia_settlement_index", i + 1)
 		bm.sanguinia_summons.append(pop)
 
-	bm.log_message("🚪 Сверхспособность Сангинии: на шкале действий созданы призываемые существа «Готовьтесь...» (AV 59) и три «Заселение!» (AV 60)!")
+	bm.log_message("🚪 Сверхспособность Сангинии: на шкале действий созданы призываемые существа «Готовьтесь...» (AV 19) и три «Заселение!» (AV 20)!")
 	bm.action_order_changed.emit()
 	bm.unit_updated.emit(attacker)
 
 # -------------------------------------------------------------------------
-# Действие сущности «Готовьтесь...» (AV 59)
+# Действие сущности «Готовьтесь...» (AV 19)
 # Продвигает союзника с высшей СА на 100%, восстанавливает 40 энергии, +60% СА на 1 ход.
 # След 2: следующая атака союзника игнорирует 20% защиты.
 # -------------------------------------------------------------------------
@@ -175,7 +180,7 @@ static func execute_prep_turn(prep: CombatUnit, bm: BattleManager) -> void:
 		bm.action_order_changed.emit()
 
 # -------------------------------------------------------------------------
-# Действие сущности «Заселение!» (AV 60)
+# Действие сущности «Заселение!» (AV 20)
 # Групповая атака по всем врагам: 40% СА Сангинии (считается бонус-атакой).
 # E6: множитель повышается на 100% (до 80% СА), чистый урон с +20% бонусом.
 # След 1: атаки восстанавливают Сангинии 7 единиц энергии.
@@ -228,7 +233,9 @@ static func execute_settlement_turn(settlement: CombatUnit, bm: BattleManager) -
 # -------------------------------------------------------------------------
 # Талант "Журчание волн"
 # Добавление стаков (до 47). За каждую бонус-атаку союзников или ульту союзника с наивысшей СА.
-# При 47: продвигает союзника с наивысшей СА на 100%, +50% урона следующей атаки.
+# При 47: моментально продвигает действие союзника с самой высокой силой атаки на 100%,
+# повышает урон его следующей атаки на 100% и принудительно заставляет использовать Навык E
+# на противнике с наивысшим ХП без траты ОН. Стаки сбрасываются только после применения Навыка E.
 # -------------------------------------------------------------------------
 static func add_waves_stacks(count: int, bm: BattleManager) -> void:
 	var sanguinia: CombatUnit = bm.get_sanguinia_unit()
@@ -243,49 +250,113 @@ static func add_waves_stacks(count: int, bm: BattleManager) -> void:
 	sanguinia.set_meta("sanguinia_waves", new_val)
 	bm.log_message("🌊 Журчание волн Сангинии: %d/47 зарядов (+%d%% урона бонус-атак отряда)." % [new_val, new_val * 2])
 	bm.unit_updated.emit(sanguinia)
+
+	var lenskaya: CombatUnit = bm.get_lenskaya_unit()
+	if lenskaya != null:
+		lenskaya.set_meta("lenskaya_manipulation", new_val)
+		bm.unit_updated.emit(lenskaya)
 	
 	if new_val >= 47:
 		_trigger_talent_threshold(sanguinia, bm)
+
+static func can_unit_execute_skill_e(unit: CombatUnit, bm: BattleManager) -> bool:
+	if unit == null or not unit.is_alive():
+		return false
+	if unit.statuses.skip_next_turn:
+		return false
+	if unit.id == "musienko" and unit.has_meta("musienko_annihilation_active"):
+		return false
+	if bm == null or bm.get_living_enemies().is_empty():
+		return false
+	return true
+
+static func execute_forced_skill_e(target_ally: CombatUnit, bm: BattleManager) -> void:
+	var sanguinia: CombatUnit = bm.get_sanguinia_unit()
+	var living_enemies: Array[CombatUnit] = bm.get_living_enemies()
+	if living_enemies.is_empty() or target_ally == null or not target_ally.is_alive():
+		return
+		
+	var target_enemy: CombatUnit = null
+	for enemy in living_enemies:
+		if target_enemy == null or enemy.stats.hp > target_enemy.stats.hp:
+			target_enemy = enemy
+	if target_enemy == null:
+		return
+
+	bm.log_message("🌊 Сангиния принуждает %s применить Навык E по %s (ХП: %d) без траты ОН!" % [
+		target_ally.display_name, target_enemy.display_name, int(target_enemy.stats.hp)
+	])
+
+	# Выполняем Навык E без траты Очков Навыков
+	bm.set_meta("current_attack_type", "skill_e")
+	bm._execute_skill_e(target_ally, target_enemy)
+	bm.set_meta("current_attack_type", "")
+
+	# Снимаем метку принудительного Навыка E и бафф урона следующей атаки
+	if target_ally.has_meta("sanguinia_forced_skill_e"):
+		target_ally.remove_meta("sanguinia_forced_skill_e")
+	if target_ally.has_meta("sanguinia_talent_dmg_boost"):
+		target_ally.remove_meta("sanguinia_talent_dmg_boost")
+		bm.unit_updated.emit(target_ally)
+
+	# Только после успешного применения Навыка Е сбрасываем стаки волн и применяем бонусы сброса
+	if sanguinia != null:
+		sanguinia.remove_meta("sanguinia_pending_forced_skill_unit")
+		sanguinia.remove_meta("sanguinia_waves_pending_reset_target")
+		sanguinia.set_meta("sanguinia_waves", 0)
+
+		# След 3: Когда Журчание волн сбрасывается до 0, Сангиния восстанавливает 1 очко навыков
+		bm.gain_skill_point()
+		bm.log_message("🕊️ След 3 Сангинии: Сброс Журчания волн восстановил 1 Очко Навыков!")
+
+		# E2: При сбросе уровней Журчания волн увеличивает наносимый Сангинией урон на 60% на 2 хода
+		if sanguinia.eidolon >= 2:
+			sanguinia.set_meta("sanguinia_e2_dmg_turns", 2)
+			sanguinia.set_meta("sanguinia_e2_dmg_skip_tick", true)
+			sanguinia.set_meta("sanguinia_e2_dmg_buff", 0.60)
+			bm.log_message("👑 Эйдолон 2 Сангинии: Наносимый урон повышен на +60%% на 2 хода!")
+
+		bm.unit_updated.emit(sanguinia)
+
+	var lenskaya: CombatUnit = bm.get_lenskaya_unit()
+	if lenskaya != null:
+		lenskaya.set_meta("lenskaya_manipulation", 0)
+		bm.unit_updated.emit(lenskaya)
+
+	bm.log_message("🌊 Журчание волн Сангинии сброшено до 0 после успешного применения Навыка E.")
 
 static func _trigger_talent_threshold(sanguinia: CombatUnit, bm: BattleManager) -> void:
 	var ignore_self := sanguinia.eidolon >= 4
 	var target_ally := get_highest_atk_ally(bm, ignore_self)
 	if target_ally:
-		target_ally.advance_action(100.0)
 		target_ally.set_meta("sanguinia_talent_dmg_boost", 1.00)
-		sanguinia.set_meta("sanguinia_waves_pending_reset_target", target_ally)
-		bm.log_message("🌊 ТАЛАНТ САНГИНИИ (47 стаков): Действие союзника %s с наивысшей СА моментально продвинуто на 100%%, а урон следующей атаки повышен на 100%%!" % target_ally.display_name)
+		target_ally.set_meta("sanguinia_forced_skill_e", true)
+		target_ally.advance_action(100.0)
+		bm.log_message("🌊 ТАЛАНТ САНГИНИИ (47 стаков): Действие союзника %s с наивысшей СА моментально продвинуто на 100%%, а урон следующей атаки повышен на 100%%! В свой ход он применит Навык E." % target_ally.display_name)
 		bm.unit_updated.emit(target_ally)
 		bm.action_order_changed.emit()
 
+		sanguinia.set_meta("sanguinia_pending_forced_skill_unit", target_ally)
+		
+		# Если бой запущен вне боевой UI-сцены (в headless тестах BattleManager без battle.gd)
+		if not bm.has_meta("is_battle_ui_active"):
+			if can_unit_execute_skill_e(target_ally, bm):
+				execute_forced_skill_e(target_ally, bm)
+
 # Вызывается при завершении действия союзника, усиленного 47 стаками таланта
 static func check_reset_waves_stacks(actor: CombatUnit, bm: BattleManager) -> void:
+	# Стаки сбрасываются только после применения Навыка E (в execute_forced_skill_e или Lenskaya.execute_skill_e)
 	var sanguinia: CombatUnit = bm.get_sanguinia_unit()
 	if sanguinia == null:
 		return
-	if actor.has_meta("sanguinia_talent_dmg_boost"):
-		actor.remove_meta("sanguinia_talent_dmg_boost")
-		bm.unit_updated.emit(actor)
-		
-	if sanguinia.has_meta("sanguinia_waves_pending_reset_target"):
+	if sanguinia.has_meta("sanguinia_pending_forced_skill_unit"):
+		var pending: CombatUnit = sanguinia.get_meta("sanguinia_pending_forced_skill_unit") as CombatUnit
+		if pending != null and can_unit_execute_skill_e(pending, bm):
+			execute_forced_skill_e(pending, bm)
+	elif sanguinia.has_meta("sanguinia_waves_pending_reset_target"):
 		var target: CombatUnit = sanguinia.get_meta("sanguinia_waves_pending_reset_target") as CombatUnit
-		if target == actor:
-			sanguinia.remove_meta("sanguinia_waves_pending_reset_target")
-			sanguinia.set_meta("sanguinia_waves", 0)
-			bm.log_message("🌊 Журчание волн Сангинии сброшено до 0.")
-			
-			# След 3: Когда Журчание волн сбрасывается до 0, Сангиния восстанавливает 1 очко навыков
-			bm.gain_skill_point()
-			bm.log_message("🕊️ След 3 Сангинии: Сброс Журчания волн восстановил 1 Очко Навыков!")
-			
-			# E2: При сбросе уровней Журчания волн увеличивает наносимый Сангинией урон на 60% на 2 хода
-			if sanguinia.eidolon >= 2:
-				sanguinia.set_meta("sanguinia_e2_dmg_turns", 2)
-				sanguinia.set_meta("sanguinia_e2_dmg_skip_tick", true)
-				sanguinia.set_meta("sanguinia_e2_dmg_buff", 0.60)
-				bm.log_message("👑 Эйдолон 2 Сангинии: Наносимый урон повышен на +60%% на 2 хода!")
-				
-			bm.unit_updated.emit(sanguinia)
+		if target == actor and can_unit_execute_skill_e(target, bm):
+			execute_forced_skill_e(target, bm)
 
 # -------------------------------------------------------------------------
 # Обработка статуса "Особый гость" при атаке союзника

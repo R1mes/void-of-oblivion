@@ -26,6 +26,7 @@ static func get_available_characters() -> Array[Dictionary]:
 			"path": CombatConstants.Path.ABUNDANCE,
 			"rarity": 4,
 			"description": "Целитель физического элемента. Лечит союзников и накладывает «Заплатку».",
+			"splash": "res://assets/characters/sara.jpg",
 		},
 		{
 			"id": "arseniy",
@@ -114,6 +115,7 @@ static func get_available_characters() -> Array[Dictionary]:
 			"path": CombatConstants.Path.HUNT,
 			"rarity": 5,
 			"description": "Безжалостный палач из Рассвета Хаоса (Квантовый). Способен затянуть противника в Вечную Изоляцию и казнить его чистым уроном.",
+			"splash": "res://assets/characters/rimes.jpg",
 		},
 		{
 			"id": "isaac",
@@ -122,6 +124,7 @@ static func get_available_characters() -> Array[Dictionary]:
 			"path": CombatConstants.Path.HARMONY,
 			"rarity": 4,
 			"description": "Гениальный теоретик из Академии (Ветряной). Саппорт-баффер, способный продвигать ходы союзников на 100%, повышать их КУ на 100% и накладывать уязвимости.",
+			"splash": "res://assets/characters/isaac.jpg",
 		},
 		{
 			"id": "keloist",
@@ -178,6 +181,7 @@ static func get_available_characters() -> Array[Dictionary]:
 			"path": CombatConstants.Path.DESTRUCTION,
 			"rarity": 5,
 			"description": "Легендарный мейн ДД Консоли (Физический). Повелитель Бинарного урона, аккумулирующий Векторы для перегрузок Таланта и сокрушительного взлома.",
+			"splash": "res://assets/characters/isaac_admin.jpg",
 		},
 		{
 			"id": "sara_admin",
@@ -186,6 +190,7 @@ static func get_available_characters() -> Array[Dictionary]:
 			"path": CombatConstants.Path.HARMONY,
 			"rarity": 5,
 			"description": "Легендарный саппорт Консоли (Электрический). Разворачивает Среду разработки, разгоняет Бинарный урон от своей скорости и активирует протоколы команды.",
+			"splash": "res://assets/characters/sara_admin.jpg",
 		},
 		{
 			"id": "arseniy_admin",
@@ -309,3 +314,61 @@ static func get_path_icon(path: CombatConstants.Path) -> String:
 
 static func get_path_full_label(path: CombatConstants.Path) -> String:
 	return "%s %s" % [get_path_icon(path), get_path_name(path)]
+
+static func get_recommendation(char_id: String, type: String) -> String:
+	match char_id:
+		"sanguinia":
+			match type:
+				"allies": return "• [color=gold]Ленская[/color], [color=gold]Раймс • Восхождение[/color], [color=gold]Юлия Доцева[/color], [color=gold]Жоан[/color], [color=gold]Марина[/color]"
+				"cones": return "• [color=cyan]Последнее лето[/color] (Сигнатурный)\n• [color=cyan]Я стану богом[/color], [color=cyan]Колыбельная[/color], [color=cyan]Я создам лучший мир[/color], [color=cyan]Коснись - и верни её в бодрствующий мир[/color]"
+				"relics": return "• [color=lightgreen]Защитник цветения[/color] (Лучший)\n• [color=lightgreen]Исследователь отнятого будущего[/color] + [color=lightgreen]Штаб Восставших[/color] (Планарный)"
+				"tip": return "💡 [i]Сангиния — превосходный саппорт для бонус-атакеров. Накладывайте Навыком E статус «Особый гость» на сильнейшего атакующего для проведения разрушительных совместных бонус-атак![/i]"
+		"lenskaya_sky_guardian":
+			match type:
+				"allies": return "• [color=gold]Каори[/color], [color=gold]Даша[/color], [color=gold]Сара[/color], [color=gold]Валраморс[/color], [color=gold]Марина • Хранитель небес[/color]"
+				"cones": return "• [color=cyan]Прощание перед пробуждением[/color] (Сигнатурный)\n• [color=cyan]Стрелы[/color], [color=cyan]Я не могу тебя убить[/color], [color=cyan]Нападение[/color]"
+				"relics": return "• [color=lightgreen]Перебежчик тёмной стороны[/color] + [color=lightgreen]Восставший Краснодар[/color] (Планарный)\n• [color=lightgreen]Отпор бренного мира[/color] (Альтернатива)"
+				"tip": return "💡 [i]Ленская • Хранитель небес сокрушает стойкость через статус «Враг Свечения» (1.5x стойкость) и конвертирует удары всей команды по пробитым врагам в колоссальный урон Суперпробития![/i]"
+		"marina_sky_guardian":
+			match type:
+				"allies": return "• [color=gold]Раймс • Восхождение[/color], [color=gold]Милена[/color], [color=gold]Валраморс[/color], [color=gold]Сара[/color], [color=gold]Ленская • Хранитель небес[/color], [color=gold]Все (универсал)[/color]"
+				"cones": return "• [color=cyan]Пусть прошлое остаётся позади[/color] (Сигнатурный)\n• [color=cyan]И вновь я один[/color], [color=cyan]Нити мнемы[/color], [color=cyan]Сгоревшая страница[/color]"
+				"relics": return "• [color=lightgreen]Защитник цветения[/color] + [color=lightgreen]Штаб Восставших[/color] (Планарный)\n• [color=lightgreen]Потерянное в вечности Я[/color] (Альтернатива)"
+				"tip": return "💡 [i]Марина • Хранитель небес призывает духа памяти «Эго» и раскрывает зону «Элизиум». Связывайте союзников узами Крит. шанса через Навык Q![/i]"
+		"rimes_ascension":
+			match type:
+				"allies": return "• [color=gold]Марина • Хранитель небес[/color], [color=gold]Сангиния Ял[/color], [color=gold]Милена[/color], [color=gold]Сара[/color], [color=gold]Валраморс[/color]"
+				"cones": return "• [color=cyan]И вновь я один[/color] (Сигнатурный)\n• [color=cyan]Пусть прошлое остаётся позади[/color], [color=cyan]Нити мнемы[/color]"
+				"relics": return "• [color=lightgreen]Защитник цветения[/color] + [color=lightgreen]Штаб Восставших[/color] (Планарный)\n• [color=lightgreen]Истинный родоначальник хаоса[/color] (Альтернатива)"
+				"tip": return "💡 [i]Раймс • Восхождение жертвует здоровьем отряда для накопления «Крещендо» и сокрушительных атак Духа Памяти «Лапы антиматерии». Весь его урон масштабируется от максимального HP![/i]"
+				_: return ""
+		_:
+			return ""
+	return ""
+
+static func get_character_splash_path(char_id: String) -> String:
+	match char_id:
+		"sara": return "res://assets/characters/sara.jpg"
+		"sara_admin": return "res://assets/characters/sara_admin.jpg"
+		"isaac": return "res://assets/characters/isaac.jpg"
+		"isaac_admin": return "res://assets/characters/isaac_admin.jpg"
+		"rimes": return "res://assets/characters/rimes.jpg"
+		_: return ""
+
+static func has_character_splash(char_id: String) -> bool:
+	return get_character_splash_path(char_id) != ""
+
+static func get_character_splash(char_id: String) -> Texture2D:
+	var path := get_character_splash_path(char_id)
+	if path == "":
+		return null
+	if ResourceLoader.exists(path):
+		var res = load(path)
+		if res is Texture2D:
+			return res
+	var global_p := ProjectSettings.globalize_path(path)
+	if FileAccess.file_exists(global_p):
+		var img := Image.new()
+		if img.load(global_p) == OK:
+			return ImageTexture.create_from_image(img)
+	return null

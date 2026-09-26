@@ -89,8 +89,8 @@ func test_2_paws_definition_and_summon() -> bool:
 	var paws := RimesAscensionAbilities.get_paws_sprite(rimes, bm)
 	if paws == null or not paws.is_alive(): return false
 	
-	# Базовое ХП = 150% от макс. ХП Раймса = 4500 * 1.5 = 6750
-	if absf(paws.stats.max_hp - 6750.0) > 1.0: return false
+	# Базовое ХП = 120% от макс. ХП Раймса = 4500 * 1.2 = 5400
+	if absf(paws.stats.max_hp - 5400.0) > 1.0: return false
 	if paws.stats.spd != 165.0: return false
 	if paws.is_targetable != false: return false
 	if paws.is_backup != true: return false
@@ -150,12 +150,12 @@ func test_4_skill_q_ally_drain_and_joint_attack() -> bool:
 	
 	# Навык Q стоит 0 SP!
 	if bm.skill_points != 3: return false
-	# Раймс потерял 15% ХП
-	if absf(rimes.stats.hp - (rimes_hp_before * 0.85)) > 1.0: return false
-	# Союзник потерял 15% ХП
-	if absf(ally.stats.hp - (ally_hp_before * 0.85)) > 1.0: return false
-	# Лапы потеряли 30% ХП
-	if absf(paws.stats.hp - (paws_hp_before * 0.70)) > 1.0: return false
+	# Раймс потерял 25% ХП
+	if absf(rimes.stats.hp - (rimes_hp_before * 0.75)) > 1.0: return false
+	# Союзник потерял 25% ХП
+	if absf(ally.stats.hp - (ally_hp_before * 0.75)) > 1.0: return false
+	# Лапы потеряли 35% ХП
+	if absf(paws.stats.hp - (paws_hp_before * 0.65)) > 1.0: return false
 	# Враг получил урон от совместной атаки
 	if enemy.stats.hp >= enemy_hp_before: return false
 	return true
@@ -191,9 +191,9 @@ func test_6_crescendo_accumulation_and_talent_buff() -> bool:
 	# Союзник теряет 800 ХП (20% от макс. ХП)
 	bm.deal_damage(ally, 800.0)
 	
-	# Раймс должен получить 20% Крещендо
+	# Раймс должен получить 4% Крещендо (20% потерь * 0.20)
 	var c := float(rimes.get_meta("crescendo_stacks", 0.0))
-	if absf(c - 20.0) > 1.0: return false
+	if absf(c - 4.0) > 0.5: return false
 	
 	# Талант: +1 стак урона на 3 хода
 	var stacks := int(rimes.get_meta("talent_dmg_stacks", 0))
@@ -232,8 +232,8 @@ func test_7_skill_e_summon_heal_cleanse_and_charges() -> bool:
 	if paws.statuses.skip_next_turn or paws.statuses.break_status == "freeze": return false
 	if paws.get_charge() != 2.0: return false
 	
-	# При 2 зарядах макс. ХП должно увеличиться на +75% базового = base_max_hp * 1.75
-	var expected_max := base_max_hp * 1.75
+	# При 2 зарядах макс. ХП должно увеличиться на +20% базового = base_max_hp * 1.20
+	var expected_max := base_max_hp * 1.20
 	if absf(paws.stats.max_hp - expected_max) > 1.0: return false
 	return true
 

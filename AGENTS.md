@@ -26,8 +26,24 @@
 * **dev (запуск игры)**:
   `/Applications/Godot.app/Contents/MacOS/Godot --path .` (или через Godot Editor).
 * **test (автотесты)**:
-  * Все тесты Духов Памяти:
+  * Все тесты Духов Памяти (Memosprites):
     `/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/test_runner.tscn`
+  * Зал воспоминаний (Memory Hall):
+    `/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/test_memory_hall_runner.tscn`
+  * Сангиния Ял:
+    `/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/test_sanguinia_runner.tscn`
+  * Раймс • Восхождение:
+    `/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/test_rimes_ascension_runner.tscn`
+  * Стойкость и Суперпробитие:
+    `/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/test_break_runner.tscn`
+  * Сплеш-арты, модалки и ультимейт:
+    `/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/test_character_splashes_runner.tscn`
+  * Динамика карт:
+    `/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/test_card_dynamics_runner.tscn`
+  * Промокоды и батч-фиксы:
+    `/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/test_batch_fixes_runner.tscn`
+  * Новый контент (враги и реликвии):
+    `/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/test_new_content_runner.tscn`
   * Тесты Марины • Хранитель небес:
     `/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/test_marina_runner.tscn`
   * Тесты Ленской • Хранитель небес:

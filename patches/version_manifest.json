@@ -1,13 +1,13 @@
 {
-  "latest_version": "1.7",
+  "latest_version": "1.7.1",
   "mandatory": false,
-  "changelog": "Void of Oblivion 1.7:\\n- Полная переработка и стабилизация обучения уровней 1-4\\n- Обучение управлению клавишами (W, Q, E, R, Space, Enter, A/D, 1-4)\\n- Исправление пробития стойкости Каори на 3 уровне\\n- Исправление анимации выпадения персонажей в гаче\\n- Полная разблокировка разделов главного меню после обучения",
+  "changelog": "Void of Oblivion 1.7.1:\\n- Интеграция сплеш-артов персонажей в инвентарь, отряд и боевые карточки\\n- Новый режим «Зал воспоминаний» (Memory Hall) с 5 этажами испытаний\\n- Кинематографичная анимация Сверхспособности со сплеш-артом и ударной волной\\n- Непрозрачные модальные окна эйдолонов и подробное описание световых конусов\\n- Динамика покачивания карточек союзников и противников в бою\\n- Оптимизация боевой системы и батч-фиксы",
   "patch": {
-    "version": "1.7",
-    "filename": "patch_v1.7.pck",
-    "download_url": "https://github.com/R1mes/void-of-oblivion/releases/download/v1.7/patch_v1.7.pck",
-    "size_bytes": 14202832,
-    "sha256": "e0fd7b718a769a00fd923d655ad636eead3d470b38fa9cc880abc6ce7c7e8b2a",
-    "signature_base64": "hwlOGURYKVXTBBVQBeu0UwwNpq9dMH/PMyWZAxvOT3KG0wvLT4WI0XbGmHsDCZ0ldMnI8UbVwwdmUXJQKcP8YI8UhxiAYufFblBuBUVbE8dmkYBbGcmL151rBGRJaEp1rV+al5o0hfiOTxWg7CPMVnGGZOfiWl3WKl47SipIFYfBdK4sig6xvyGucY4BOLvN5hPEJFy7qgHcfy1jYNHxxmzLv+GJLjmPEKPf6sN8LBEVUjCH7c2HGXVDph7+KEpHBiMM8jvO4gb7eCtGCMnMkXQsUbp3BhkGcR/lPQ8w+umdeBo/QXiVA5s/N4NE9Ns9tCw/aLzHT7XKGoHFAseiPA=="
+    "version": "1.7.1",
+    "filename": "patch_v1.7.1.pck",
+    "download_url": "https://github.com/R1mes/void-of-oblivion/releases/download/v1.7.1/patch_v1.7.1.pck",
+    "size_bytes": 39633076,
+    "sha256": "2d321cd791d7df3cd3df2ca810570ca7ba2cc4b8d8bbb8f99202929be45f608e",
+    "signature_base64": "D4NhkU2KDZv1MrYeaRbrt2PdKSYHSma2gBO3bFL7kA0IykzGm3jjyCauu4KhBA6UGqVgXkhSb16QKX1WpZzUYu4KafoGVzvL1kzpNe2PDTEyjL8dAt6tge3CVBgZy/Prar3YDQ68L2W4rjsbSd2enkXLtVHSuSTiAP0H+TgQlj7nJZYMasgOrE/3kbHVb4YByyr+ttgV7OJP5XdVnBoDBLDhuAMTo+J40x1PAu4x4XjlKGewj6ZAYpUvqhDTKGHI3Uej/KqVzQCW3cQZhRBbsC99E/dLaeXXuhoZU0qxZaP4D4eJ9oXnJG/03ED6QZXOH9IGK3HhejFprsDJbip/HQ=="
   }
 }

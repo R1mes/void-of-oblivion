@@ -44,6 +44,8 @@ func _enter_tree() -> void:
 	add_child(banners)
 
 func _ready() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
 	# Пытаемся автоматически восстановить сессию или войти анонимно
 	if not auth.is_authenticated():
 		auth.sign_in_anonymously()

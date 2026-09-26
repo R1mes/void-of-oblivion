@@ -9,6 +9,9 @@ const OrtofetaminHorror = preload("res://scripts/enemies/ortofetamin_horror.gd")
 const ShojiVz = preload("res://scripts/enemies/shoji_vz.gd")
 const VelzebulBoss = preload("res://scripts/enemies/velzebul_boss.gd")
 const RimesFinalBoss = preload("res://scripts/enemies/rimes_final_boss.gd")
+const AntimatterSlave = preload("res://scripts/enemies/antimatter_slave.gd")
+const Insurgent = preload("res://scripts/enemies/insurgent.gd")
+const KyleRebelLeader = preload("res://scripts/enemies/kyle_rebel_leader.gd")
 const YourMemories = preload("res://scripts/enemies/your_memories.gd")
 const VoidPaws = preload("res://scripts/enemies/void_paws.gd")
 const LenskayaAntimatterAbilities = preload("res://scripts/characters/lenskaya_antimatter.gd")
@@ -17,6 +20,7 @@ const MarinaSkyGuardianAbilities = preload("res://scripts/characters/marina_sky_
 const LenskayaSkyGuardianAbilities = preload("res://scripts/characters/lenskaya_sky_guardian.gd")
 const RimesAscensionAbilities = preload("res://scripts/characters/rimes_ascension.gd")
 const SanguiniaAbilities = preload("res://scripts/characters/sanguinia.gd")
+const MemoryHallManager = preload("res://scripts/combat/memory_hall_manager.gd")
 
 signal battle_started
 signal turn_started(unit: CombatUnit)
@@ -29,6 +33,7 @@ signal unit_updated(unit: CombatUnit)
 signal arya_changed(active: bool, remaining: float)
 signal combat_text_spawned(unit: CombatUnit, text: String, color: Color, tag: String, is_crit: bool)
 signal ult_targeting_requested(unit: CombatUnit)
+signal ultimate_started(unit: CombatUnit)
 signal enemies_reshuffled
 signal screen_impact_requested(color: Color, intensity: float)
 signal xaeroh_changed(current_xaeroh: int)
@@ -42,6 +47,9 @@ signal lenskaya_am_inverted_exit_requested(attacker: CombatUnit)
 signal chorus_charges_changed(charges: int, unlocked: bool)
 signal chorus_activated(chosen_ally: CombatUnit)
 signal moon_maiden_hits_changed(hits: int)
+signal boss_phase_changed(boss_unit: CombatUnit, new_phase: int)
+signal memory_hall_wave_advanced(wave: int, total_waves: int)
+signal memory_hall_half1_cleared(spent_cycles: int, remaining_cycles: int)
 
 enum Phase { SETUP, RUNNING, VICTORY, DEFEAT }
 
@@ -57,6 +65,11 @@ var current_unit: CombatUnit = null
 var _last_attacker: CombatUnit = null
 var _waiting_for_player: bool = false
 var battle_mode: String = "custom"
+var memory_hall_floor: int = 0
+var memory_hall_wave: int = 1
+var memory_hall_total_waves: int = 1
+var memory_hall_half: int = 1
+var memory_hall_half1_spent_cycles: int = 0
 var fiction_max_pool: int = 10 # 10 резервных солдат в "Чистом вымысле"
 var fiction_defeated_count: int = 0 # Общий счетчик убитых солдат
 # Массив уникальных противников, задетых за текущее действие (для таланта Жоана)
@@ -84,6 +97,7 @@ func finish_attack_action() -> void:
 	_attack_action_depth = maxi(0, _attack_action_depth - 1)
 	if _attack_action_depth == 0:
 		remove_meta("sanguinia_guest_credited_this_action")
+		check_joan_talent_trigger()
 		_process_elysium_zone_proc()
 		_process_pending_phase_transitions()
 
@@ -95,6 +109,8 @@ func can_unit_phase_transition(unit: CombatUnit) -> bool:
 	if unit.id == "shoji_vz" and int(unit.get_meta("phase", 1)) == 1:
 		return true
 	if unit.id == "velzebul_boss" and int(unit.get_meta("phase", 1)) == 1:
+		return true
+	if unit.id == "kyle_rebel_leader" and int(unit.get_meta("phase", 1)) == 1:
 		return true
 	if unit.id == "rimes_final_boss" and int(unit.get_meta("phase", 1)) in [1, 2]:
 		return true
@@ -148,6 +164,7 @@ func _execute_boss_phase_transition(target: CombatUnit) -> void:
 		MaskedSilhouette.execute_turn(target, allies, self)
 		
 		log_message("🎭 Поражение первой маски! Силуэт восстанавливает силы, мгновенно накладывает «Тайну сияющей маски» и откладывает свой ход на 150%!")
+		boss_phase_changed.emit(target, 2)
 		unit_updated.emit(target)
 		_check_battle_end()
 		return
@@ -166,6 +183,7 @@ func _execute_boss_phase_transition(target: CombatUnit) -> void:
 		target.toughness = target.max_toughness
 		target.set_meta("turn_p2_count", 0)
 		log_message("⚡ Смена фазы Сёдзи ВЗ! Перезагрузка ядра Цитадели, переход во 2 фазу!")
+		boss_phase_changed.emit(target, 2)
 		ShojiVz.execute_turn(target, allies, self)
 		target.set_meta("acted_in_phase_transition", true)
 		target.reset_action_value()
@@ -190,7 +208,20 @@ func _execute_boss_phase_transition(target: CombatUnit) -> void:
 		target.set_meta("self_dmg_80_done", false)
 		target.set_meta("self_dmg_50_done", false)
 		log_message("👑 Пробуждение Истинной Вельзевул! Владычица Мух восстанавливает силы и начинает 2-ю фазу!")
+		boss_phase_changed.emit(target, 2)
 		VelzebulBoss.execute_turn(target, allies, self)
+		target.set_meta("acted_in_phase_transition", true)
+		target.reset_action_value()
+		action_order_changed.emit()
+		unit_updated.emit(target)
+		_check_battle_end()
+		return
+
+	# Воскрешение и смена фазы Кайл • Лидер восстания (Фаза 1 -> Фаза 2)
+	if target.id == "kyle_rebel_leader" and int(target.get_meta("phase", 1)) == 1:
+		KyleRebelLeader.start_phase_2(target, self)
+		boss_phase_changed.emit(target, 2)
+		KyleRebelLeader.execute_turn(target, allies, self)
 		target.set_meta("acted_in_phase_transition", true)
 		target.reset_action_value()
 		action_order_changed.emit()
@@ -213,6 +244,7 @@ func _execute_boss_phase_transition(target: CombatUnit) -> void:
 		target.set_meta("turn_p2_count", 0)
 		unlock_chorus_of_humanity()
 		log_message("👑 Раймс • Финальный босс переходит во 2-ю фазу! Открыт доступ к «Хору Человечества»!")
+		boss_phase_changed.emit(target, 2)
 		RimesFinalBoss.execute_turn(target, allies, self)
 		target.set_meta("acted_in_phase_transition", true)
 		target.reset_action_value()
@@ -235,6 +267,7 @@ func _execute_boss_phase_transition(target: CombatUnit) -> void:
 		target.toughness = target.max_toughness
 		target.set_meta("turn_p3_count", 0)
 		log_message("👑 Раймс • Финальный босс переходит в 3-ю фазу! Пространство содрогается под натиском Бездны!")
+		boss_phase_changed.emit(target, 3)
 		RimesFinalBoss.execute_turn(target, allies, self)
 		target.set_meta("acted_in_phase_transition", true)
 		target.reset_action_value()
@@ -395,12 +428,25 @@ func start_battle(team_data: Array, initiator_id: String) -> void:
 	
 	battle_mode = TeamConfig.battle_mode
 	
+	if TeamConfig.is_test_mode_battle or battle_mode == "test_env":
+		const TEST_ENV_SEED: int = 133742
+		seed(TEST_ENV_SEED)
+		log_message("🧪 Режим «Тестовая среда» активирован. RNG сид зафиксирован (%d)." % TEST_ENV_SEED)
+
 	if battle_mode == "fiction":
 		fiction_max_pool = 10
 		fiction_defeated_count = 0
 		log_message("⚔ Запуск режима «Чистый вымысел»: Победите 15 Солдат Пустоты!")
+	elif battle_mode == "test_env" and TeamConfig.test_submode == "fiction":
+		fiction_max_pool = maxi(0, TeamConfig.test_fiction_count - 5)
+		fiction_defeated_count = 0
+		log_message("⚔ Запуск режима «Тестовая среда — Чистый вымысел»: Победите %d противников!" % TeamConfig.test_fiction_count)
 	elif battle_mode == "boss":
 		log_message("⚔ Запуск режима «Босс-файт»: Битва с Повелителем Пустоты!")
+	elif battle_mode == "test_env" and TeamConfig.test_submode == "boss":
+		log_message("⚔ Запуск режима «Тестовая среда — Босс»: Битва с Тест Боссом!")
+	elif battle_mode == "test_env" and TeamConfig.test_submode == "trio":
+		log_message("⚔ Запуск режима «Тестовая среда — 3 противника»: Битва с Тест Боссом и 2 Тест Элитами!")
 	# Внутри start_battle() в battle_manager.gd (после создания противников):
 	if battle_mode == "level_10":
 		for enemy in enemies:
@@ -568,14 +614,32 @@ func start_battle(team_data: Array, initiator_id: String) -> void:
 			
 		_init_light_cone_effects(ally)
 
+	if TeamConfig.is_test_mode_battle:
+		for ally in allies:
+			ally.stats.crit_rate = maxf(ally.stats.crit_rate, 1.0)
+
 	# --- СПАВН ПРОТИВНИКОВ (Пропускается для Уровней и Данжей, так как их спавнит LevelManager) ---
 	if battle_mode.begins_with("level_") or battle_mode.begins_with("dungeon_") or battle_mode.begins_with("planar_"):
 		LevelManager.setup_level_battle(battle_mode, self)
+	elif battle_mode.begins_with("memory_hall_"):
+		_setup_memory_hall_battle()
 	elif not TeamConfig.enemy_members.is_empty():
 			for enemy_data in TeamConfig.enemy_members:
 				var e_id = enemy_data.get("id", "")
 				var enemy_unit: CombatUnit = null
 				match e_id:
+					"test_boss":
+						var b_hp: float = float(enemy_data.get("hp", TeamConfig.test_boss_hp if TeamConfig.test_submode == "boss" else TeamConfig.test_trio_boss_hp))
+						var b_def: float = float(enemy_data.get("def", 1200.0))
+						enemy_unit = TestBoss.create_unit(b_hp, b_def)
+					"test_elite":
+						var e_hp: float = float(enemy_data.get("hp", TeamConfig.test_trio_elite_hp))
+						var e_def: float = float(enemy_data.get("def", 800.0))
+						enemy_unit = TestElite.create_unit(e_hp, e_def)
+					"test_soldier":
+						var s_hp: float = float(enemy_data.get("hp", TeamConfig.test_fiction_hp))
+						var s_def: float = float(enemy_data.get("def", 400.0))
+						enemy_unit = TestSoldier.create_unit(s_hp, s_def)
 					VoidSoldier.ID:
 						enemy_unit = VoidSoldier.create_unit()
 					VoidElite.ID:
@@ -610,6 +674,12 @@ func start_battle(team_data: Array, initiator_id: String) -> void:
 						enemy_unit = YourMemories.create_unit()
 					"void_paws":
 						enemy_unit = VoidPaws.create_unit()
+					"antimatter_slave":
+						enemy_unit = AntimatterSlave.create_unit()
+					"insurgent":
+						enemy_unit = Insurgent.create_unit()
+					"kyle_rebel_leader":
+						enemy_unit = KyleRebelLeader.create_unit()
 				if enemy_unit:
 					if enemy_unit.id == "rimes_final_boss":
 						enemy_unit.slot_index = 2
@@ -753,6 +823,9 @@ func start_battle(team_data: Array, initiator_id: String) -> void:
 		
 	_apply_all_techniques(initiator_id)
 	
+	if battle_mode.begins_with("memory_hall_"):
+		MemoryHallManager.apply_turbulence(self)
+	
 	for ally in allies:
 		if ally != null and ally.is_alive() and ally.id == "marina_sky_guardian":
 			MarinaSkyGuardianAbilities.apply_battle_start_traces(ally, self)
@@ -862,6 +935,18 @@ func _init_light_cone_effects(unit: CombatUnit) -> void:
 		"let_past_stay_behind":
 			unit.stats.crit_dmg += 0.36
 			log_message("Световой конус «Пусть прошлое остаётся позади»: Крит. урон %s повышен на +36%%." % unit.display_name)
+		"farewell_before_awakening":
+			unit.stats.break_effect += 0.50
+			log_message("Световой конус «Прощание перед пробуждением»: Эффект пробития %s повышен на +50%%." % unit.display_name)
+		"last_summer":
+			log_message("Световой конус «Последнее лето»: Экипирован на %s (урон бонус-атак +30%%, наложение «Закрой глаза»)." % unit.display_name)
+		"alone_again":
+			var cur_relic_hp_pct := float(unit.get_meta("relic_hp_pct", 0.0))
+			unit.set_meta("relic_hp_pct", cur_relic_hp_pct + 0.30)
+			var base_hp := float(unit.get_meta("base_hp_original", unit.stats.max_hp))
+			unit.stats.max_hp += base_hp * 0.30
+			unit.stats.hp += base_hp * 0.30
+			log_message("Световой конус «И вновь я один»: Макс. HP %s повышено на +30%%." % unit.display_name)
 		# --- НОВЫЕ КОНУСЫ ВЕРСИИ 1.1 ---
 		"monument_of_silence":
 			for ally in allies:
@@ -1269,7 +1354,21 @@ func _advance_to_next_turn() -> void:
 
 	# Единая проверка превышения лимита циклов для Уровней
 	var cur_c := get_current_cycles()
-	if (battle_mode == "level_6" and cur_c >= 5) \
+	if battle_mode.begins_with("memory_hall_"):
+		if battle_mode == "memory_hall_4":
+			var spent := (memory_hall_half1_spent_cycles + cur_c) if memory_hall_half == 2 else cur_c
+			if spent > 28:
+				phase = Phase.DEFEAT
+				log_message("⏳ Время истекло! Превышен лимит 28 циклов Зала воспоминаний. Поражение!")
+				battle_ended.emit(false)
+				return
+		else:
+			if cur_c > 14:
+				phase = Phase.DEFEAT
+				log_message("⏳ Время истекло! Превышен лимит 14 циклов Зала воспоминаний. Поражение!")
+				battle_ended.emit(false)
+				return
+	elif (battle_mode == "level_6" and cur_c >= 5) \
 	or (battle_mode == "level_7" and cur_c >= 16) \
 	or (battle_mode == "level_8" and cur_c >= 13) \
 	or (battle_mode == "level_9" and cur_c >= 13) \
@@ -1304,17 +1403,6 @@ func _advance_to_next_turn() -> void:
 		
 	accumulated_av += tick_val
 
-	# ИСПРАВЛЕНО: sara_u объявляется строго здесь (без дублирования!)
-	if tick_val > 0.0:
-		var sara_u: CombatUnit = get_sara_admin_unit()
-		if sara_u and bool(sara_u.get_meta("sara_talent_pending_release", false)):
-			sara_u.set_meta("sara_talent_pending_release", false)
-			var excess_v: int = int(sara_u.get_meta("sara_recorded_excess_vectors", 0))
-			sara_u.set_meta("sara_recorded_excess_vectors", 0)
-			if excess_v > 0:
-				log_message("🔓 ТАЛАНТ САРЫ: Наступил следующий индекс действия! Записанные +%d Векторов выгружены в пул Консоли." % excess_v)
-				SaraAdminAbilities.add_vectors(excess_v, self)
-
 	if arya_active and tick_val > 0.0:
 		arya_remaining -= tick_val
 		arya_changed.emit(true, arya_remaining)
@@ -1323,10 +1411,13 @@ func _advance_to_next_turn() -> void:
 
 	action_order_changed.emit()
 
+	check_sanguinia_pending_forced_skill()
+
 	if current_unit.statuses.skip_next_turn:
 		current_unit.statuses.skip_next_turn = false
 		log_message("%s пропускает ход (Заморозка)" % current_unit.display_name)
 		_end_turn(current_unit)
+		check_sanguinia_pending_forced_skill()
 		return
 
 	_process_turn_start_statuses(current_unit)
@@ -1445,6 +1536,22 @@ func _process_turn_start_statuses(unit: CombatUnit) -> void:
 		# 1. Зеркальная иллюзия: обновление зарядов до 3 в свой ход
 		if unit.get_meta("light_cone_id", "") == "mirror_illusion":
 			unit.set_meta("mirror_illusion_triggers", 3)
+
+		# Конус «Прощание перед пробуждением»: сброс срабатывания восстановления энергии за ход
+		if unit.get_meta("light_cone_id", "") == "farewell_before_awakening":
+			unit.set_meta("farewell_energy_proc_this_turn", false)
+
+		# Конус «И вновь я один»: тик статуса «Искупление»
+		if unit.has_meta("redemption_turns") and int(unit.get_meta("redemption_turns", 0)) > 0:
+			if unit.get_meta("redemption_skip_tick", false):
+				unit.set_meta("redemption_skip_tick", false)
+			else:
+				var r_t := int(unit.get_meta("redemption_turns", 0)) - 1
+				unit.set_meta("redemption_turns", r_t)
+				if r_t == 0:
+					unit.remove_meta("redemption_turns")
+					log_message("🕊️ Статус «Искупление» на %s завершился." % unit.display_name)
+					unit_updated.emit(unit)
 			
 		# 2. Солнце, что затмевает луну: потеря 1% ХП в начале своего хода
 		if unit.get_meta("light_cone_id", "") == "sun_eclipses_moon":
@@ -1657,6 +1764,18 @@ func _process_turn_start_statuses(unit: CombatUnit) -> void:
 						unit.remove_meta("traces_of_memories_turns")
 						unit.remove_meta("traces_of_memories_owner")
 						log_message("👣 Статус «По следам воспоминаний» на %s завершился." % unit.display_name)
+						unit_updated.emit(unit)
+
+			# Конус «Последнее лето»: тики статуса «Закрой глаза» на враге
+			if unit.has_meta("close_eyes_turns") and int(unit.get_meta("close_eyes_turns", 0)) > 0:
+				if unit.get_meta("close_eyes_skip_tick", false):
+					unit.set_meta("close_eyes_skip_tick", false)
+				else:
+					var ce_t := int(unit.get_meta("close_eyes_turns", 0)) - 1
+					unit.set_meta("close_eyes_turns", ce_t)
+					if ce_t == 0:
+						unit.remove_meta("close_eyes_turns")
+						log_message("👁️ Статус «Закрой глаза» на %s завершился." % unit.display_name)
 						unit_updated.emit(unit)
 
 			NaamaAbilities.process_enemy_turn_start(unit, self)
@@ -2048,6 +2167,18 @@ func _execute_enemy_turn(enemy: CombatUnit) -> void:
 			YourMemories.execute_turn(enemy, allies, self)
 		"void_paws":
 			VoidPaws.execute_turn(enemy, allies, self)
+		"test_boss":
+			TestBoss.execute_turn(enemy, allies, self)
+		"test_elite":
+			TestElite.execute_turn(enemy, allies, self)
+		"test_soldier":
+			TestSoldier.execute_turn(enemy, allies, self)
+		"antimatter_slave":
+			AntimatterSlave.execute_turn(enemy, allies, self)
+		"insurgent":
+			Insurgent.execute_turn(enemy, allies, self)
+		"kyle_rebel_leader":
+			KyleRebelLeader.execute_turn(enemy, allies, self)
 		_:
 			_execute_enemy_basic(enemy)
 
@@ -2499,6 +2630,10 @@ func deal_damage(target: CombatUnit, amount: float, attacker: CombatUnit = null,
 				log_message("🎭 Тайна сияющей маски: Все слои уничтожены! Защита Силуэта снижена на -20%% до конца боя!")
 				unit_updated.emit(target)
 				
+	# Статус «Особый гость» Сангинии: получаемый урон бонус-атак повышается на 70% (для чистого урона)
+	if is_true_damage and (tag_override == "sanguinia_true_fua" or tag_override == "lenskaya_true_fua") and target != null and (target.has_meta("sanguinia_special_guest_charges") or target.statuses.debuffs.has("sanguinia_special_guest")):
+		amount *= 1.70
+
 	if is_true_damage:
 		dealt = target.apply_damage(amount)
 	else:
@@ -2627,7 +2762,7 @@ func deal_damage(target: CombatUnit, amount: float, attacker: CombatUnit = null,
 
 	# Синергия Антиматерии [3]: Чёрная дыра казнит мобов с ХП < 7%
 	if not target.is_ally and target.is_alive() and get_antimatter_count() >= 3 and tag_override != "black_hole_execution":
-		var is_boss: bool = target.id in ["void_boss", "masked_silhouette", "shoji_vz", "velzebul_boss", "rimes_final_boss"] or bool(target.get_meta("cannot_be_executed", false)) or bool(target.get_meta("is_weekly_boss", false)) or (target.stats.max_hp >= 50000 and not target.is_elite)
+		var is_boss: bool = target.id in ["void_boss", "masked_silhouette", "shoji_vz", "velzebul_boss", "rimes_final_boss", "kyle_rebel_leader"] or bool(target.get_meta("cannot_be_executed", false)) or bool(target.get_meta("is_weekly_boss", false)) or (target.stats.max_hp >= 50000 and not target.is_elite)
 		if not is_boss and target.stats.hp / target.stats.max_hp <= 0.07:
 			log_message("🕳️ Чёрная дыра [3]: ХП %s опустилось ниже 7%% -> поглощение и казнь!" % target.display_name)
 			deal_damage(target, target.stats.max_hp, attacker if attacker != null else target, CombatConstants.Element.QUANTUM, false, "black_hole_execution")
@@ -2679,6 +2814,27 @@ func deal_damage(target: CombatUnit, amount: float, attacker: CombatUnit = null,
 				target.set_meta("traces_of_memories_owner", m_owner)
 				log_message("👣 Конус «Пусть прошлое остаётся позади»: %s наложил статус «По следам воспоминаний» на %s на 1 ход!" % [attacker.display_name, target.display_name])
 				unit_updated.emit(target)
+
+	# Дух памяти атакует противника -> реакции AntimatterSlave, KyleRebelLeader и сета «Защитница цветущей земли» (4 части)
+	if dealt > 0.0 and target.is_alive() and not target.is_ally and (attacker is Memosprite or (attacker != null and bool(attacker.get_meta("is_memosprite", false)))):
+		if target.id == "antimatter_slave":
+			AntimatterSlave.on_attacked_by_memosprite(target, attacker, self)
+		elif target.id == "kyle_rebel_leader":
+			KyleRebelLeader.on_attacked_by_memosprite(target, attacker, self)
+
+		var m_owner: CombatUnit = (attacker as Memosprite).owner if (attacker is Memosprite) else (attacker.get_meta("owner_unit") if attacker.has_meta("owner_unit") else null)
+		if m_owner != null and m_owner.has_meta("set_bloom_defender_4"):
+			if not m_owner.has_meta("bloom_defender_crit_turns") or int(m_owner.get_meta("bloom_defender_crit_turns", 0)) <= 0:
+				m_owner.stats.crit_dmg += 0.30
+			m_owner.set_meta("bloom_defender_crit_turns", 2)
+			m_owner.set_meta("bloom_defender_crit_skip_tick", true)
+			if not attacker.has_meta("bloom_defender_crit_turns") or int(attacker.get_meta("bloom_defender_crit_turns", 0)) <= 0:
+				attacker.stats.crit_dmg += 0.30
+			attacker.set_meta("bloom_defender_crit_turns", 2)
+			attacker.set_meta("bloom_defender_crit_skip_tick", true)
+			log_message("🌸 Сет «Защитница цветущей земли»: атака духа памяти повысила Крит. урон %s и %s на +30%% на 2 хода!" % [m_owner.display_name, attacker.display_name])
+			unit_updated.emit(m_owner)
+			unit_updated.emit(attacker)
 
 	# Конус «Пусть прошлое остаётся позади»: когда владелец атакует противника со статусом «По следам воспоминаний»
 	if dealt > 0.0 and target.is_alive() and not target.is_ally and attacker and not (attacker is Memosprite):
@@ -2765,9 +2921,45 @@ func deal_damage(target: CombatUnit, amount: float, attacker: CombatUnit = null,
 	if attacker and attacker.get_meta("light_cone_id", "") == "cant_kill_you" and is_crit and tag_override != "cant_kill_bonus_hit" and tag_override != "copied_e6" and tag_override != "debtor_proc" and tag_override != "dotseva_fua" and tag_override != "dotseva_fua_normal" and tag_override != "DoT":
 		var extra_dmg := attacker.stats.get_effective_atk(attacker.statuses) * 0.20
 		deal_damage(target, extra_dmg, attacker, attacker.element, false, "cant_kill_bonus_hit")
+
+	# Конус «Прощание перед пробуждением»: Атака восстанавливает 8 ед. энергии (1 раз за ход)
+	if dealt > 0.0 and attacker and attacker.is_ally and not target.is_ally and attacker.get_meta("light_cone_id", "") == "farewell_before_awakening":
+		var is_non_attack := (tag_override in ["DoT", "Break", "SuperBreak", "Суперпробитие", "cant_kill_bonus_hit", "copied_e6", "debtor_proc", "mask_retaliation", "elysium_extra_dmg", "paws_backup_redirection"]) or has_meta("is_processing_dots")
+		if not is_non_attack and not bool(attacker.get_meta("farewell_energy_proc_this_turn", false)):
+			attacker.set_meta("farewell_energy_proc_this_turn", true)
+			gain_energy_with_err(attacker, 8.0)
+			log_message("🏹 Конус «Прощание перед пробуждением»: %s совершил атаку и восстановил 8 ед. энергии!" % attacker.display_name)
+			unit_updated.emit(attacker)
 		
-	var is_any_fua: bool = (tag_override == "Бонус-атака" or tag_override == "FollowUp" or tag_override == "dotseva_fua" or tag_override == "copied_e6" or tag_override == "debtor_proc" or tag_override == "lenskaya_fua" or tag_override == "lenskaya_true_fua")
+	var is_any_fua: bool = (tag_override == "Бонус-атака" or tag_override == "FollowUp" or tag_override == "dotseva_fua" or tag_override == "copied_e6" or tag_override == "debtor_proc" or tag_override == "lenskaya_fua" or tag_override == "lenskaya_true_fua" or tag_override == "sanguinia_true_fua")
 	if attacker and attacker.is_ally and is_any_fua:
+		# Конус «Последнее лето»:
+		# Когда владелец (в т.ч. призываемые существа) наносит FUA -> накладывает «Закрой глаза» на 1 ход (+30% получаемого FUA урона)
+		var is_last_summer_attacker: bool = (attacker.get_meta("light_cone_id", "") == "last_summer")
+		if not is_last_summer_attacker and attacker is Memosprite:
+			var m_owner: CombatUnit = (attacker as Memosprite).owner
+			if m_owner != null and m_owner.get_meta("light_cone_id", "") == "last_summer":
+				is_last_summer_attacker = true
+		elif not is_last_summer_attacker and attacker.has_meta("owner_unit"):
+			var s_owner: CombatUnit = attacker.get_meta("owner_unit")
+			if s_owner != null and s_owner.get_meta("light_cone_id", "") == "last_summer":
+				is_last_summer_attacker = true
+
+		if is_last_summer_attacker and target != null and target.is_alive() and not target.is_ally:
+			target.set_meta("close_eyes_turns", 1)
+			target.set_meta("close_eyes_skip_tick", true)
+			log_message("🌸 Конус «Последнее лето»: %s наложил статус «Закрой глаза» на %s на 1 ход!" % [attacker.display_name, target.display_name])
+			unit_updated.emit(target)
+
+		# Когда союзники наносят урон FUA по противнику со статусом «Закрой глаза» -> +3% получаемого FUA урона (до 48%)
+		if not is_last_summer_attacker and target != null and target.is_alive() and not target.is_ally and target.has_meta("close_eyes_turns") and int(target.get_meta("close_eyes_turns", 0)) > 0:
+			var cur_perm: float = float(target.get_meta("close_eyes_perm_fua_vuln", 0.0))
+			if cur_perm < 0.48:
+				var new_perm: float = minf(cur_perm + 0.03, 0.48)
+				target.set_meta("close_eyes_perm_fua_vuln", new_perm)
+				log_message("🌸 Конус «Последнее лето»: FUA союзника повысила получаемый %s урон бонус-атак на +3%% (всего: +%d%%/48%%)!" % [target.display_name, int(new_perm * 100.0)])
+				unit_updated.emit(target)
+
 		# Конус «Зеркальная иллюзия»: +5 энергии за Бонус-атаку (до 3 раз за ход)
 		if attacker.get_meta("light_cone_id", "") == "mirror_illusion":
 			if not has_meta("mirror_illusion_credited_this_fua"):
@@ -3642,9 +3834,13 @@ func _end_turn(unit: CombatUnit) -> void:
 		remove_meta("arseniy_talent_credited_this_action")
 	ArseniyAbilities.tick_turn_end(unit, self)
 	if unit != null:
-		SanguiniaAbilities.check_reset_waves_stacks(unit, self)
+		if unit.has_meta("sanguinia_extra_turn_after_current"):
+			unit.remove_meta("sanguinia_extra_turn_after_current")
+		else:
+			SanguiniaAbilities.check_reset_waves_stacks(unit, self)
 		if unit.has_meta("sanguinia_prep_ignore_def_attack"):
 			unit.remove_meta("sanguinia_prep_ignore_def_attack")
+	check_sanguinia_pending_forced_skill()
 	unit.reset_action_value() 
 	
 	# Сброс накопительной суммы конвертации исцеления Следа 2 Раймса после действия любого существа
@@ -3881,6 +4077,42 @@ func _end_turn(unit: CombatUnit) -> void:
 					log_message("Сет Сервер в глубинах реальности: бонус скорости на %s завершился." % unit.display_name)
 					action_order_changed.emit()
 
+		# Списание бонуса КУ сета «Защитница цветущей земли» (2 хода)
+		if unit.has_meta("bloom_defender_crit_turns") and int(unit.get_meta("bloom_defender_crit_turns", 0)) > 0:
+			if unit.get_meta("bloom_defender_crit_skip_tick", false):
+				unit.set_meta("bloom_defender_crit_skip_tick", false)
+			else:
+				var b_t := int(unit.get_meta("bloom_defender_crit_turns", 0)) - 1
+				unit.set_meta("bloom_defender_crit_turns", b_t)
+				if b_t == 0:
+					unit.stats.crit_dmg -= 0.30
+					log_message("🌸 Сет Защитница цветущей земли: бонус Крит. урона на %s завершился." % unit.display_name)
+
+		# Списание дебаффа «Подавление» Кайла (2 хода)
+		if unit.has_meta("kyle_suppression_turns") and int(unit.get_meta("kyle_suppression_turns", 0)) > 0:
+			var ks_t := int(unit.get_meta("kyle_suppression_turns", 0)) - 1
+			unit.set_meta("kyle_suppression_turns", ks_t)
+			if ks_t == 0:
+				unit.remove_speed_modifier(-0.15, 0.0)
+				log_message("🌀 Подавление Кайла на %s завершилось." % unit.display_name)
+
+		# Списание дебаффа «Раскол разума» на Кайле (2 хода)
+		if unit.has_meta("kyle_mind_fracture_turns") and int(unit.get_meta("kyle_mind_fracture_turns", 0)) > 0:
+			var km_t := int(unit.get_meta("kyle_mind_fracture_turns", 0)) - 1
+			unit.set_meta("kyle_mind_fracture_turns", km_t)
+			if km_t == 0:
+				unit.remove_meta("kyle_mind_fracture_stacks")
+				unit.remove_meta("kyle_vuln_pct")
+				log_message("🧠 Раскол разума на %s рассеялся." % unit.display_name)
+
+		# Списание баффа КУ от иллюзии памяти против Кайла (2 хода)
+		if unit.has_meta("kyle_crit_buff_turns") and int(unit.get_meta("kyle_crit_buff_turns", 0)) > 0:
+			var kc_t := int(unit.get_meta("kyle_crit_buff_turns", 0)) - 1
+			unit.set_meta("kyle_crit_buff_turns", kc_t)
+			if kc_t == 0:
+				unit.stats.crit_dmg -= 0.25
+				log_message("⚔ Бонус крит. урона от иллюзии памяти на %s завершился." % unit.display_name)
+
 		# Списание уязвимости к Бинарному урону сета «Сервер в глубинах реальности» (2 хода на враге)
 		if unit.has_meta("server_depths_vuln_sources"):
 			if unit.get_meta("server_depths_vuln_skip_tick", false):
@@ -3919,6 +4151,7 @@ func _end_turn(unit: CombatUnit) -> void:
 			var cd := int(unit.get_meta("sara_talent_cooldown", 0))
 			if cd > 0:
 				unit.set_meta("sara_talent_cooldown", cd - 1)
+				sara_talent_cooldown = cd - 1
 				
 		# Списание RES PEN
 		if unit.has_meta("sara_ult_res_pen_turns") and int(unit.get_meta("sara_ult_res_pen_turns", 0)) > 0:
@@ -4690,11 +4923,36 @@ func _check_battle_end() -> bool:
 			log_message("💀 Поражение! Не выполнено условие: погиб один из союзников!")
 			battle_ended.emit(false)
 			return true
-	if battle_mode == "fiction":
+	if battle_mode.begins_with("memory_hall_") and get_living_enemies().is_empty():
+		if memory_hall_wave < memory_hall_total_waves:
+			memory_hall_wave += 1
+			enemies.clear()
+			var next_enemies := MemoryHallManager.get_wave_enemies(memory_hall_floor, memory_hall_wave, memory_hall_half)
+			for e in next_enemies:
+				enemies.append(e)
+			log_message("🌊 Вторая волна противников вступает в бой! (Волна %d/%d)" % [memory_hall_wave, memory_hall_total_waves])
+			enemies_reshuffled.emit()
+			action_order_changed.emit()
+			memory_hall_wave_advanced.emit(memory_hall_wave, memory_hall_total_waves)
+			return false
+		elif battle_mode == "memory_hall_4" and memory_hall_half == 1:
+			memory_hall_half1_spent_cycles = get_current_cycles()
+			var rem: int = maxi(0, 28 - memory_hall_half1_spent_cycles)
+			log_message("🎉 Отряд 1 победил! Затрачено циклов: %d. Осталось циклов: %d." % [memory_hall_half1_spent_cycles, rem])
+			memory_hall_half1_cleared.emit(memory_hall_half1_spent_cycles, rem)
+			return false
+		else:
+			phase = Phase.VICTORY
+			log_message("🎉 Победа в Зале воспоминаний!")
+			battle_ended.emit(true)
+			return true
+	elif battle_mode == "fiction" or (battle_mode == "test_env" and TeamConfig.test_submode == "fiction"):
 		# В Вымысле победа засчитывается, когда резерв исчерпан И на поле никого не осталось
 		if fiction_max_pool == 0 and get_living_enemies().is_empty():
 			phase = Phase.VICTORY
-			log_message("Победа в Чистом вымысле! Все 15 Солдат Пустоты уничтожены!")
+			var total_count: int = TeamConfig.test_fiction_count if (battle_mode == "test_env") else 15
+			var e_name: String = "Тест Солдат" if (battle_mode == "test_env") else "Солдат Пустоты"
+			log_message("Победа в Чистом вымысле! Все %d %s уничтожены!" % [total_count, e_name])
 			battle_ended.emit(true)
 			return true
 	else:
@@ -4781,11 +5039,7 @@ func player_enhanced_basic(target: CombatUnit) -> void:
 	if not ArseniyAbilities.is_new_development(current_unit):
 		log_message("Усиленная атака доступна только в «Новой разработке»!")
 		return
-	if skill_points < 1:
-		log_message("Недостаточно ОН!")
-		return
 	_waiting_for_player = false
-	_spend_skill_points(1)
 	start_attack_action()
 	ArseniyAbilities.execute_enhanced_basic(current_unit, target, self)
 	finish_attack_action()
@@ -5084,7 +5338,17 @@ func _process_ult_queue() -> void:
 			target = unit.get_meta("ult_target")
 			unit.remove_meta("ult_target")
 			
-		# ИСПРАВЛЕНО: Список ультимейтов, требующих выбора цели
+		# 1. СНАЧАЛА воспроизводится кат-сцена Сверхспособности персонажа
+		ultimate_started.emit(unit)
+		var cutin_watchdog := 5.0
+		while has_meta("is_playing_ult_cutin") and bool(get_meta("is_playing_ult_cutin")):
+			if not is_inside_tree() or not get_tree() or cutin_watchdog <= 0.0:
+				remove_meta("is_playing_ult_cutin")
+				break
+			await get_tree().create_timer(0.05).timeout
+			cutin_watchdog -= 0.05
+		
+		# 2. И только ПОТОМ, после кат-сцены — выбор цели (если Сверхспособность требует цели)
 		var requires_target := unit.id in ["arseniy", "pusenkov", "kaori", "shoji", "vika", "rimes", "isaac", "musienko", "valramors", "arseniy_admin", "katarina"] or (unit.id == "lenskaya_antimatter" and String(unit.get_meta("lenskaya_am_ult_choice", "supernova")) == "supernova")
 		if requires_target and target == null:
 			set_meta("is_selecting_ult_target", true)
@@ -5099,6 +5363,7 @@ func _process_ult_queue() -> void:
 				target = unit.get_meta("ult_target")
 				unit.remove_meta("ult_target")
 		
+		# 3. Выполнение Сверхспособности
 		_execute_ultimate(unit, target)
 		
 		if unit.has_meta("lenskaya_am_e6_followup_ult") and bool(unit.get_meta("lenskaya_am_e6_followup_ult", false)):
@@ -5186,7 +5451,10 @@ func _execute_basic_attack(attacker: CombatUnit, target: CombatUnit) -> void:
 		SaraAbilities.ID:
 			SaraAbilities.execute_basic(attacker, target, self)
 		ArseniyAbilities.ID:
-			ArseniyAbilities.execute_basic(attacker, target, self)
+			if ArseniyAbilities.is_new_development(attacker):
+				ArseniyAbilities.execute_enhanced_basic(attacker, target, self)
+			else:
+				ArseniyAbilities.execute_basic(attacker, target, self)
 		PusenkovAbilities.ID:
 			var counter: int = attacker.get_meta("basic_counter", 0)
 			if counter >= 3:
@@ -6550,6 +6818,12 @@ func _execute_ultimate(attacker: CombatUnit, target: CombatUnit) -> void:
 			log_message("🩸 Конус «История, вымоченная в крови»: Накопленный урон очищен после Сверхспособности.")
 			unit_updated.emit(attacker)
 
+	# Конус «И вновь я один»: Использование сверхспособности продвигает действие владельца вперед на 12%
+	if attacker.get_meta("light_cone_id", "") == "alone_again":
+		attacker.advance_action(12.0)
+		log_message("🕊️ Конус «И вновь я один»: Сверхспособность продвинула действие %s на 12%%!" % attacker.display_name)
+		action_order_changed.emit()
+
 	# След 2 Вельзевул: списание временных 80 Зеро после Сверхспособности
 	if attacker.has_meta("temp_velzebul_zero"):
 		var temp_z: int = int(attacker.get_meta("temp_velzebul_zero", 0))
@@ -6685,7 +6959,7 @@ func calc_dmg(attacker: CombatUnit, target: CombatUnit, mult: float, element_bon
 			else:
 				log_message("💨 Промах! «Передача порчи» на %s не наложилась перед ударом из-за сопротивления." % target_to_debuff.display_name)
 
-	var is_fua: bool = (tag_override == "Бонус-атака" or tag_override == "FollowUp" or tag_override == "dotseva_fua" or tag_override == "lenskaya_fua" or tag_override == "lenskaya_true_fua" or tag_override == "debtor_proc")
+	var is_fua: bool = (tag_override == "Бонус-атака" or tag_override == "FollowUp" or tag_override == "dotseva_fua" or tag_override == "lenskaya_fua" or tag_override == "lenskaya_true_fua" or tag_override == "debtor_proc" or tag_override == "sanguinia_true_fua" or bool(get_meta("is_sanguinia_guest_fua", false)))
 	
 	# --- 1. РАСЧЕТ БАЗОВОГО УРОНА ---
 	# Базовый урон = Множитель способности * Характеристика + Дополнительный урон
@@ -6905,7 +7179,7 @@ func calc_dmg(attacker: CombatUnit, target: CombatUnit, mult: float, element_bon
 		if attacker.has_meta("paws_trace3_stacks"):
 			var t3_st := int(attacker.get_meta("paws_trace3_stacks", 0))
 			if t3_st > 0:
-				dmg_boost_sum += float(t3_st) * 0.30
+				dmg_boost_sum += float(t3_st) * 0.05
 	
 	# Талант Раймса • Восхождение: +20% наносимого урона за стак (до 3 раз) для Раймса и Лап
 	var rimes_asc_dmg_u := get_rimes_ascension_unit()
@@ -6956,6 +7230,18 @@ func calc_dmg(attacker: CombatUnit, target: CombatUnit, mult: float, element_bon
 	# 5. Конус «План по спасению мира»: Урон бонус-атак +30%
 	if is_fua and lc_equipped == "save_the_world_plan":
 		dmg_boost_sum += 0.30
+
+	# Конус «Последнее лето»: Урон бонус-атак владельца (и его призываемых существ) +30%
+	if is_fua:
+		var is_last_summer_wearer: bool = (lc_equipped == "last_summer")
+		if not is_last_summer_wearer and attacker is Memosprite and (attacker as Memosprite).owner != null:
+			is_last_summer_wearer = ((attacker as Memosprite).owner.get_meta("light_cone_id", "") == "last_summer")
+		elif not is_last_summer_wearer and attacker.has_meta("owner_unit"):
+			var o_ls: CombatUnit = attacker.get_meta("owner_unit")
+			if o_ls != null and o_ls.get_meta("light_cone_id", "") == "last_summer":
+				is_last_summer_wearer = true
+		if is_last_summer_wearer:
+			dmg_boost_sum += 0.30
 		
 	# ИСПРАВЛЕНО: Безопасное определение ультимейта по метаданным (решает проблему сброса Е1 при перерасчете)
 	
@@ -7387,6 +7673,20 @@ func calc_dmg(attacker: CombatUnit, target: CombatUnit, mult: float, element_bon
 			var z_cd := minf(floorf(extra_z / 10.0) * 0.10, 0.60)
 			crit_dmg_sum += z_cd
 
+	# Сет: Восставший Краснодар (+16% КУ базово в статах, +32% если на поле есть призванные существа или духи памяти)
+	if attacker != null and attacker.has_meta("has_set_risen_krasnodar"):
+		var has_memosprite_on_field: bool = false
+		for m in memosprites:
+			if m is Memosprite and m.is_alive() and m.owner == attacker:
+				has_memosprite_on_field = true
+				break
+		if has_memosprite_on_field or bool(attacker.get_meta("has_summoned_entity", false)):
+			crit_dmg_sum += 0.32
+
+	# Аномалия планарного данжа «Оплот восстания»: Крит. урон отряда +30%
+	if battle_mode == "planar_rebellion_hq" and attacker != null and attacker.is_ally:
+		crit_dmg_sum += 0.30
+
 	# Аномалия 20 уровня: +50% Крит. урона по Силуэту без маски или в Изоляции
 	if battle_mode == "level_20" and attacker != null and attacker.is_ally and target != null and target.id == "masked_silhouette":
 		var mask_broken := int(target.get_meta("mask_layers", 0)) <= 0
@@ -7513,6 +7813,16 @@ func calc_dmg(attacker: CombatUnit, target: CombatUnit, mult: float, element_bon
 	if is_binary and attacker != null and attacker.has_meta("damaged_strings_def_ignore_turns") and int(attacker.get_meta("damaged_strings_def_ignore_turns", 0)) > 0:
 		def_ignore += 0.20
 
+	# Аномалия планарного данжа «Оплот восстания»: пока на поле есть Дух Памяти или призванное существо, урон отряда игнорирует 20% защиты
+	if battle_mode == "planar_rebellion_hq" and attacker != null and attacker.is_ally:
+		var has_any_memo_or_summon := false
+		for m in memosprites:
+			if m is Memosprite and m.is_alive():
+				has_any_memo_or_summon = true
+				break
+		if has_any_memo_or_summon or bool(attacker.get_meta("has_summoned_entity", false)):
+			def_ignore += 0.20
+
 	# Навык Q Катарины: игнорирует 30% защиты цели
 	if attacker != null and attacker.id == "katarina":
 		var cur_atk_type := String(get_meta("current_attack_type", ""))
@@ -7551,6 +7861,20 @@ func calc_dmg(attacker: CombatUnit, target: CombatUnit, mult: float, element_bon
 			def_ignore += 0.20 # Воин из «В изнанке»: +20% игнор защиты
 		if attacker.eidolon >= 6 and attacker.has_meta("lenskaya_am_supernova_100_zero"):
 			def_ignore += 0.30 # Е6: +30% игнор защиты при 100+ Xaeroh
+
+	# Конус «И вновь я один»: статус «Искупление» игнорирует 30% защиты противников
+	var is_redemption_active: bool = false
+	if attacker != null:
+		if attacker.has_meta("redemption_turns") and int(attacker.get_meta("redemption_turns", 0)) > 0:
+			is_redemption_active = true
+		elif attacker is Memosprite and (attacker as Memosprite).owner != null and (attacker as Memosprite).owner.has_meta("redemption_turns") and int((attacker as Memosprite).owner.get_meta("redemption_turns", 0)) > 0:
+			is_redemption_active = true
+		elif attacker.has_meta("owner_unit"):
+			var o_red: CombatUnit = attacker.get_meta("owner_unit")
+			if o_red != null and o_red.has_meta("redemption_turns") and int(o_red.get_meta("redemption_turns", 0)) > 0:
+				is_redemption_active = true
+	if is_redemption_active:
+		def_ignore += 0.30
 
 	var def_multiplier_bracket: float = 0.0
 	if target.is_ally:
@@ -7645,6 +7969,17 @@ func calc_dmg(attacker: CombatUnit, target: CombatUnit, mult: float, element_bon
 	if target.statuses.toughness_broken:
 		vulnerability_sum += 0.20
 	vulnerability_sum += target.statuses.damage_taken_bonus
+
+	# Статус «Особый гость» Сангинии: получаемый урон бонус-атак повышается на 70% (пока действует этот статус)
+	if is_fua and target != null and (target.has_meta("sanguinia_special_guest_charges") or target.statuses.debuffs.has("sanguinia_special_guest")):
+		vulnerability_sum += 0.70
+
+	# Конус «Последнее лето»: статус «Закрой глаза» (+30% получаемого урона FUA) и постоянные стаки (до +48%)
+	if is_fua and target != null:
+		if target.has_meta("close_eyes_turns") and int(target.get_meta("close_eyes_turns", 0)) > 0:
+			vulnerability_sum += 0.30
+		if target.has_meta("close_eyes_perm_fua_vuln") and float(target.get_meta("close_eyes_perm_fua_vuln", 0.0)) > 0.0:
+			vulnerability_sum += float(target.get_meta("close_eyes_perm_fua_vuln", 0.0))
 		
 	# Эйдолон 2 Ленской: Разложение (+30% / +60% получаемого квантового урона)
 	if target != null and target.has_meta("lenskaya_am_decomp_turns") and int(target.get_meta("lenskaya_am_decomp_turns", 0)) > 0:
@@ -8378,6 +8713,10 @@ func _apply_relic_effects(unit: CombatUnit, relics: Dictionary) -> void:
 	var is_damaged_strings_4: bool = (cavern_set_1 == "damaged_strings" and cavern_set_2 == "")
 	var is_dying_stars_child_2: bool = (cavern_set_1 == "dying_stars_child" or cavern_set_2 == "dying_stars_child")
 	var is_dying_stars_child_4: bool = (cavern_set_1 == "dying_stars_child" and cavern_set_2 == "")
+	var is_dark_side_defector_2: bool = (cavern_set_1 == "dark_side_defector" or cavern_set_2 == "dark_side_defector")
+	var is_dark_side_defector_4: bool = (cavern_set_1 == "dark_side_defector" and cavern_set_2 == "")
+	var is_bloom_defender_2: bool = (cavern_set_1 == "bloom_defender" or cavern_set_2 == "bloom_defender")
+	var is_bloom_defender_4: bool = (cavern_set_1 == "bloom_defender" and cavern_set_2 == "")
 	
 	# Сет 1: Жертва долгого симбиоза
 	if is_symbiosis_2 and unit.element == CombatConstants.Element.ICE:
@@ -8476,6 +8815,23 @@ func _apply_relic_effects(unit: CombatUnit, relics: Dictionary) -> void:
 		unit.stats.crit_rate += 0.08
 	if is_dying_stars_child_4:
 		unit.set_meta("set_dying_stars_child_4", true)
+
+	# Сет: Перебежщик тёмной стороны (+16% ЭП)
+	if is_dark_side_defector_2:
+		unit.stats.break_effect += 0.16
+	if is_dark_side_defector_4:
+		unit.set_meta("set_dark_side_defector_4", true)
+
+	# Сет: Защитница цветущей земли (+12% СА, +6% скорости пока дух на поле)
+	if is_bloom_defender_2:
+		relic_atk_pct += 0.12
+		unit.set_meta("set_bloom_defender_2", true)
+		var spr: Memosprite = MemospriteSystem.get_sprite(unit, self)
+		if spr != null and spr.is_alive():
+			unit.add_speed_modifier(0.06, 0.0)
+			unit.set_meta("bloom_defender_spd_active", true)
+	if is_bloom_defender_4:
+		unit.set_meta("set_bloom_defender_4", true)
 		
 	# ПЛАНАРНЫЕ НАБОРЫ (Базовое безусловное начисление)
 	if planar_set == "lost_edge":
@@ -8520,6 +8876,20 @@ func _apply_relic_effects(unit: CombatUnit, relics: Dictionary) -> void:
 	if planar_set == "inverted_depths":
 		relic_atk_pct += 0.12
 		unit.set_meta("has_set_inverted_depths", true)
+
+	# Сет: Восставший Краснодар (+16% КУ)
+	if planar_set == "risen_krasnodar":
+		unit.stats.crit_dmg += 0.16
+		unit.set_meta("has_set_risen_krasnodar", true)
+
+	# Сет: Замурованный под руинами штаб (+16% ЭП)
+	if planar_set == "ruins_hq":
+		unit.stats.break_effect += 0.16
+		unit.set_meta("has_set_ruins_hq", true)
+
+	# Аномалия данжа «Руины восстания»: +40% Эффекта пробития отряду
+	if battle_mode == "dungeon_rebellion_ruins" and unit.is_ally:
+		unit.stats.break_effect += 0.40
 			
 	# --- 4. ПРИМЕНЕНИЕ ВСЕХ НАКОПЛЕННЫХ ПРОЦЕНТОВ К СТАТАМ ---
 	# ИСПРАВЛЕНО: Процентные модификаторы НЕ МУТИРУЮТ unit.stats.atk и unit.stats.def напрямую!
@@ -8540,11 +8910,15 @@ func _apply_relic_effects(unit: CombatUnit, relics: Dictionary) -> void:
 	unit.stats.hp = unit.stats.max_hp
 		
 func _handle_enemy_death_reinforcement(dead_enemy: CombatUnit) -> void:
-	if battle_mode != "fiction" or dead_enemy.is_ally:
+	var is_fiction := (battle_mode == "fiction")
+	var is_test_fiction := (battle_mode == "test_env" and TeamConfig.test_submode == "fiction")
+	if (not is_fiction and not is_test_fiction) or dead_enemy.is_ally:
 		return
 		
 	fiction_defeated_count += 1
-	log_message("💀 Повержен солдат Пустоты (%d / 15)" % fiction_defeated_count)
+	var total_count: int = TeamConfig.test_fiction_count if is_test_fiction else 15
+	var enemy_name: String = "Тест Солдат" if is_test_fiction else "солдат Пустоты"
+	log_message("💀 Повержен %s (%d / %d)" % [enemy_name, fiction_defeated_count, total_count])
 	
 	var idx: int = enemies.find(dead_enemy) # Явно типизирован int
 	if idx == -1:
@@ -8554,7 +8928,11 @@ func _handle_enemy_death_reinforcement(dead_enemy: CombatUnit) -> void:
 		fiction_max_pool -= 1
 		
 		# Создаём абсолютно чистого нового юнита
-		var new_soldier: CombatUnit = VoidSoldier.create_unit() # Явно типизирован CombatUnit
+		var new_soldier: CombatUnit = null
+		if is_test_fiction:
+			new_soldier = TestSoldier.create_unit(TeamConfig.test_fiction_hp, 400.0)
+		else:
+			new_soldier = VoidSoldier.create_unit() # Явно типизирован CombatUnit
 		new_soldier.slot_index = idx # Закрепляем за тем же слотом
 		
 		# Задаем чистую шкалу AV без хвостов
@@ -8570,7 +8948,7 @@ func _handle_enemy_death_reinforcement(dead_enemy: CombatUnit) -> void:
 		# Заменяем мертвого солдата на живого в массиве
 		enemies[idx] = new_soldier
 		
-		log_message("📥 На поле боя вступает новый Солдат Пустоты! (Осталось в запасе: %d)" % fiction_max_pool)
+		log_message("📥 На поле боя вступает новый %s! (Осталось в запасе: %d)" % [enemy_name, fiction_max_pool])
 		
 		# Оповещаем UI, что нужно обновить связи карточек с новыми врагами
 		enemies_reshuffled.emit.call_deferred()
@@ -8789,6 +9167,16 @@ func get_sanguinia_unit() -> CombatUnit:
 		if a != null and a.is_alive() and a.id == SanguiniaAbilities.ID:
 			return a
 	return null
+
+func check_sanguinia_pending_forced_skill() -> void:
+	var sanguinia := get_sanguinia_unit()
+	if sanguinia == null or not sanguinia.is_alive():
+		return
+	if not sanguinia.has_meta("sanguinia_pending_forced_skill_unit"):
+		return
+	var target_ally: CombatUnit = sanguinia.get_meta("sanguinia_pending_forced_skill_unit") as CombatUnit
+	if target_ally != null and SanguiniaAbilities.can_unit_execute_skill_e(target_ally, self):
+		SanguiniaAbilities.execute_forced_skill_e(target_ally, self)
 
 func get_naama_unit() -> CombatUnit:
 	for a in allies:
@@ -9022,6 +9410,33 @@ func trigger_accepted_sin_hp_loss(unit: CombatUnit, hp_loss: float = 0.0) -> voi
 		unit.set_meta("relic_sin_turns", 1)
 		unit.set_meta("relic_sin_skip_tick", true)
 
+	# Конус «И вновь я один»:
+	# Если во время своего хода владелец или его дух памяти теряют HP -> «Искупление» на 2 хода
+	var lc_owner_alone: CombatUnit = null
+	if unit.get_meta("light_cone_id", "") == "alone_again":
+		lc_owner_alone = unit
+	elif unit is Memosprite and (unit as Memosprite).owner != null and (unit as Memosprite).owner.get_meta("light_cone_id", "") == "alone_again":
+		lc_owner_alone = (unit as Memosprite).owner
+	elif unit.has_meta("owner_unit"):
+		var o_al: CombatUnit = unit.get_meta("owner_unit")
+		if o_al != null and o_al.get_meta("light_cone_id", "") == "alone_again":
+			lc_owner_alone = o_al
+
+	if lc_owner_alone != null:
+		var is_own_turn: bool = (current_unit == lc_owner_alone)
+		if not is_own_turn and current_unit is Memosprite and (current_unit as Memosprite).owner == lc_owner_alone:
+			is_own_turn = true
+		if not is_own_turn and "memosprites" in self:
+			for m in memosprites:
+				if m is Memosprite and m == current_unit and m.owner == lc_owner_alone:
+					is_own_turn = true
+					break
+		if is_own_turn:
+			lc_owner_alone.set_meta("redemption_turns", 2)
+			lc_owner_alone.set_meta("redemption_skip_tick", true)
+			log_message("🕊️ Конус «И вновь я один»: %s получил статус «Искупление» на 2 хода (игнорирование 30%% защиты)!" % lc_owner_alone.display_name)
+			unit_updated.emit(lc_owner_alone)
+
 # Полный динамический расчет боевой защиты без мутации базовых характеристик
 func get_effective_def_complete(unit: CombatUnit) -> float:
 	if unit == null:
@@ -9055,16 +9470,17 @@ func check_joan_talent_trigger() -> void:
 		return
 		
 	var living_enemies := get_living_enemies()
-	if living_enemies.is_empty():
+	if living_enemies.is_empty() or action_hit_enemies.is_empty():
 		return
 		
-	var unique_hits: Array[CombatUnit] = []
-	for enemy in action_hit_enemies:
-		if enemy.is_alive() and not enemy in unique_hits:
-			unique_hits.append(enemy)
+	# Проверяем, задела ли атака всех живых противников на арене
+	var all_hit := true
+	for enemy in living_enemies:
+		if not enemy in action_hit_enemies:
+			all_hit = false
+			break
 			
-	# Если атака задела ВСЕХ живых противников на арене
-	if unique_hits.size() >= living_enemies.size():
+	if all_hit:
 		# Находим противника с самым большим макс. ХП
 		var strongest_enemy: CombatUnit = null
 		for enemy in living_enemies:
@@ -9072,7 +9488,9 @@ func check_joan_talent_trigger() -> void:
 				strongest_enemy = enemy
 				
 		if strongest_enemy:
+			action_hit_enemies.clear()
 			JoanAbilities.trigger_talent_fua(joan, strongest_enemy, self, false)
+			return
 			
 	action_hit_enemies.clear()
 
@@ -9559,9 +9977,10 @@ func add_console_vectors(amount: int) -> void:
 	
 	var sara := get_sara_admin_unit()
 	# Если талант Сары активен (фиксация на 100), всё, что выше — в буфер
-	if sara and sara_talent_active:
+	if sara and sara.is_alive() and sara_talent_active:
 		sara_buffered_vectors += amount
-		log_message("🛡 Буфер Сары: +%d Векторов записано в буфер (лимит 100 зафиксирован)." % amount)
+		set_console_vectors(100) # Жесткая фиксация на 100
+		log_message("🛡 Буфер Сары: +%d Векторов записано в буфер (всего в буфере: %d, пул зафиксирован на 100)." % [amount, sara_buffered_vectors])
 		return
 		
 	var cur := get_console_vectors()
@@ -9624,10 +10043,9 @@ func add_console_vectors(amount: int) -> void:
 		return
 
 	# ПРИОРИТЕТ 2: ТАЛАНТ САРЫ (ПОРОГ 100) — ТОЛЬКО ЕСЛИ СЁДЗИ НЕТ ИЛИ ОНА МЕРТВА
-	if not shoji_active and cur < 100 and new_val >= 100:
-		if sara and sara.is_alive() and sara_talent_cooldown == 0:
-			activate_sara_talent(new_val - 100)
-			return
+	if not shoji_active and sara and sara.is_alive() and sara_talent_cooldown == 0 and new_val >= 100:
+		activate_sara_talent(new_val - 100)
+		return
 
 	set_console_vectors(new_val)
 	log_message("⚡ [КОНСОЛЬ]: Пул Векторов: %d (+%d)." % [new_val, amount])
@@ -9743,9 +10161,9 @@ func activate_sara_talent(excess: int) -> void:
 	
 	sara_talent_active = true
 	sara_buffered_vectors = excess
-	set_meta("console_vectors", 100) # Фиксируем на 100
+	set_console_vectors(100) # Фиксируем на 100
 	
-	log_message("🛡 ТАЛАНТ САРЫ: Пул зафиксирован на 100! Продвижение действий союзников Консоли на 100%!")
+	log_message("🛡 ТАЛАНТ САРЫ: Пул зафиксирован на 100! Записано в буфер: +%d Векторов. Продвижение действий союзников Консоли на 100%!" % excess)
 	for ally in allies:
 		if ally.is_alive() and ally.id in FactionSystem.FACTIONS["console"].members:
 			ally.advance_action(100.0)
@@ -9755,29 +10173,29 @@ func release_sara_buffer() -> void:
 	sara_talent_active = false
 	var vectors_to_add := sara_buffered_vectors
 	sara_buffered_vectors = 0
-	sara_talent_cooldown = 4 # 3 хода + 1 текущий (он сбросится в _end_turn)
+	sara_talent_cooldown = 3
+	var sara := get_sara_admin_unit()
+	if sara and sara.is_alive():
+		sara.set_meta("sara_talent_cooldown", 3)
 	
-	log_message("🛡 ТАЛАНТ САРЫ: Индекс действия сменился! Выгрузка буфера: +%d Векторов." % vectors_to_add)
+	log_message("🛡 ТАЛАНТ САРЫ: Индекс действия сменился! Выгрузка буфера: +%d Векторов. Талант деактивирован на 3 хода." % vectors_to_add)
 	
-	# Проверяем кто есть в пати для активации их талантов
+	var final_vectors: int = 100 + vectors_to_add
+	set_console_vectors(final_vectors)
+	
 	var isaac := get_isaac_admin_unit()
-	var ars := get_arseniy_admin_unit()
-	
-	# Логика: Айзек приоритетнее, потом Арсений
 	if isaac and isaac.is_alive():
-		# Айзек: вычесть 1 для активации таланта (если нужно), потом сумма
-		# Если логика требует именно 101, то мы вручную добавляем
-		set_meta("console_vectors", 100 + vectors_to_add)
-		# И вызываем проверку перегрузки Айзека
-		IsaacAdminAbilities.trigger_talent_overload_attack(isaac, self)
-		set_meta("console_vectors", 0) # После взрыва остаток присуммируем
-		# (Тут можно дописать логику корректного пересчета остатка)
-	elif ars and ars.is_alive():
-		# Логика Арсения (сброс до 150)
-		set_console_vectors(get_console_vectors() + vectors_to_add)
+		while get_console_vectors() >= 101:
+			var v_cur := get_console_vectors()
+			set_console_vectors(v_cur - 101)
+			if isaac and isaac.is_alive():
+				isaac.set_meta("isaac_vectors", v_cur - 101)
+			log_message("💥 ТАЛАНТ АДМИНИСТРАТОРА: 101 Вектор превышен! Мгновенная атака 400%% СА (-101 Вектор).")
+			IsaacAdminAbilities.trigger_talent_overload_attack(isaac, self)
+			
+	var ars := get_arseniy_admin_unit()
+	if ars and ars.is_alive():
 		ArseniyAdminAbilities.check_overload_talent(ars, self)
-	else:
-		set_console_vectors(get_console_vectors() + vectors_to_add)
 
 # --- СИСТЕМА АНТИМАТЕРИИ И РЕСУРС XAEROH ---
 func get_xaeroh() -> int:
@@ -10115,7 +10533,38 @@ func activate_chorus_of_humanity(chosen_ally: CombatUnit) -> void:
 	
 	chorus_activated.emit(chosen_ally)
 
+func break_enemy_toughness(enemy: CombatUnit, attacker: CombatUnit = null) -> void:
+	if enemy == null or enemy.statuses.toughness_broken:
+		return
+	enemy.toughness = 0.0
+	enemy.statuses.toughness_broken = true
+	enemy.statuses.toughness_break_source = attacker.display_name if attacker != null else ""
+	enemy.statuses.damage_taken_bonus = CombatConstants.BREAK_DAMAGE_BONUS
+	enemy.delay_action(CombatConstants.BREAK_ACTION_DELAY * 100.0)
+	on_enemy_toughness_broken(enemy)
+	unit_updated.emit(enemy)
+
 func on_enemy_toughness_broken(enemy: CombatUnit) -> void:
+	if enemy != null:
+		if enemy.id == "antimatter_slave":
+			AntimatterSlave.on_weakness_break(enemy, self)
+		elif enemy.id == "insurgent":
+			Insurgent.on_weakness_break(enemy, self)
+
+	# Аномалия планарного данжа «Оплот восстания»: дополнительный урон в размере 100% базового пробития
+	if battle_mode == "planar_rebellion_hq" and enemy != null and _last_attacker != null and _last_attacker.is_ally:
+		var bonus_brk := DamageCalculator.calc_break_damage(_last_attacker, enemy, 1.0)
+		deal_damage(enemy, bonus_brk, _last_attacker, _last_attacker.element, false, "Аномалия: Эхо революции")
+		log_message("💥 Аномалия «Эхо революции»: дополнительный урон пробития по %s: %d!" % [enemy.display_name, int(bonus_brk)])
+
+	# Аномалия пещерного данжа «Руины восстания»: пробитие уязвимости восстанавливает 10 энергии и продвигает действие на 15%
+	if battle_mode == "dungeon_rebellion_ruins" and _last_attacker != null and _last_attacker.is_ally:
+		_last_attacker.gain_energy(10.0)
+		_last_attacker.advance_action(15.0)
+		log_message("⚡ Аномалия «Разлом сингулярности»: %s восстановил 10 энергии и продвинул действие на 15%%!" % _last_attacker.display_name)
+		action_order_changed.emit()
+		unit_updated.emit(_last_attacker)
+
 	if not chorus_unlocked or enemy == null:
 		return
 	if enemy.id == "rimes_final_boss":
@@ -10129,3 +10578,291 @@ func on_debuff_applied_to_enemy(enemy: CombatUnit, source_hero: CombatUnit) -> v
 
 func count_unique_debuffs(unit: CombatUnit) -> int:
 	return get_unit_debuff_count(unit)
+
+# --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ СОЗДАНИЯ И НАСТРОЙКИ СОЮЗНИКОВ ---
+
+func _create_ally_by_id(c_id: String, eidolon: int) -> CombatUnit:
+	match c_id:
+		MarinaAbilities.ID: return MarinaAbilities.create_unit(eidolon)
+		SaraAbilities.ID: return SaraAbilities.create_unit(eidolon)
+		ArseniyAbilities.ID: return ArseniyAbilities.create_unit(eidolon)
+		PusenkovAbilities.ID: return PusenkovAbilities.create_unit(eidolon)
+		KaoriAbilities.ID: return KaoriAbilities.create_unit(eidolon)
+		ShojiAbilities.ID: return ShojiAbilities.create_unit(eidolon)
+		"dasha": return DashaAbilities.create_unit(eidolon)
+		"danill": return DanillAbilities.create_unit(eidolon)
+		"vika": return VikaAbilities.create_unit(eidolon)
+		"dotseva": return DotsevaAbilities.create_unit(eidolon)
+		"milena": return MilenaAbilities.create_unit(eidolon)
+		"naama": return NaamaAbilities.create_unit(eidolon)
+		"lenskaya": return LenskayaAbilities.create_unit(eidolon)
+		"rimes": return RimesAbilities.create_unit(eidolon)
+		"isaac": return IsaacAbilities.create_unit(eidolon)
+		"keloist": return KeloistAbilities.create_unit(eidolon)
+		"musienko": return MusienkoAbilities.create_unit(eidolon)
+		"joan": return JoanAbilities.create_unit(eidolon)
+		"jeff": return JeffAbilities.create_unit(eidolon)
+		"valramors": return ValramorsAbilities.create_unit(eidolon)
+		"joan_spirit": return JoanSpiritAbilities.create_unit(eidolon)
+		"isaac_admin": return IsaacAdminAbilities.create_unit(eidolon)
+		"sara_admin": return SaraAdminAbilities.create_unit(eidolon)
+		"arseniy_admin": return ArseniyAdminAbilities.create_unit(eidolon)
+		"dasha_admin": return DashaAdminAbilities.create_unit(eidolon)
+		"shoji_swan": return ShojiSwanAbilities.create_unit(eidolon)
+		"katarina": return KatarinaAbilities.create_unit(eidolon)
+		"dotseva_crimson_tears": return DotsevaCrimsonTearsAbilities.create_unit(eidolon)
+		"lenskaya_antimatter": return LenskayaAntimatterAbilities.create_unit(eidolon)
+		"velzebul": return VelzebulAbilities.create_unit(eidolon)
+		"marina_sky_guardian": return MarinaSkyGuardianAbilities.create_unit(eidolon)
+		"lenskaya_sky_guardian": return LenskayaSkyGuardianAbilities.create_unit(eidolon)
+		"rimes_ascension": return RimesAscensionAbilities.create_unit(eidolon)
+		"sanguinia": return SanguiniaAbilities.create_unit(eidolon)
+	return null
+
+func _apply_ally_traces_and_cones(ally: CombatUnit) -> void:
+	if ally == null:
+		return
+	if ally.id == MarinaAbilities.ID:
+		MarinaAbilities.apply_traces(ally, allies)
+	elif ally.id == SaraAbilities.ID:
+		SaraAbilities.apply_traces(ally)
+	elif ally.id == ArseniyAbilities.ID:
+		ArseniyAbilities.apply_traces(ally)
+	elif ally.id == PusenkovAbilities.ID:
+		PusenkovAbilities.apply_traces(ally)
+	elif ally.id == KaoriAbilities.ID:
+		KaoriAbilities.apply_traces(ally)
+	elif ally.id == ShojiAbilities.ID:
+		ShojiAbilities.apply_traces(ally)
+	elif ally.id == "dasha":
+		DashaAbilities.apply_traces(ally)
+	elif ally.id == "danill":
+		DanillAbilities.apply_traces(ally)
+	elif ally.id == "vika":
+		VikaAbilities.apply_traces(ally)
+	elif ally.id == "dotseva":
+		DotsevaAbilities.apply_traces(ally)
+	elif ally.id == "milena":
+		MilenaAbilities.apply_traces(ally, allies)
+	elif ally.id == "naama":
+		NaamaAbilities.apply_traces(ally)
+	elif ally.id == "lenskaya":
+		LenskayaAbilities.apply_traces(ally)
+	elif ally.id == "rimes":
+		RimesAbilities.apply_traces(ally)
+	elif ally.id == "isaac":
+		IsaacAbilities.apply_traces(ally)
+	elif ally.id == "keloist":
+		KeloistAbilities.apply_traces(ally)
+	elif ally.id == "musienko":
+		MusienkoAbilities.apply_traces(ally)
+	elif ally.id == "joan":
+		JoanAbilities.apply_traces(ally)
+	elif ally.id == "jeff":
+		JeffAbilities.apply_traces(ally)
+	elif ally.id == "valramors":
+		ValramorsAbilities.apply_traces(ally)
+	elif ally.id == "joan_spirit":
+		JoanSpiritAbilities.apply_traces(ally, self)
+	elif ally.id == "isaac_admin":
+		IsaacAdminAbilities.apply_traces(ally, self)
+	elif ally.id == "sara_admin":
+		SaraAdminAbilities.apply_traces(ally, self)
+	elif ally.id == "arseniy_admin":
+		ArseniyAdminAbilities.apply_traces(ally, self)
+	elif ally.id == "dasha_admin":
+		DashaAdminAbilities.apply_traces(ally, self)
+	elif ally.id == "shoji_swan":
+		ShojiSwanAbilities.apply_traces(ally, self)
+	elif ally.id == "katarina":
+		KatarinaAbilities.apply_traces(ally, self)
+	elif ally.id == "dotseva_crimson_tears":
+		DotsevaCrimsonTearsAbilities.apply_traces(ally, self)
+	elif ally.id == "lenskaya_antimatter":
+		LenskayaAntimatterAbilities.apply_traces(ally, self)
+	elif ally.id == "velzebul":
+		VelzebulAbilities.apply_traces(ally, self)
+	_init_light_cone_effects(ally)
+
+# --- ИНТЕГРАЦИЯ РЕЖИМА «ЗАЛ ВОСПОМИНАНИЙ» ---
+
+func _setup_memory_hall_battle() -> void:
+	match battle_mode:
+		"memory_hall_1":
+			memory_hall_floor = 1
+			memory_hall_total_waves = 1
+			memory_hall_half = 1
+		"memory_hall_2":
+			memory_hall_floor = 2
+			memory_hall_total_waves = 1
+			memory_hall_half = 1
+		"memory_hall_3":
+			memory_hall_floor = 3
+			memory_hall_total_waves = 2
+			memory_hall_half = 1
+		"memory_hall_4":
+			memory_hall_floor = 4
+			memory_hall_total_waves = 2
+			memory_hall_half = 1
+			memory_hall_half1_spent_cycles = 0
+
+	memory_hall_wave = 1
+	enemies.clear()
+	var initial_enemies := MemoryHallManager.get_wave_enemies(memory_hall_floor, 1, memory_hall_half)
+	for e in initial_enemies:
+		enemies.append(e)
+	log_message("⚔ Зал воспоминаний: Этаж %d | Волна 1/%d" % [memory_hall_floor, memory_hall_total_waves])
+
+func setup_memory_hall_team2(team2_data: Array, initiator_id: String) -> void:
+	memory_hall_half = 2
+	memory_hall_wave = 1
+	memory_hall_total_waves = 2
+
+	allies.clear()
+	enemies.clear()
+	memosprites.clear()
+	sanguinia_summons.clear()
+	accumulated_av = 0.0
+	skill_points = 3
+	ult_queue.clear()
+	_is_processing_ult_queue = false
+	action_hit_enemies.clear()
+	dark_seal_holder = null
+	arya_active = false
+	arya_remaining = 0.0
+
+	for member in team2_data:
+		var unit: CombatUnit = _create_ally_by_id(member.get("id", ""), int(member.get("eidolon", 0)))
+		if unit:
+			unit.slot_index = allies.size()
+			unit.set_meta("light_cone_id", member.get("light_cone", ""))
+			var relics_data: Dictionary = member.get("relics", {})
+			_apply_relic_effects(unit, relics_data)
+			allies.append(unit)
+
+	for ally in allies:
+		_apply_ally_traces_and_cones(ally)
+
+	_apply_faction_synergies()
+
+	enemies = MemoryHallManager.get_wave_enemies(4, 1, 2)
+
+	MemoryHallManager.apply_turbulence(self)
+
+	var eff_init: String = initiator_id if not initiator_id.is_empty() else (allies[0].id if not allies.is_empty() else "")
+	_apply_all_techniques(eff_init)
+
+	log_message("⚔ Отряд 2 вступает в бой! Волна 1/2. Доступно циклов: %d" % maxi(0, 28 - memory_hall_half1_spent_cycles))
+
+	phase = Phase.RUNNING
+	enemies_reshuffled.emit()
+	action_order_changed.emit()
+	if not allies.is_empty():
+		turn_started.emit(allies[0])
+	_advance_to_next_turn()
+
+func _apply_faction_synergies() -> void:
+	var faction_counts := { "doomed": 0, "chaos": 0, "empyreans": 0, "academy": 0, "console": 0, "antimatter": 0, "sky_guardians": 0, "radiance": 0 }
+	for ally in allies:
+		for f_id in FactionSystem.FACTIONS:
+			if ally.id in FactionSystem.FACTIONS[f_id].members:
+				if not faction_counts.has(f_id):
+					faction_counts[f_id] = 0
+				faction_counts[f_id] += 1
+				
+	set_meta("active_factions", faction_counts)
+
+	# 1. ОБРЕЧЁННЫЕ [2 / 3 / 4]
+	var doomed_count: int = faction_counts["doomed"]
+	var doomed_crit := 0.0
+	if doomed_count == 2:
+		doomed_crit = 0.15
+	elif doomed_count >= 3:
+		doomed_crit = 0.30
+		
+	if doomed_crit > 0.0:
+		for ally in allies:
+			ally.stats.crit_rate += doomed_crit
+			ally.set_meta("faction_crit_bonus", doomed_crit)
+			
+	if doomed_count >= 4:
+		for ally in allies:
+			if ally.id in FactionSystem.FACTIONS["doomed"].members:
+				ally.energy = ally.max_energy
+				log_message("Обречённые [4]: Сверхспособность %s полностью заряжена!" % ally.display_name)
+
+	# 2. РАССВЕТ ХАОСА [2 / 4]
+	var chaos_count: int = faction_counts["chaos"]
+	if chaos_count >= 2:
+		for ally in allies:
+			if ally.id in FactionSystem.FACTIONS["chaos"].members:
+				ally.set_meta("faction_chaos_atk_pct", 0.15)
+				ally.set_meta("faction_chaos_hp_pct", 0.15)
+				ally.set_meta("faction_chaos_atk_hp", true)
+				recalculate_unit_max_hp(ally)
+				
+	if chaos_count >= 4:
+		for ally in allies:
+			if ally.id in FactionSystem.FACTIONS["chaos"].members:
+				ally.advance_action(50.0) 
+				log_message("Рассвет Хаоса [4]: действие %s продвинуто на 50%%." % ally.display_name)
+
+	# 3. ЭМПИРЕЙЦЫ [2 / 4]
+	var empyreans_count: int = faction_counts["empyreans"]
+	if empyreans_count >= 2:
+		for ally in allies:
+			if ally.id in FactionSystem.FACTIONS["empyreans"].members:
+				ally.set_meta("faction_empyrean_atk_pct", 0.30)
+				ally.set_meta("faction_empyrean_atk", true)
+				
+	if empyreans_count >= 4:
+		for ally in allies:
+			if ally.id in FactionSystem.FACTIONS["empyreans"].members:
+				ally.set_meta("faction_empyrean_crit_turns", 4)
+				ally.set_meta("faction_original_crit_rate", ally.stats.crit_rate)
+				ally.stats.crit_rate = 1.0
+
+	# 4. АКАДЕМИЯ [1 / 2 / 3]
+	var academy_count: int = faction_counts["academy"]
+	if academy_count >= 1:
+		skill_points = mini(skill_points + 1, CombatConstants.MAX_SKILL_POINTS)
+		skill_points_changed.emit(skill_points)
+		log_message("Академия [1]: получено +1 ОН на старте боя.")
+		
+	if academy_count >= 2:
+		for ally in allies:
+			ally.add_speed_modifier(0.08, 0.0)
+			ally.set_meta("faction_academy_spd", true)
+	
+	# 5. КОНСОЛЬ [2 / 4]
+	var console_count: int = faction_counts["console"]
+	if console_count >= 2:
+		for ally in allies:
+			if ally.id in FactionSystem.FACTIONS["console"].members:
+				ally.add_speed_modifier(0.10, 0.0)
+				ally.set_meta("faction_console_spd", true)
+				log_message("Консоль [2]: Скорость %s повышена на +10%%." % ally.display_name)
+				
+	if console_count >= 4:
+		for ally in allies:
+			if ally.id in FactionSystem.FACTIONS["console"].members:
+				ally.set_meta("faction_console_full_access", true)
+				log_message("Консоль [4]: Полный доступ активирован для %s!" % ally.display_name)
+		set_console_vectors(get_console_vectors() + 15)
+		
+	# 6. АНТИМАТЕРИЯ [1 / 2 / 3 / 4]
+	var antimatter_count: int = faction_counts.get("antimatter", 0)
+	if antimatter_count >= 1:
+		add_xaeroh(20)
+		log_message("🌌 Антиматерия [1]: Активирован счётчик Xaeroh (+20 ед. на старте).")
+		
+	# 7. ХРАНИТЕЛИ НЕБЕС [1 / 2 / 4]
+	var sg_count: int = faction_counts.get("sky_guardians", 0)
+	if sg_count >= 1:
+		init_moon_maiden()
+		log_message("🌙 Хранители небес [%d]: Призвана Дева луны (базовая скорость 60) на шкале действий!" % sg_count)
+		
+	# 8. СВЕЧЕНИЕ [2 / 3]
+	var rad_count: int = faction_counts.get("radiance", 0)
+	if rad_count >= 2:
+		log_message("✨ Свечение [%d]: Активирован бонус Звёздного проводника!" % rad_count)

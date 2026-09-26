@@ -126,6 +126,7 @@ static func trigger_talent_fua(unit: CombatUnit, target: CombatUnit, bm: BattleM
 	if not force:
 		unit.set_meta("joan_coffee_liqueur_stacks", stacks - 1)
 		bm.log_message("☕ Жоан тратит 1 заряд ликёра! Остаток: %d/2" % (stacks - 1))
+		bm.unit_updated.emit(unit)
 		
 	bm.start_attack_action()
 	bm.advance_fua_sequence()

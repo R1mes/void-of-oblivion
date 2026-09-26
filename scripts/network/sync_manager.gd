@@ -68,9 +68,17 @@ func sync_from_cloud() -> void:
 
 			var lc_list = cloud_data.get("unlocked_light_cones", [])
 			if lc_list is Array and not lc_list.is_empty():
+				var cloud_counts: Dictionary = {}
 				for lc in lc_list:
-					if not str(lc) in TeamConfig.unlocked_light_cones:
-						TeamConfig.unlocked_light_cones.append(str(lc))
+					var lc_str := str(lc)
+					cloud_counts[lc_str] = int(cloud_counts.get(lc_str, 0)) + 1
+				var local_counts: Dictionary = {}
+				for lc in TeamConfig.unlocked_light_cones:
+					local_counts[lc] = int(local_counts.get(lc, 0)) + 1
+				for lc_id in cloud_counts:
+					var diff: int = int(cloud_counts[lc_id]) - int(local_counts.get(lc_id, 0))
+					for i in range(maxi(0, diff)):
+						TeamConfig.unlocked_light_cones.append(lc_id)
 
 			var lvls = cloud_data.get("completed_levels", [])
 			if lvls is Array and not lvls.is_empty():

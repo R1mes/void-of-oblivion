@@ -6,6 +6,17 @@ const BASE_TGH_REDUCTION := 30.0
 # Откройте toughness_system.gd и обновите первую функцию класса:
 # === ЗАМЕНИТЬ МЕТОД apply_weakness_hit В TOUGHNESS_SYSTEM.GD ===
 # === ОБНОВЛЕННЫЙ МЕТОД В TOUGHNESS_SYSTEM.GD ===
+static func get_effective_hit_element(attacker: CombatUnit) -> int:
+	if attacker == null:
+		return CombatConstants.Element.PHYSICAL
+	if attacker.has_meta("current_attack_element"):
+		return int(attacker.get_meta("current_attack_element"))
+	if attacker.id == "lenskaya_antimatter":
+		var stance: String = String(attacker.get_meta("lenskaya_am_stance", "none"))
+		if not stance in ["keeper", "warrior"] and attacker.eidolon < 6:
+			return CombatConstants.Element.PHYSICAL
+	return attacker.element
+
 static func apply_weakness_hit(
 	attacker: CombatUnit,
 	target: CombatUnit,
@@ -23,7 +34,8 @@ static func apply_weakness_hit(
 		return false
 	if target.toughness <= 0.0:
 		return false
-	if not ignore_weakness and not CombatConstants.element_matches_weakness(attacker.element, target.weaknesses):
+	var hit_elem: int = get_effective_hit_element(attacker)
+	if not ignore_weakness and not CombatConstants.element_matches_weakness(hit_elem, target.weaknesses):
 		return false
 
 	# Учитываем множитель конкретного умения при срезе стойкости
@@ -31,17 +43,20 @@ static func apply_weakness_hit(
 	var reduction: float = BASE_TGH_REDUCTION * (1.0 + attacker.stats.weakness_efficiency) * multiplier
 	if target.has_meta("lenskaya_radiance_enemy_turns") and int(target.get_meta("lenskaya_radiance_enemy_turns", 0)) > 0:
 		reduction *= 1.50
+	if battle != null and battle.battle_mode == "dungeon_rebellion_ruins" and (attacker is Memosprite or bool(attacker.get_meta("is_memosprite", false))):
+		reduction *= 2.0
 	
 	target.toughness = maxf(target.toughness - reduction, 0.0)
 
 	if target.toughness <= 0.0:
-		_trigger_break(attacker, target, battle)
+		_trigger_break(attacker, target, battle, hit_elem)
 		return true
 	return false
 
 # === ЗАМЕНИТЬ МЕТОД _trigger_break В TOUGHNESS_SYSTEM.GD ===
-static func _trigger_break(attacker: CombatUnit, target: CombatUnit, battle: BattleManager) -> void:
-	var break_dmg: float = DamageCalculator.calc_break_damage(attacker, target)
+static func _trigger_break(attacker: CombatUnit, target: CombatUnit, battle: BattleManager, break_elem: int = -1) -> void:
+	var eff_elem: int = break_elem if break_elem != -1 else get_effective_hit_element(attacker)
+	var break_dmg: float = DamageCalculator.calc_break_damage(attacker, target, 1.0, eff_elem)
 
 	# Бонус фракции Свечение (Ленская • Хранитель небес): урон пробития команды +30% (или +45% при 3+)
 	if battle != null and battle.get_radiance_count() >= 2 and battle.get_chosen_star_guide() == "lenskaya_sky_guardian":
@@ -101,7 +116,7 @@ static func _trigger_break(attacker: CombatUnit, target: CombatUnit, battle: Bat
 	if target.statuses.suppression_stacks > 0:
 		target.delay_action(CombatConstants.SUPPRESSION_BREAK_EXTRA_DELAY * 100.0)
 
-	_apply_break_status(attacker.element, target, battle, attacker)
+	_apply_break_status(eff_elem, target, battle, attacker)
 	if battle.has_method("on_enemy_toughness_broken"):
 		battle.on_enemy_toughness_broken(target)
 	if battle.has_method("on_debuff_applied_to_enemy") and attacker != null and attacker.is_ally:

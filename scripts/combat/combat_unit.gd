@@ -92,6 +92,9 @@ func gain_energy(amount: float) -> void:
 	energy = minf(energy + amount, max_energy)
 	energy_changed.emit(self)
 
+func add_energy(amount: float) -> void:
+	gain_energy(amount)
+
 func spend_energy(amount: float) -> bool:
 	if energy < amount:
 		return false
@@ -132,6 +135,9 @@ func get_effective_be() -> float:
 		be += float(get_meta("lenskaya_ult_be_buff", 0.40))
 	if has_meta("lenskaya_trace2_be_turns") and int(get_meta("lenskaya_trace2_be_turns", 0)) > 0:
 		be += float(get_meta("lenskaya_trace2_be_buff", 0.40))
+	if has_meta("has_set_ruins_hq"):
+		if stats.get_effective_spd() >= 145.0:
+			be += 0.20
 	return be
 
 func add_speed_modifier(pct: float, flat: float) -> void:

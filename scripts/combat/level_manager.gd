@@ -3,6 +3,10 @@ extends RefCounted
 
 ## Модуль управления Уровнями, Обучением и Сюжетными Встречами.
 
+const AntimatterSlave = preload("res://scripts/enemies/antimatter_slave.gd")
+const Insurgent = preload("res://scripts/enemies/insurgent.gd")
+const KyleRebelLeader = preload("res://scripts/enemies/kyle_rebel_leader.gd")
+
 static var current_level_id: String = ""
 static var is_tutorial: bool = false
 static var tut_step: int = 0
@@ -263,6 +267,45 @@ static func setup_level_battle(level_id: String, bm: BattleManager) -> void:
 					cleaner.stats.atk = 1500.0 * atk_scale
 					bm.enemies.append(cleaner)
 				bm.log_message("🖥 Сервер | Аномалия «Глубины реальности»: Скорость отряда +15%, подрыв DoT восстанавливает 5 энергии и 1 Вектор!")
+
+			"dungeon_rebellion_ruins":
+				var elite: CombatUnit = Insurgent.create_unit()
+				elite.display_name = "Восставший"
+				elite.stats.max_hp = 225000.0 * hp_scale
+				elite.stats.hp = elite.stats.max_hp
+				elite.stats.atk = 1900.0 * atk_scale
+				bm.enemies.append(elite)
+
+				for i in 2:
+					var slave: CombatUnit = AntimatterSlave.create_unit(i + 1)
+					slave.display_name = "Раб Антиматерии %d" % (i + 1)
+					slave.stats.max_hp = 30000.0 * hp_scale
+					slave.stats.hp = slave.stats.max_hp
+					slave.stats.atk = 1200.0 * atk_scale
+					bm.enemies.append(slave)
+
+				for ally in bm.allies:
+					ally.stats.break_effect += 0.40
+				bm.log_message("🏛 Руины восстания | Аномалия «Разлом сингулярности»: Эффект пробития отряда +40%! Атаки Духов Памяти истощают стойкость на 100% эффективнее, а пробитие уязвимости восстанавливает 10 энергии и продвигает действие на 15%!")
+
+			"planar_rebellion_hq":
+				var boss: CombatUnit = KyleRebelLeader.create_unit()
+				boss.display_name = "Кайл • Лидер восстания"
+				boss.stats.max_hp = 350000.0 * hp_scale
+				boss.stats.hp = boss.stats.max_hp
+				boss.stats.atk = 2400.0 * atk_scale
+				bm.enemies.append(boss)
+
+				var elite: CombatUnit = Insurgent.create_unit(1)
+				elite.display_name = "Восставший"
+				elite.stats.max_hp = 180000.0 * hp_scale
+				elite.stats.hp = elite.stats.max_hp
+				elite.stats.atk = 1800.0 * atk_scale
+				bm.enemies.append(elite)
+
+				for ally in bm.allies:
+					ally.stats.crit_dmg += 0.30
+				bm.log_message("🚩 Оплот восстания | Аномалия «Эхо революции»: Крит. урон отряда +30%! Пока на поле есть Дух Памяти, весь отряд игнорирует 20% защиты, а пробитие уязвимости наносит дополнительный урон в 100% базового пробития!")
 
 			_:
 				var elite_def: CombatUnit = VoidElite.create_unit()

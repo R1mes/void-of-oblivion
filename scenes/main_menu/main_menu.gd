@@ -2,10 +2,14 @@ extends Control
 
 const LenskayaAntimatterAbilities = preload("res://scripts/characters/lenskaya_antimatter.gd")
 const VelzebulAbilities = preload("res://scripts/characters/velzebul.gd")
+const MarinaSkyGuardianAbilities = preload("res://scripts/characters/marina_sky_guardian.gd")
+const LenskayaSkyGuardianAbilities = preload("res://scripts/characters/lenskaya_sky_guardian.gd")
+const RimesAscensionAbilities = preload("res://scripts/characters/rimes_ascension.gd")
+const SanguiniaAbilities = preload("res://scripts/characters/sanguinia.gd")
+const MemoryHallManager = preload("res://scripts/combat/memory_hall_manager.gd")
 
 # Цены персонажей в магазине
 const SHOP_PRICES := {
-	"velzebul": 1850,
 	"marina": 1850,
 	"pusenkov": 1850,
 	"milena": 1850,
@@ -308,7 +312,11 @@ const RELIC_DESCRIPTIONS := {
 	"other_side_universe": "🌌 [2 ч]: Крит. шанс +12%. Если КШ >= 70%, урон базовой атаки и навыков повышается на +20%.",
 	"irkutsk": "🧊 [2 ч]: Бонус-атака союзника дает стак Подвига (+5% урона FUA). При 5 стаках КУ +25%.",
 	"server_depths": "🖥 [2 ч]: Скорость +6%. При Навыке E скорость +12% на 2 хода. Если Навык E Бинарный, враги получают на 10% больше Бинарного урона на 2 хода (стакается от разных источников).",
-	"inverted_depths": "🌀 [2 ч]: Сила атаки +12%. Если не в 1-м слоте и фракция совпадает с 1-м персонажем — наносимый урон обоих повышается на +10%."
+	"inverted_depths": "🌀 [2 ч]: Сила атаки +12%. Если не в 1-м слоте и фракция совпадает с 1-м персонажем — наносимый урон обоих повышается на +10%.",
+	"dark_side_defector": "🎯 [2 ч]: Эффект пробития +16%.\n🎯 [4 ч]: При ЭП >= 130% урон пробития игнорирует 10% защиты; при ЭП >= 180% Суперпробитие игнорирует ещё 15% защиты.",
+	"bloom_defender": "🌸 [2 ч]: Сила атаки +12%. При наличии Духа Памяти скорость владельца +6%.\n🌸 [4 ч]: Атака Духа Памяти дает +30% Крит. урона владельцу и Духу Памяти на 2 хода.",
+	"risen_krasnodar": "💥 [2 ч]: Крит. урон +16%. Если на поле есть призванные существа или Дух Памяти, Крит. урон владельца +32%.",
+	"ruins_hq": "🏛 [2 ч]: Эффект пробития +16%. Если Скорость >= 145, Эффект пробития дополнительно повышается на +20%."
 }
 
 # UI Контейнеры экранов
@@ -324,6 +332,7 @@ var database_screen: VBoxContainer
 var gacha_screen: VBoxContainer
 var shine_label: Label
 var gacha_info_label: Label
+var _menu_bgm_player: AudioStreamPlayer = null
 
 # Элементы интерфейса
 var coins_label: Label
@@ -340,6 +349,7 @@ var build_editor_panel: VBoxContainer
 var build_char_title: Label
 var opt_eidolon: OptionButton
 var opt_light_cone: OptionButton
+var btn_choose_light_cone: Button
 var opt_cavern_type: OptionButton
 var opt_cavern_set1: OptionButton
 var opt_cavern_set2: OptionButton
@@ -386,7 +396,7 @@ var level_team_setup_screen: VBoxContainer
 var selected_level_for_battle: int = 6
 var _level_team: Array = [null, null, null, null]
 var level_team_slots_container: HBoxContainer
-var level_team_roster_container: GridContainer
+var level_team_roster_container: BoxContainer
 var level_initiator_option: OptionButton
 var level_setup_title: Label
 
@@ -425,7 +435,7 @@ var btn_menu_gacha: Button
 
 # Элементы обновленного интерфейса Хаба
 var hub_overview_panel: PanelContainer
-var hub_overview_team_vbox: VBoxContainer
+var hub_overview_team_vbox: BoxContainer
 var hub_overview_progress_lbl: Label
 var hub_coins_pill_label: Label
 var hub_shine_pill_label: Label
@@ -458,6 +468,27 @@ var tut_slot_btn_head: Button = null
 var tut_slot_btn_hands: Button = null
 var tut_slot_btn_upgrade_head: Button = null
 var tut_dismantle_btn: Button = null
+
+# Элементы Зала воспоминаний (Memory Hall)
+var btn_menu_memory_hall: Button = null
+var _memory_hall_shimmer_tween: Tween = null
+var memory_hall_screen: VBoxContainer = null
+var memory_hall_cards_container: GridContainer = null
+var memory_hall_status_label: Label = null
+var memory_hall_stars_label: Label = null
+var memory_hall_rewards_container: HBoxContainer = null
+var selected_memory_hall_floor: int = 0
+
+# Двухкомандная подготовка для 4-го этажа
+var memory_hall_team_setup_screen: VBoxContainer = null
+var mh_team1_slots_container: HBoxContainer = null
+var mh_team2_slots_container: HBoxContainer = null
+var mh_roster_container: GridContainer = null
+var mh_init_opt_1: OptionButton = null
+var mh_init_opt_2: OptionButton = null
+var _mh_team_1: Array = [null, null, null, null]
+var _mh_team_2: Array = [null, null, null, null]
+var _mh_active_target_team: int = 1
 
 # Космический фон для главного меню игры
 class CosmicMenuBackground extends Control:
@@ -666,6 +697,9 @@ func _ready() -> void:
 		_init_menu_tutorial_ui()
 		_show_screen("levels")
 		_run_menu_tut_step(1)
+	elif TeamConfig.battle_mode.begins_with("memory_hall_"):
+		_refresh_memory_hall_screen()
+		_show_screen("memory_hall")
 	elif TeamConfig.battle_mode.begins_with("level_"):
 		_show_screen("levels")
 	else:
@@ -858,9 +892,16 @@ func _build_ui() -> void:
 			_run_menu_tut_step(10)
 	)
 
+	# 8. Зал воспоминаний (Memory Hall)
+	btn_menu_memory_hall = _create_hub_memory_hall_card(hub_grid)
+	btn_menu_memory_hall.pressed.connect(func():
+		_refresh_memory_hall_screen()
+		_show_screen("memory_hall")
+	)
+
 	# Правая инфо-панель (Обзор отряда и профиля)
 	hub_overview_panel = PanelContainer.new()
-	hub_overview_panel.custom_minimum_size = Vector2(380, 410)
+	hub_overview_panel.custom_minimum_size = Vector2(480, 410)
 	hub_overview_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var op_sb := StyleBoxFlat.new()
 	op_sb.bg_color = Color(0.08, 0.10, 0.15, 0.85)
@@ -907,6 +948,8 @@ func _build_ui() -> void:
 	_build_database_screen()
 	_build_level_team_setup_screen()
 	_build_relic_farming_screen()
+	_build_memory_hall_screen()
+	_build_memory_hall_team_setup_screen()
 
 func _create_hub_card(btn_id: String, icon_text: String, title_text: String, subtitle_text: String, parent: Control, min_size: Vector2 = Vector2(230, 126)) -> Button:
 	var btn := Button.new()
@@ -1062,8 +1105,9 @@ func _build_hub_overview_content() -> void:
 	top_hdr.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
 	vbox.add_child(top_hdr)
 
-	hub_overview_team_vbox = VBoxContainer.new()
-	hub_overview_team_vbox.add_theme_constant_override("separation", 8)
+	hub_overview_team_vbox = HBoxContainer.new()
+	hub_overview_team_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hub_overview_team_vbox.add_theme_constant_override("separation", 10)
 	vbox.add_child(hub_overview_team_vbox)
 
 	var div2 := HSeparator.new()
@@ -1089,6 +1133,7 @@ func _refresh_hub_overview() -> void:
 	if not hub_overview_team_vbox:
 		return
 	for c in hub_overview_team_vbox.get_children():
+		hub_overview_team_vbox.remove_child(c)
 		c.queue_free()
 
 	for slot_idx in range(4):
@@ -1097,28 +1142,115 @@ func _refresh_hub_overview() -> void:
 			var member_data = TeamConfig.team_members[slot_idx]
 			if member_data is Dictionary:
 				char_id = String(member_data.get("id", ""))
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 10)
 
-		var slot_badge := Label.new()
-		slot_badge.text = "[%d]" % (slot_idx + 1)
-		slot_badge.add_theme_color_override("font_color", Color(0.6, 0.7, 0.8))
-		slot_badge.add_theme_font_size_override("font_size", 14)
-		row.add_child(slot_badge)
+		var card := PanelContainer.new()
+		card.custom_minimum_size = Vector2(104, 148)
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.clip_contents = true
 
-		var name_lbl := Label.new()
+		var card_sb := StyleBoxFlat.new()
+		card_sb.set_corner_radius_all(8)
+		card_sb.set_content_margin_all(8)
+
 		if char_id != "":
 			var unit := _create_dummy_unit_for_db(char_id)
-			var elem_lbl: String = CombatConstants.get_element_label(unit.element) if unit else ""
+			var elem: int = unit.element if unit else 0
+			var elem_col: Color = CombatConstants.get_element_color(elem)
+			var elem_lbl: String = CombatConstants.get_element_label(elem)
 			var d_name: String = unit.display_name if unit else char_id
-			name_lbl.text = "%s  •  %s" % [d_name, elem_lbl]
-			name_lbl.add_theme_color_override("font_color", CombatConstants.get_element_color(unit.element) if unit else Color(0.95, 0.95, 1.0))
+			var build := TeamConfig.get_saved_build(char_id)
+			var e_lvl: int = int(build.get("eidolon", 0))
+
+			card_sb.bg_color = Color(0.10, 0.12, 0.18, 0.88)
+			card_sb.border_color = Color(elem_col.r, elem_col.g, elem_col.b, 0.65)
+			card_sb.set_border_width_all(2)
+			card.add_theme_stylebox_override("panel", card_sb)
+
+			# Сплеш-арт на заднем фоне карточки слота
+			var splash_tex: Texture2D = CharacterRegistry.get_character_splash(char_id)
+			if splash_tex != null:
+				var splash_rect := TextureRect.new()
+				splash_rect.name = "HubSlotSplashBG"
+				splash_rect.texture = splash_tex
+				splash_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				splash_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+				splash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				splash_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+				splash_rect.modulate = Color(0.40, 0.40, 0.46, 0.45)
+				splash_rect.z_index = 0
+				card.add_child(splash_rect)
+
+			var card_vbox := VBoxContainer.new()
+			card_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			card_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+			card_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			card_vbox.add_theme_constant_override("separation", 4)
+			card_vbox.z_index = 1
+			card.add_child(card_vbox)
+
+			var top_row := HBoxContainer.new()
+			top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			card_vbox.add_child(top_row)
+
+			var slot_badge := Label.new()
+			slot_badge.text = "[%d]" % (slot_idx + 1)
+			slot_badge.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
+			slot_badge.add_theme_font_size_override("font_size", 12)
+			top_row.add_child(slot_badge)
+
+			var sp := Control.new()
+			sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			top_row.add_child(sp)
+
+			var elem_badge := Label.new()
+			elem_badge.text = elem_lbl
+			elem_badge.add_theme_color_override("font_color", elem_col)
+			elem_badge.add_theme_font_size_override("font_size", 12)
+			top_row.add_child(elem_badge)
+
+			var name_lbl := Label.new()
+			name_lbl.text = d_name
+			name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			name_lbl.custom_minimum_size = Vector2(85, 0)
+			name_lbl.add_theme_font_size_override("font_size", 13)
+			card_vbox.add_child(name_lbl)
+
+			var e_lbl := Label.new()
+			e_lbl.text = "★ E%d" % e_lvl
+			e_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			e_lbl.add_theme_font_size_override("font_size", 11)
+			e_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+			card_vbox.add_child(e_lbl)
 		else:
-			name_lbl.text = "[Пустой слот]"
-			name_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
-		name_lbl.add_theme_font_size_override("font_size", 14)
-		row.add_child(name_lbl)
-		hub_overview_team_vbox.add_child(row)
+			card_sb.bg_color = Color(0.07, 0.08, 0.12, 0.50)
+			card_sb.border_color = Color(0.25, 0.30, 0.40, 0.40)
+			card_sb.set_border_width_all(1)
+			card.add_theme_stylebox_override("panel", card_sb)
+
+			var card_vbox := VBoxContainer.new()
+			card_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			card_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+			card_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			card_vbox.add_theme_constant_override("separation", 6)
+			card.add_child(card_vbox)
+
+			var slot_badge := Label.new()
+			slot_badge.text = "[%d]" % (slot_idx + 1)
+			slot_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			slot_badge.add_theme_color_override("font_color", Color(0.45, 0.5, 0.6))
+			slot_badge.add_theme_font_size_override("font_size", 12)
+			card_vbox.add_child(slot_badge)
+
+			var empty_lbl := Label.new()
+			empty_lbl.text = "[Пусто]"
+			empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			empty_lbl.add_theme_color_override("font_color", Color(0.40, 0.45, 0.55))
+			empty_lbl.add_theme_font_size_override("font_size", 12)
+			card_vbox.add_child(empty_lbl)
+
+		hub_overview_team_vbox.add_child(card)
 
 	if hub_overview_progress_lbl:
 		var completed: int = TeamConfig.completed_levels.size()
@@ -1146,6 +1278,10 @@ func _show_screen(screen_name: String) -> void:
 	level_team_setup_screen.visible = (screen_name == "level_team_setup")
 	if relic_farming_screen:
 		relic_farming_screen.visible = (screen_name == "relic_farming")
+	if memory_hall_screen:
+		memory_hall_screen.visible = (screen_name == "memory_hall")
+	if memory_hall_team_setup_screen:
+		memory_hall_team_setup_screen.visible = (screen_name == "memory_hall_team_setup")
 	
 	if screen_name == "gacha":
 		active_banner_idx = 0
@@ -1154,6 +1290,7 @@ func _show_screen(screen_name: String) -> void:
 		_refresh_gacha_ui()
 
 	if screen_name == "hub":
+		_refresh_memory_hall_card()
 		if btn_menu_relics:
 			var title_lbl: Label = btn_menu_relics.get_meta("card_title_lbl", null)
 			var icon_lbl: Label = btn_menu_relics.get_meta("card_icon_lbl", null)
@@ -1183,9 +1320,39 @@ func _show_screen(screen_name: String) -> void:
 		# Кнопка Уровней ВСЕГДА доступна в хабе вне обучения в меню!
 		if not is_menu_tutorial:
 			_set_hub_card_disabled(btn_menu_levels, false)
-		
 	_update_coins_display()
 	
+	# Управление фоновой музыкой меню: играет во всех разделах после "Начать игру", отключается на титульном экране ("main")
+	if screen_name == "main":
+		_stop_menu_bgm()
+	else:
+		_play_menu_bgm()
+
+func _setup_menu_bgm() -> void:
+	if _menu_bgm_player == null or not is_instance_valid(_menu_bgm_player):
+		_menu_bgm_player = AudioStreamPlayer.new()
+		_menu_bgm_player.name = "MenuBgmPlayer"
+		_menu_bgm_player.bus = "Master"
+		var stream: AudioStream = load("res://assets/audio/spellbound_dreamscape.mp3")
+		if stream is AudioStreamMP3:
+			stream.loop = true
+		_menu_bgm_player.stream = stream
+		_menu_bgm_player.volume_db = linear_to_db(0.75)
+		add_child(_menu_bgm_player)
+
+func _play_menu_bgm() -> void:
+	_setup_menu_bgm()
+	if is_instance_valid(_menu_bgm_player) and not _menu_bgm_player.playing and _menu_bgm_player.stream != null:
+		_menu_bgm_player.play()
+
+func _stop_menu_bgm() -> void:
+	if is_instance_valid(_menu_bgm_player) and _menu_bgm_player.playing:
+		_menu_bgm_player.stop()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE or what == NOTIFICATION_EXIT_TREE:
+		_stop_menu_bgm()
+
 func _update_coins_display() -> void:
 	var txt := "💰 Монеты: %d" % TeamConfig.coins
 	if hub_coins_pill_label:
@@ -1475,9 +1642,27 @@ func _select_char_for_database(char_id: String) -> void:
 	]
 	
 	if db_banner_panel:
+		db_banner_panel.clip_contents = true
 		var b_sb := db_banner_panel.get_theme_stylebox("panel") as StyleBoxFlat
 		if b_sb:
 			b_sb.border_color = _get_element_color(data.element)
+		var db_splash_bg: TextureRect = db_banner_panel.get_node_or_null("DbSplashBG") as TextureRect
+		var splash_tex: Texture2D = CharacterRegistry.get_character_splash(char_id)
+		if splash_tex != null:
+			if db_splash_bg == null:
+				db_splash_bg = TextureRect.new()
+				db_splash_bg.name = "DbSplashBG"
+				db_splash_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				db_splash_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+				db_splash_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				db_splash_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+				db_banner_panel.add_child(db_splash_bg)
+				db_banner_panel.move_child(db_splash_bg, 0)
+			db_splash_bg.texture = splash_tex
+			db_splash_bg.modulate = Color(0.35, 0.35, 0.40, 0.28)
+			db_splash_bg.visible = true
+		elif db_splash_bg != null:
+			db_splash_bg.visible = false
 	
 	db_bio_label.text = "« %s »" % data.description
 
@@ -1527,12 +1712,19 @@ func _create_dummy_unit_for_db(char_id: String) -> CombatUnit:
 		"dotseva_crimson_tears": return DotsevaCrimsonTearsAbilities.create_unit(0)
 		"lenskaya_antimatter": return LenskayaAntimatterAbilities.create_unit(0)
 		"velzebul": return VelzebulAbilities.create_unit(0)
+		"marina_sky_guardian": return MarinaSkyGuardianAbilities.create_unit(0)
+		"lenskaya_sky_guardian": return LenskayaSkyGuardianAbilities.create_unit(0)
+		"rimes_ascension": return RimesAscensionAbilities.create_unit(0)
+		"sanguinia": return SanguiniaAbilities.create_unit(0)
 		
 	return null
 
 # База знаний рекомендаций для персонажей
 # База знаний и рекомендаций для всех персонажей в игре
 func _get_db_recommendation(char_id: String, type: String) -> String:
+	var cr_rec := CharacterRegistry.get_recommendation(char_id, type)
+	if not cr_rec.is_empty():
+		return cr_rec
 	match char_id:
 		"vika":
 			match type:
@@ -1608,7 +1800,7 @@ func _get_db_recommendation(char_id: String, type: String) -> String:
 				"tip": return "💡 [i]Нааме критически нужен Шанс Попадания Эффектов (ШПЭ), поэтому в реликвиях обязательно берите Тело на ШПЭ![/i]"
 		"lenskaya":
 			match type:
-				"allies": return "• [color=gold]Жоан[/color], [color=gold]Доцева[/color], [color=gold]Джефф[/color], [color=gold]Валраморс[/color], [color=gold]Данилл[/color], [color=gold]Даша[/color], [color=gold]Мусиенко[/color]"
+				"allies": return "• [color=gold]Сангиния Ял[/color], [color=gold]Жоан[/color], [color=gold]Доцева[/color], [color=gold]Джефф[/color], [color=gold]Валраморс[/color], [color=gold]Данилл[/color], [color=gold]Даша[/color], [color=gold]Мусиенко[/color]"
 				"cones": return "• [color=cyan]План по спасению мира[/color], [color=cyan]Пробуждение зверя[/color], [color=cyan]Апокалипсис[/color]"
 				"relics": return "• [color=lightgreen]Галилеянин[/color], [color=lightgreen]Погрязший в руинах Иркутск[/color], [color=lightgreen]Жертва долгого симбиоза[/color]"
 				"tip": return "💡 [i]Ленской нужны союзники с Бонус-атаками для быстрого накопления стаков «Манипуляции»![/i]"
@@ -1750,10 +1942,12 @@ const BANNERS := [
 	{"id": "why_did_you_remember_me", "type": "weapon", "title": "⚔ Почему ты вспомнила меня? (5★ Конус)"},
 	{"id": "behind_the_curtains", "type": "weapon", "title": "🎭 Выход из-за кулис (5★ Конус)"},
 	{"id": "i_will_become_god", "type": "weapon", "title": "👑 Я стану богом (5★ Конус)"},
-	{"id": "let_past_stay_behind", "type": "weapon", "title": "⚔ Пусть прошлое остаётся позади (5★ Конус)"}
+	{"id": "let_past_stay_behind", "type": "weapon", "title": "⚔ Пусть прошлое остаётся позади (5★ Конус)"},
+	{"id": "last_summer", "type": "weapon", "title": "🌸 Последнее лето (5★ Конус)"},
+	{"id": "alone_again", "type": "weapon", "title": "🕊️ И вновь я один (5★ Конус)"}
 ]
 
-const POOL_4LC := ["warm_embraces", "echoes_of_the_past", "forget_past_self", "better_world", "medical_smell", "what_is_reality", "new_life_start", "moon_dance", "quarantine", "first_minutes_of_war"]
+const POOL_4LC := ["warm_embraces", "echoes_of_the_past", "forget_past_self", "better_world", "medical_smell", "what_is_reality", "new_life_start", "moon_dance", "quarantine", "first_minutes_of_war", "farewell_before_awakening"]
 
 var active_banner_idx: int = 0
 var banner_select_option: OptionButton
@@ -1816,8 +2010,22 @@ func _build_characters_screen() -> void:
 	build_editor_panel.add_child(_create_form_row("Уровень Эйдолона:", opt_eidolon))
 
 	opt_light_cone = OptionButton.new()
+	btn_choose_light_cone = Button.new()
+	btn_choose_light_cone.text = "🗡 Выбрать Световой Конус..."
+	btn_choose_light_cone.custom_minimum_size = Vector2(320, 36)
+	btn_choose_light_cone.add_theme_font_size_override("font_size", 14)
+	btn_choose_light_cone.pressed.connect(func():
+		_open_light_cone_selection_dialog(selected_char_for_build)
+	)
+
+	var lc_row_hbox := HBoxContainer.new()
+	lc_row_hbox.add_theme_constant_override("separation", 10)
+	lc_row_hbox.add_child(btn_choose_light_cone)
+	opt_light_cone.visible = false
+	lc_row_hbox.add_child(opt_light_cone)
+
 	desc_light_cone = _create_info_box()
-	build_editor_panel.add_child(_create_form_row("Световой Конус:", opt_light_cone, desc_light_cone))
+	build_editor_panel.add_child(_create_form_row("Световой Конус:", lc_row_hbox, desc_light_cone))
 
 	var sep_relics := HSeparator.new()
 	build_editor_panel.add_child(sep_relics)
@@ -1878,9 +2086,19 @@ func _build_characters_screen() -> void:
 	sets_vbox.add_child(char_active_sets_label)
 
 	opt_light_cone.item_selected.connect(func(_idx):
+		var selected_id := String(opt_light_cone.get_item_metadata(opt_light_cone.selected))
+		if not selected_id.is_empty():
+			if not TeamConfig.can_equip_light_cone(selected_char_for_build, selected_id):
+				var eq := TeamConfig.get_light_cone_equipped_characters(selected_id)
+				if not eq.is_empty():
+					_show_lc_transfer_confirm(selected_char_for_build, selected_id, eq, func():
+						_update_lc_description()
+						if is_menu_tutorial and menu_tut_step == 3 and selected_id == "apocalypse":
+							_run_menu_tut_step(4)
+					)
+					return
 		_update_lc_description()
 		if is_menu_tutorial and menu_tut_step == 3:
-			var selected_id := String(opt_light_cone.get_item_metadata(opt_light_cone.selected))
 			if selected_id == "apocalypse":
 				_run_menu_tut_step(4)
 	)
@@ -1956,7 +2174,9 @@ func _fill_cavern_sets_option(opt: OptionButton) -> void:
 		{"name": "Принявший грех глава", "id": "accepted_sin", "req_level": 11},
 		{"name": "Исследователь будущего", "id": "bereft_future", "req_level": 11},
 		{"name": "След из повреждённых строк", "id": "damaged_strings", "req_level": 11},
-		{"name": "Дитя умирающих звёзд", "id": "dying_stars_child", "req_level": 11}
+		{"name": "Дитя умирающих звёзд", "id": "dying_stars_child", "req_level": 11},
+		{"name": "Перебежщик тёмной стороны", "id": "dark_side_defector", "req_level": 11},
+		{"name": "Защитница цветущей земли", "id": "bloom_defender", "req_level": 11}
 	]
 	opt.clear()
 	var idx := 0
@@ -1980,6 +2200,18 @@ func _update_cavern_visibility() -> void:
 
 func _update_lc_description() -> void:
 	var lc_id: String = String(opt_light_cone.get_item_metadata(opt_light_cone.selected))
+	if btn_choose_light_cone and is_instance_valid(btn_choose_light_cone):
+		if lc_id.is_empty():
+			btn_choose_light_cone.text = "🗡 [Без оружия]  [Выбрать конус ▾]"
+			btn_choose_light_cone.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+		else:
+			var cone_info: Dictionary = LightConeRegistry.get_cone(lc_id)
+			var c_name: String = cone_info.get("name", lc_id)
+			var c_rarity: int = int(cone_info.get("rarity", 3))
+			var col: Color = Color(1.0, 0.85, 0.3) if c_rarity == 5 else (Color(0.8, 0.5, 1.0) if c_rarity == 4 else Color(0.4, 0.7, 1.0))
+			btn_choose_light_cone.text = "🗡 %s (%d★)  [Сменить ▾]" % [c_name, c_rarity]
+			btn_choose_light_cone.add_theme_color_override("font_color", col)
+
 	if lc_id.is_empty():
 		desc_light_cone.text = "[color=gray]Оружие не выбрано.[/color]"
 		return
@@ -1991,6 +2223,367 @@ func _update_lc_description() -> void:
 			cone.get("rarity", 3),
 			cone.get("desc", "Описание отсутствует.")
 		]
+
+func _open_light_cone_selection_dialog(char_id: String) -> void:
+	if char_id.is_empty():
+		return
+	var data := CharacterRegistry.get_character(char_id)
+	if data.is_empty():
+		return
+
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.85)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 50
+	add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(760, 620)
+	center.add_child(panel)
+
+	var panel_sb := StyleBoxFlat.new()
+	panel_sb.bg_color = Color(0.09, 0.11, 0.16, 0.98)
+	panel_sb.border_color = Color(0.35, 0.45, 0.65, 0.9)
+	panel_sb.set_border_width_all(2)
+	panel_sb.set_corner_radius_all(14)
+	panel_sb.content_margin_left = 22
+	panel_sb.content_margin_right = 22
+	panel_sb.content_margin_top = 18
+	panel_sb.content_margin_bottom = 18
+	panel.add_theme_stylebox_override("panel", panel_sb)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
+	panel.add_child(vbox)
+
+	# Header
+	var header_hbox := HBoxContainer.new()
+	vbox.add_child(header_hbox)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "🗡 Выбор Светового Конуса: %s (%s)" % [data.name, CharacterRegistry.get_path_name(data.path)]
+	title_lbl.add_theme_font_size_override("font_size", 20)
+	title_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_hbox.add_child(title_lbl)
+
+	var close_btn := Button.new()
+	close_btn.text = "✖"
+	close_btn.custom_minimum_size = Vector2(36, 36)
+	close_btn.pressed.connect(func(): overlay.queue_free())
+	header_hbox.add_child(close_btn)
+
+	var subtitle_lbl := Label.new()
+	subtitle_lbl.text = "3★ конусы неограничены. 4★ и 5★ требуют свободных копий или переноса с другого персонажа."
+	subtitle_lbl.add_theme_font_size_override("font_size", 12)
+	subtitle_lbl.add_theme_color_override("font_color", Color(0.65, 0.72, 0.85))
+	vbox.add_child(subtitle_lbl)
+
+	vbox.add_child(HSeparator.new())
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(716, 480)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(scroll)
+
+	var list_vbox := VBoxContainer.new()
+	list_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_vbox.add_theme_constant_override("separation", 10)
+	scroll.add_child(list_vbox)
+
+	var cur_saved := TeamConfig.get_saved_build(char_id)
+	var current_lc_id: String = String(cur_saved.get("light_cone", ""))
+
+	# 1. Карточка "Без оружия"
+	var unequip_card := PanelContainer.new()
+	var unequip_sb := StyleBoxFlat.new()
+	unequip_sb.bg_color = Color(0.12, 0.14, 0.20, 0.9)
+	unequip_sb.border_color = Color(0.25, 0.3, 0.4, 0.6)
+	unequip_sb.set_border_width_all(1)
+	unequip_sb.set_corner_radius_all(8)
+	unequip_sb.content_margin_left = 14
+	unequip_sb.content_margin_right = 14
+	unequip_sb.content_margin_top = 10
+	unequip_sb.content_margin_bottom = 10
+	unequip_card.add_theme_stylebox_override("panel", unequip_sb)
+	list_vbox.add_child(unequip_card)
+
+	var unequip_hbox := HBoxContainer.new()
+	unequip_hbox.add_theme_constant_override("separation", 14)
+	unequip_card.add_child(unequip_hbox)
+
+	var unequip_info := VBoxContainer.new()
+	unequip_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	unequip_hbox.add_child(unequip_info)
+
+	var unequip_title := Label.new()
+	unequip_title.text = "🚫 Без оружия"
+	unequip_title.add_theme_font_size_override("font_size", 16)
+	unequip_title.add_theme_color_override("font_color", Color(0.7, 0.75, 0.85))
+	unequip_info.add_child(unequip_title)
+
+	var unequip_desc := Label.new()
+	unequip_desc.text = "Снять световой конус с персонажа."
+	unequip_desc.add_theme_font_size_override("font_size", 12)
+	unequip_desc.add_theme_color_override("font_color", Color(0.5, 0.55, 0.65))
+	unequip_info.add_child(unequip_desc)
+
+	var unequip_btn := Button.new()
+	unequip_btn.custom_minimum_size = Vector2(130, 38)
+	if current_lc_id.is_empty():
+		unequip_btn.text = "✓ Выбрано"
+		unequip_btn.disabled = true
+	else:
+		unequip_btn.text = "Снять"
+		unequip_btn.pressed.connect(func():
+			TeamConfig.unequip_light_cone_from_character(char_id)
+			_select_option_by_meta(opt_light_cone, "")
+			_update_lc_description()
+			overlay.queue_free()
+		)
+	unequip_hbox.add_child(unequip_btn)
+
+	# 2. Список доступных конусов
+	for lc in LightConeRegistry.LIST:
+		if lc.path != data.path:
+			continue
+		var is_3star: bool = (int(lc.get("rarity", 3)) == 3)
+		var total_copies: int = TeamConfig.get_light_cone_total_count(lc.id)
+		if not is_3star and total_copies <= 0:
+			continue
+
+		var equipped_chars: Array[String] = TeamConfig.get_light_cone_equipped_characters(lc.id)
+		var is_current: bool = (current_lc_id == lc.id)
+		var busy_count: int = equipped_chars.size()
+		var free_copies: int = maxi(0, total_copies - busy_count) if not is_3star else 999
+
+		var card := PanelContainer.new()
+		var card_sb := StyleBoxFlat.new()
+		card_sb.set_border_width_all(1)
+		card_sb.set_corner_radius_all(8)
+		card_sb.content_margin_left = 14
+		card_sb.content_margin_right = 14
+		card_sb.content_margin_top = 10
+		card_sb.content_margin_bottom = 10
+
+		if is_current:
+			card_sb.bg_color = Color(0.12, 0.18, 0.16, 0.95)
+			card_sb.border_color = Color(0.3, 0.8, 0.45, 0.9)
+		else:
+			card_sb.bg_color = Color(0.10, 0.12, 0.18, 0.92)
+			card_sb.border_color = Color(0.28, 0.35, 0.50, 0.6)
+		card.add_theme_stylebox_override("panel", card_sb)
+		list_vbox.add_child(card)
+
+		var card_hbox := HBoxContainer.new()
+		card_hbox.add_theme_constant_override("separation", 14)
+		card.add_child(card_hbox)
+
+		var info_vbox := VBoxContainer.new()
+		info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info_vbox.add_theme_constant_override("separation", 4)
+		card_hbox.add_child(info_vbox)
+
+		# Имя и Редкость
+		var top_hbox := HBoxContainer.new()
+		top_hbox.add_theme_constant_override("separation", 8)
+		info_vbox.add_child(top_hbox)
+
+		var stars_lbl := Label.new()
+		var rarity_val: int = int(lc.get("rarity", 3))
+		var stars_str := ""
+		for s in range(rarity_val):
+			stars_str += "★"
+		stars_lbl.text = stars_str
+		stars_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if rarity_val == 5 else (Color(0.8, 0.5, 1.0) if rarity_val == 4 else Color(0.4, 0.7, 1.0)))
+		stars_lbl.add_theme_font_size_override("font_size", 14)
+		top_hbox.add_child(stars_lbl)
+
+		var name_lbl := Label.new()
+		name_lbl.text = lc.name
+		name_lbl.add_theme_font_size_override("font_size", 16)
+		name_lbl.add_theme_color_override("font_color", Color.WHITE)
+		top_hbox.add_child(name_lbl)
+
+		# Описание эффекта
+		var desc_lbl := Label.new()
+		desc_lbl.text = lc.desc
+		desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		desc_lbl.add_theme_font_size_override("font_size", 12)
+		desc_lbl.add_theme_color_override("font_color", Color(0.82, 0.86, 0.94))
+		info_vbox.add_child(desc_lbl)
+
+		# Строка статуса занятости
+		var status_lbl := Label.new()
+		status_lbl.add_theme_font_size_override("font_size", 12)
+
+		var wearers_names: Array[String] = []
+		for ec_id in equipped_chars:
+			var ec_data := CharacterRegistry.get_character(ec_id)
+			wearers_names.append(ec_data.get("name", ec_id))
+		var wearers_str: String = ", ".join(wearers_names)
+
+		if is_3star:
+			status_lbl.text = "♾️ Неограниченно • Доступен для всех персонажей"
+			status_lbl.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
+		elif is_current:
+			var extra := (" • Также занят: " + wearers_str) if busy_count > 1 else ""
+			status_lbl.text = "✅ Экипирован на %s (Всего копий: %d)%s" % [data.name, total_copies, extra]
+			status_lbl.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))
+		elif free_copies > 0:
+			var extra := (" • Занят: " + wearers_str) if busy_count > 0 else ""
+			status_lbl.text = "🟢 Свободно: %d из %d%s" % [free_copies, total_copies, extra]
+			status_lbl.add_theme_color_override("font_color", Color(0.3, 0.85, 0.5))
+		else:
+			status_lbl.text = "🔴 Все копии заняты (%d/%d) • Экипирован у: %s" % [busy_count, total_copies, wearers_str]
+			status_lbl.add_theme_color_override("font_color", Color(1.0, 0.45, 0.45))
+		info_vbox.add_child(status_lbl)
+
+		# Кнопка действия
+		var action_btn := Button.new()
+		action_btn.custom_minimum_size = Vector2(130, 38)
+		if is_current:
+			action_btn.text = "✓ Надет"
+			action_btn.disabled = true
+		elif free_copies > 0:
+			action_btn.text = "Надеть"
+			action_btn.add_theme_color_override("font_color", Color(0.4, 1.0, 0.6))
+			var chosen_lc_id: String = lc.id
+			action_btn.pressed.connect(func():
+				TeamConfig.equip_light_cone_to_character(char_id, chosen_lc_id)
+				_select_option_by_meta(opt_light_cone, chosen_lc_id)
+				_update_lc_description()
+				if is_menu_tutorial and menu_tut_step == 3 and chosen_lc_id == "apocalypse":
+					_run_menu_tut_step(4)
+				overlay.queue_free()
+			)
+		else:
+			action_btn.text = "🔄 Перенести"
+			action_btn.add_theme_color_override("font_color", Color(1.0, 0.75, 0.3))
+			var chosen_lc_id: String = lc.id
+			var eq_copy: Array[String] = equipped_chars.duplicate()
+			action_btn.pressed.connect(func():
+				_show_lc_transfer_confirm(char_id, chosen_lc_id, eq_copy, func():
+					_select_option_by_meta(opt_light_cone, chosen_lc_id)
+					_update_lc_description()
+					if is_menu_tutorial and menu_tut_step == 3 and chosen_lc_id == "apocalypse":
+						_run_menu_tut_step(4)
+					overlay.queue_free()
+				)
+			)
+		card_hbox.add_child(action_btn)
+
+func _show_lc_transfer_confirm(to_char_id: String, lc_id: String, from_chars: Array[String], on_confirmed: Callable) -> void:
+	if from_chars.is_empty():
+		return
+
+	var cone := LightConeRegistry.get_cone(lc_id)
+	var to_data := CharacterRegistry.get_character(to_char_id)
+	var cone_name: String = cone.get("name", lc_id)
+	var to_name: String = to_data.get("name", to_char_id)
+
+	var conf_overlay := ColorRect.new()
+	conf_overlay.color = Color(0, 0, 0, 0.85)
+	conf_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	conf_overlay.z_index = 60
+	add_child(conf_overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	conf_overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(480, 260)
+	center.add_child(panel)
+
+	var p_sb := StyleBoxFlat.new()
+	p_sb.bg_color = Color(0.11, 0.13, 0.20, 0.98)
+	p_sb.border_color = Color(0.8, 0.5, 0.2, 0.9)
+	p_sb.set_border_width_all(2)
+	p_sb.set_corner_radius_all(12)
+	p_sb.content_margin_left = 20
+	p_sb.content_margin_right = 20
+	p_sb.content_margin_top = 18
+	p_sb.content_margin_bottom = 18
+	panel.add_theme_stylebox_override("panel", p_sb)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 14)
+	panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "🔄 Перенос Светового Конуса"
+	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	var desc := Label.new()
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(desc)
+
+	var btns_vbox := VBoxContainer.new()
+	btns_vbox.add_theme_constant_override("separation", 8)
+	vbox.add_child(btns_vbox)
+
+	if from_chars.size() == 1:
+		var from_char_id: String = from_chars[0]
+		var from_data := CharacterRegistry.get_character(from_char_id)
+		var from_name: String = from_data.get("name", from_char_id)
+		desc.text = "Все копии конуса «%s» заняты персонажем %s.\n\nСнять конус с %s и экипировать на %s?" % [
+			cone_name, from_name, from_name, to_name
+		]
+
+		var btn_hbox := HBoxContainer.new()
+		btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		btn_hbox.add_theme_constant_override("separation", 20)
+		btns_vbox.add_child(btn_hbox)
+
+		var ok_btn := Button.new()
+		ok_btn.text = "Да, перенести"
+		ok_btn.custom_minimum_size = Vector2(150, 42)
+		ok_btn.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5))
+		ok_btn.pressed.connect(func():
+			TeamConfig.equip_light_cone_to_character(to_char_id, lc_id, from_char_id)
+			conf_overlay.queue_free()
+			if on_confirmed.is_valid():
+				on_confirmed.call()
+		)
+		btn_hbox.add_child(ok_btn)
+
+		var cancel_btn := Button.new()
+		cancel_btn.text = "Отмена"
+		cancel_btn.custom_minimum_size = Vector2(120, 42)
+		cancel_btn.pressed.connect(func(): conf_overlay.queue_free())
+		btn_hbox.add_child(cancel_btn)
+	else:
+		desc.text = "Все копии конуса «%s» заняты.\nВыберите, у кого снять конус для %s:" % [cone_name, to_name]
+		for from_char_id in from_chars:
+			var from_data := CharacterRegistry.get_character(from_char_id)
+			var from_name: String = from_data.get("name", from_char_id)
+			var transfer_btn := Button.new()
+			transfer_btn.text = "Снять с %s" % from_name
+			transfer_btn.custom_minimum_size = Vector2(0, 38)
+			var target_from := from_char_id
+			transfer_btn.pressed.connect(func():
+				TeamConfig.equip_light_cone_to_character(to_char_id, lc_id, target_from)
+				conf_overlay.queue_free()
+				if on_confirmed.is_valid():
+					on_confirmed.call()
+			)
+			btns_vbox.add_child(transfer_btn)
+
+		var cancel_btn := Button.new()
+		cancel_btn.text = "Отмена"
+		cancel_btn.custom_minimum_size = Vector2(0, 38)
+		cancel_btn.pressed.connect(func(): conf_overlay.queue_free())
+		btns_vbox.add_child(cancel_btn)
 
 func _update_relic_description(opt: OptionButton, target_label: RichTextLabel) -> void:
 	var set_id: String = String(opt.get_item_metadata(opt.selected))
@@ -2168,6 +2761,7 @@ func _refresh_shop_ui() -> void:
 		var panel := PanelContainer.new()
 		panel.name = "shop_char_" + char_id
 		panel.custom_minimum_size = Vector2(180, 220)
+		panel.clip_contents = true
 		
 		var is_5star := (int(char_data.get("rarity", 4)) >= 5)
 		var sb := StyleBoxFlat.new()
@@ -2186,6 +2780,18 @@ func _refresh_shop_ui() -> void:
 			sb.border_color = Color(0.75, 0.45, 0.95, 0.90) # фиолетовый бордюр
 			
 		panel.add_theme_stylebox_override("panel", sb)
+
+		var splash_tex: Texture2D = CharacterRegistry.get_character_splash(char_id)
+		if splash_tex != null:
+			var shop_bg := TextureRect.new()
+			shop_bg.name = "ShopSplashBG"
+			shop_bg.texture = splash_tex
+			shop_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			shop_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+			shop_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			shop_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			shop_bg.modulate = Color(0.40, 0.40, 0.45, 0.32)
+			panel.add_child(shop_bg)
 
 		var vbox := VBoxContainer.new()
 		vbox.add_theme_constant_override("separation", 8)
@@ -2455,6 +3061,20 @@ func _refresh_inventory_ui() -> void:
 		btn.clip_contents = true
 		btn.pressed.connect(_show_eidolon_details_modal.bind(char_id))
 
+		# Сплеш-арт на заднем плане карточки персонажа в инвентаре
+		var splash_tex: Texture2D = CharacterRegistry.get_character_splash(char_id)
+		if splash_tex != null:
+			var bg_tex := TextureRect.new()
+			bg_tex.name = "InvSplashBG"
+			bg_tex.texture = splash_tex
+			bg_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			bg_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+			bg_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			bg_tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			bg_tex.modulate = Color(0.38, 0.38, 0.45, 0.40)
+			bg_tex.z_index = 0
+			btn.add_child(bg_tex)
+
 		var vbox := VBoxContainer.new()
 		vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -2495,22 +3115,23 @@ func _refresh_inventory_ui() -> void:
 
 	# 2. Световые конусы
 	for cone in LightConeRegistry.LIST:
-		var is_unlocked: bool = (cone.rarity == 3) or (cone.id in TeamConfig.unlocked_light_cones)
+		var is_3star: bool = (cone.rarity == 3)
+		var total_copies: int = TeamConfig.get_light_cone_total_count(cone.id)
+		var is_unlocked: bool = is_3star or (total_copies > 0)
 		if not is_unlocked:
 			continue
 
-		var panel := PanelContainer.new()
-		panel.custom_minimum_size = Vector2(130, 150)
-		
-		panel.tooltip_text = "⚔ %s (%d★)\n\n%s" % [
-			cone.get("name", "Конус"),
-			cone.get("rarity", 3),
-			cone.get("desc", "Описание отсутствует.")
-		]
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(140, 160)
+		btn.clip_contents = true
+		btn.pressed.connect(_show_light_cone_details_modal.bind(cone.id))
 
 		var vbox := VBoxContainer.new()
+		vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-		panel.add_child(vbox)
+		vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vbox.add_theme_constant_override("separation", 4)
+		btn.add_child(vbox)
 
 		var icon := Label.new()
 		icon.text = "⚔"
@@ -2519,12 +3140,22 @@ func _refresh_inventory_ui() -> void:
 		vbox.add_child(icon)
 
 		var name_lbl := Label.new()
-		name_lbl.text = "%s\n(%d★)" % [cone.name, cone.rarity]
+		var count_str := (" (x%d)" % total_copies) if (not is_3star and total_copies > 1) else ""
+		name_lbl.text = "%s\n(%d★)%s" % [cone.name, cone.rarity, count_str]
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_lbl.custom_minimum_size = Vector2(130, 0)
 		name_lbl.add_theme_font_size_override("font_size", 12)
 		vbox.add_child(name_lbl)
 
-		inv_cones_grid.add_child(panel)
+		var hint_lbl := Label.new()
+		hint_lbl.text = "[Подробнее]"
+		hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint_lbl.add_theme_font_size_override("font_size", 10)
+		hint_lbl.add_theme_color_override("font_color", Color(0.65, 0.75, 0.9))
+		vbox.add_child(hint_lbl)
+
+		inv_cones_grid.add_child(btn)
 		
 # --- МЕХАНИКА КАРТЫ УРОВНЕЙ ---
 
@@ -2716,6 +3347,14 @@ func _show_reset_confirmation_dialog() -> void:
 			menu_guide_overlay.queue_free()
 			menu_guide_overlay = null
 		TeamConfig.reset_all_progress()
+		if has_node("/root/NetworkManager"):
+			var nm = get_node("/root/NetworkManager")
+			if nm:
+				if nm.auth and nm.auth.is_anonymous:
+					nm.auth.sign_out()
+					nm.auth.sign_in_anonymously()
+				elif nm.promo:
+					nm.promo.reset_all_redeemed_codes()
 		_update_coins_display()
 		_build_levels_screen() # Перерисовываем карту (кнопка пропуска снова вернется!)
 		_lock_hub_buttons(true)
@@ -2858,8 +3497,12 @@ func _show_eidolon_details_modal(char_id: String) -> void:
 	var unlocked_e: int = int(build.get("eidolon", 0))
 
 	var overlay := ColorRect.new()
-	overlay.color = Color(0, 0, 0, 0.82)
+	overlay.name = "EidolonDetailsModal"
+	overlay.color = Color(0, 0, 0, 0.88)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 200
+	overlay.z_as_relative = false
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(overlay)
 
 	var center := CenterContainer.new()
@@ -2867,7 +3510,15 @@ func _show_eidolon_details_modal(char_id: String) -> void:
 	overlay.add_child(center)
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(580, 520)
+	panel.name = "ModalPanel"
+	panel.custom_minimum_size = Vector2(600, 530)
+	var p_sb := StyleBoxFlat.new()
+	p_sb.bg_color = Color(0.08, 0.10, 0.16, 1.0)
+	p_sb.border_color = Color(0.35, 0.50, 0.75, 1.0)
+	p_sb.set_border_width_all(2)
+	p_sb.set_corner_radius_all(14)
+	p_sb.set_content_margin_all(20)
+	panel.add_theme_stylebox_override("panel", p_sb)
 	center.add_child(panel)
 
 	var vbox := VBoxContainer.new()
@@ -2928,6 +3579,126 @@ func _show_eidolon_details_modal(char_id: String) -> void:
 	close_btn.pressed.connect(func(): overlay.queue_free())
 	vbox.add_child(close_btn)
 
+# Модальное окно детального просмотра светового конуса
+func _show_light_cone_details_modal(cone_id: String) -> void:
+	var cone := LightConeRegistry.get_cone(cone_id)
+	if cone.is_empty():
+		return
+
+	var is_3star: bool = (int(cone.get("rarity", 3)) == 3)
+	var total_copies: int = TeamConfig.get_light_cone_total_count(cone_id)
+	var rarity: int = int(cone.get("rarity", 3))
+
+	var overlay := ColorRect.new()
+	overlay.name = "LightConeDetailsModal"
+	overlay.color = Color(0, 0, 0, 0.88)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 200
+	overlay.z_as_relative = false
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.name = "ModalPanel"
+	panel.custom_minimum_size = Vector2(580, 480)
+	var p_sb := StyleBoxFlat.new()
+	p_sb.bg_color = Color(0.08, 0.10, 0.16, 1.0)
+	var border_col := Color(0.95, 0.80, 0.3) if rarity == 5 else (Color(0.75, 0.45, 0.95) if rarity == 4 else Color(0.35, 0.55, 0.85))
+	p_sb.border_color = border_col
+	p_sb.set_border_width_all(2)
+	p_sb.set_corner_radius_all(14)
+	p_sb.set_content_margin_all(22)
+	panel.add_theme_stylebox_override("panel", p_sb)
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 14)
+	panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "⚔ %s (%d★)" % [cone.get("name", "Световой конус"), rarity]
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", border_col)
+	vbox.add_child(title)
+
+	var path_val: int = int(cone.get("path", 0))
+	var path_name := CharacterRegistry.get_path_name(path_val)
+	var meta_row := HBoxContainer.new()
+	meta_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	meta_row.add_theme_constant_override("separation", 20)
+	vbox.add_child(meta_row)
+
+	var path_lbl := Label.new()
+	path_lbl.text = "Путь: %s" % path_name
+	path_lbl.add_theme_font_size_override("font_size", 14)
+	path_lbl.add_theme_color_override("font_color", Color(0.75, 0.82, 0.95))
+	meta_row.add_child(path_lbl)
+
+	var copies_lbl := Label.new()
+	if is_3star:
+		copies_lbl.text = "Количество: Базовый конус (∞)"
+	else:
+		copies_lbl.text = "В наличии: %d шт." % total_copies
+	copies_lbl.add_theme_font_size_override("font_size", 14)
+	copies_lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.6))
+	meta_row.add_child(copies_lbl)
+
+	var desc_box := PanelContainer.new()
+	desc_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var db_sb := StyleBoxFlat.new()
+	db_sb.bg_color = Color(0.05, 0.06, 0.10, 0.9)
+	db_sb.border_color = Color(0.25, 0.32, 0.45, 0.6)
+	db_sb.set_border_width_all(1)
+	db_sb.set_corner_radius_all(8)
+	db_sb.set_content_margin_all(16)
+	desc_box.add_theme_stylebox_override("panel", db_sb)
+	vbox.add_child(desc_box)
+
+	var desc_scroll := ScrollContainer.new()
+	desc_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	desc_box.add_child(desc_scroll)
+
+	var desc_lbl := RichTextLabel.new()
+	desc_lbl.name = "ConeDescText"
+	desc_lbl.bbcode_enabled = true
+	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_lbl.fit_content = true
+	desc_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	desc_lbl.add_theme_font_size_override("normal_font_size", 15)
+	desc_lbl.text = "[b]Пассивный навык:[/b]\n\n" + cone.get("desc", "Описание отсутствует.")
+	desc_scroll.add_child(desc_lbl)
+
+	# Определение, на кого надет конус
+	var wearers_names: Array[String] = []
+	for c_id in TeamConfig.unlocked_characters:
+		var b := TeamConfig.get_saved_build(c_id)
+		if b.get("light_cone", "") == cone_id:
+			var c_data := CharacterRegistry.get_character(c_id)
+			wearers_names.append(c_data.get("name", c_id))
+
+	var equip_status_lbl := RichTextLabel.new()
+	equip_status_lbl.name = "ConeCarrierText"
+	equip_status_lbl.bbcode_enabled = true
+	equip_status_lbl.fit_content = true
+	equip_status_lbl.add_theme_font_size_override("normal_font_size", 14)
+	if not wearers_names.is_empty():
+		equip_status_lbl.text = "🛡 [b]Надет на персонажей:[/b] [color=gold]%s[/color]" % (", ".join(wearers_names))
+	else:
+		equip_status_lbl.text = "✨ [color=lightgreen][b]Свободен[/b] (не надет ни на одного персонажа)[/color]"
+	vbox.add_child(equip_status_lbl)
+
+	var close_modal_btn := Button.new()
+	close_modal_btn.text = "Закрыть"
+	close_modal_btn.custom_minimum_size = Vector2(180, 42)
+	close_modal_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_modal_btn.pressed.connect(func(): overlay.queue_free())
+	vbox.add_child(close_modal_btn)
+
 # --- СЕКЦИЯ: СИСТЕМА ГАЧИ ---
 
 func _build_gacha_screen() -> void:
@@ -2978,7 +3749,9 @@ func _build_gacha_screen() -> void:
 	gacha_screen.add_child(banner_center)
 
 	var banner_panel := PanelContainer.new()
+	banner_panel.name = "BannerPanel"
 	banner_panel.custom_minimum_size = Vector2(750, 360)
+	banner_panel.clip_contents = true
 	
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.10, 0.12, 0.18, 0.95)
@@ -3060,6 +3833,26 @@ func _refresh_gacha_ui() -> void:
 			if not c_data.is_empty():
 				b_title.text = "🌟 %s (%s) — 5★ Персонаж" % [c_data.name, CharacterRegistry.get_path_name(c_data.path)]
 
+	var b_panel: PanelContainer = gacha_screen.find_child("BannerPanel", true, false)
+	if b_panel:
+		var splash_bg: TextureRect = b_panel.get_node_or_null("BannerSplashBG") as TextureRect
+		var splash_tex: Texture2D = CharacterRegistry.get_character_splash(active_b.id) if not is_weapon_banner else null
+		if splash_tex != null:
+			if splash_bg == null:
+				splash_bg = TextureRect.new()
+				splash_bg.name = "BannerSplashBG"
+				splash_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				splash_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+				splash_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				splash_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+				b_panel.add_child(splash_bg)
+				b_panel.move_child(splash_bg, 0)
+			splash_bg.texture = splash_tex
+			splash_bg.modulate = Color(0.42, 0.42, 0.48, 0.32)
+			splash_bg.visible = true
+		elif splash_bg != null:
+			splash_bg.visible = false
+
 	if gacha_info_label:
 		if is_weapon_banner:
 			var status_g := "ДА (100%)" if TeamConfig.gacha_weapon_guaranteed_featured else "70/30"
@@ -3125,10 +3918,18 @@ func _show_sequential_ten_pulls(results: Array[Dictionary], index: int) -> void:
 
 	var item := results[index]
 	var step_title := "Карточка %d / 10" % (index + 1)
-	
-	_show_single_gacha_result_with_step(item, step_title, func():
-		_show_sequential_ten_pulls(results, index + 1)
-	)
+	var rarity: int = int(item.get("rarity", 3))
+
+	if rarity >= 5:
+		_play_hsr_five_star_warp_reveal(func():
+			_show_single_gacha_result_with_step(item, step_title, func():
+				_show_sequential_ten_pulls(results, index + 1)
+			)
+		)
+	else:
+		_show_single_gacha_result_with_step(item, step_title, func():
+			_show_sequential_ten_pulls(results, index + 1)
+		)
 
 func _show_single_gacha_result_with_step(res: Dictionary, step_txt: String, on_close: Callable) -> void:
 	if res.type == "character":
@@ -3157,6 +3958,29 @@ func _single_gacha_pull() -> Dictionary:
 			build["eidolon"] = mini(cur_e + 1, 6)
 
 		TeamConfig.set_saved_build(c_id, build)
+
+		# Сразу разблокируем кнопки в гаче и в меню после выпадения Сары
+		is_menu_tutorial = false
+		TeamConfig.menu_tutorial_completed = true
+		TeamConfig.save_game()
+		if gacha_screen and is_instance_valid(gacha_screen):
+			var btn_b: Button = gacha_screen.find_child("BtnGachaBack", true, false)
+			if btn_b: btn_b.disabled = false
+			var btn_1: Button = gacha_screen.find_child("BtnPull1", true, false)
+			if btn_1: btn_1.disabled = false
+			var btn_10: Button = gacha_screen.find_child("BtnPull10", true, false)
+			if btn_10: btn_10.disabled = false
+			if banner_select_option:
+				banner_select_option.disabled = false
+		_lock_hub_buttons(false)
+		_set_hub_card_disabled(btn_menu_levels, false)
+		_set_hub_card_disabled(btn_menu_chars, false)
+		_set_hub_card_disabled(btn_menu_relics, false)
+		_set_hub_card_disabled(btn_menu_db, false)
+		_set_hub_card_disabled(btn_menu_inv, false)
+		_set_hub_card_disabled(btn_menu_shop, false)
+		_set_hub_card_disabled(btn_menu_gacha, false)
+
 		return {"type": "character", "id": c_id, "rarity": 4, "is_new": is_new, "eidolon": build["eidolon"]}
 
 	TeamConfig.gacha_4star_pity += 1
@@ -3200,8 +4024,7 @@ func _single_gacha_pull() -> Dictionary:
 				target_lc_id = std_lcs[randi() % std_lcs.size()]
 				TeamConfig.gacha_weapon_guaranteed_featured = true
 
-			if not target_lc_id in TeamConfig.unlocked_light_cones:
-				TeamConfig.unlocked_light_cones.append(target_lc_id)
+			TeamConfig.unlocked_light_cones.append(target_lc_id)
 			return {"type": "light_cone", "id": target_lc_id, "rarity": 5}
 
 		else:
@@ -3224,8 +4047,7 @@ func _single_gacha_pull() -> Dictionary:
 					# Выпал стандартный 5★ Конус из персонажного баннера
 					var std_lcs := ["cant_kill_you", "moment_of_happiness", "touch_waking_world", "concert_dead"]
 					var dropped_lc_id: String = std_lcs[randi() % std_lcs.size()]
-					if not dropped_lc_id in TeamConfig.unlocked_light_cones:
-						TeamConfig.unlocked_light_cones.append(dropped_lc_id)
+					TeamConfig.unlocked_light_cones.append(dropped_lc_id)
 					return {"type": "light_cone", "id": dropped_lc_id, "rarity": 5}
 
 			var is_new := not (char_id in TeamConfig.unlocked_characters)
@@ -3267,8 +4089,7 @@ func _single_gacha_pull() -> Dictionary:
 			return {"type": "character", "id": c_id, "rarity": 4, "is_new": is_new, "eidolon": build["eidolon"]}
 		else:
 			var lc_id: String = POOL_4LC[randi() % POOL_4LC.size()]
-			if not lc_id in TeamConfig.unlocked_light_cones:
-				TeamConfig.unlocked_light_cones.append(lc_id)
+			TeamConfig.unlocked_light_cones.append(lc_id)
 			return {"type": "light_cone", "id": lc_id, "rarity": 4}
 
 	# --- 3. ЕСЛИ НИЧЕГО НЕ ВЫПАЛО — 33% ШАНС НА ОСКОЛКИ РЕЛИКВИЙ, ИНАЧЕ 20 МОНЕТ ---
@@ -3478,9 +4299,13 @@ func _show_character_unlock_animation(char_id: String, is_new: bool, eidolon_lvl
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
 
+	var splash_tex: Texture2D = CharacterRegistry.get_character_splash(char_id)
+	var has_splash := (splash_tex != null)
+
 	var card_panel := PanelContainer.new()
-	card_panel.custom_minimum_size = Vector2(520, 440)
-	card_panel.pivot_offset = Vector2(260, 220)
+	card_panel.custom_minimum_size = Vector2(540, 620) if has_splash else Vector2(520, 440)
+	card_panel.pivot_offset = Vector2(270, 310) if has_splash else Vector2(260, 220)
+	card_panel.clip_contents = true
 	center.add_child(card_panel)
 
 	var rarity_color := Color(1.0, 0.85, 0.2) if data.rarity >= 5 else (Color(0.75, 0.45, 1.0) if data.rarity == 4 else Color(0.3, 0.7, 1.0))
@@ -3489,12 +4314,23 @@ func _show_character_unlock_animation(char_id: String, is_new: bool, eidolon_lvl
 	sb.border_color = rarity_color
 	sb.set_border_width_all(3)
 	sb.set_corner_radius_all(16)
-	sb.set_content_margin_all(24)
+	sb.set_content_margin_all(20 if has_splash else 24)
 	card_panel.add_theme_stylebox_override("panel", sb)
+
+	# Затемненный сплеш-арт на заднем плане карточки
+	if has_splash:
+		var bg_splash := TextureRect.new()
+		bg_splash.texture = splash_tex
+		bg_splash.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg_splash.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		bg_splash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg_splash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		bg_splash.modulate = Color(0.30, 0.30, 0.35, 0.35)
+		card_panel.add_child(bg_splash)
 
 	var vbox := VBoxContainer.new()
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 12)
+	vbox.add_theme_constant_override("separation", 8 if has_splash else 12)
 	card_panel.add_child(vbox)
 
 	if not step_txt.is_empty():
@@ -3517,33 +4353,66 @@ func _show_character_unlock_animation(char_id: String, is_new: bool, eidolon_lvl
 	var stars_lbl := Label.new()
 	stars_lbl.text = stars_str.strip_edges()
 	stars_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stars_lbl.add_theme_font_size_override("font_size", 28)
+	stars_lbl.add_theme_font_size_override("font_size", 26 if has_splash else 28)
 	stars_lbl.add_theme_color_override("font_color", rarity_color)
 	vbox.add_child(stars_lbl)
 
-	var elem_symbol := Label.new()
-	elem_symbol.text = "%s  %s" % [CombatConstants.ELEMENT_SYMBOLS[data.element], CombatConstants.get_element_name(data.element)]
-	elem_symbol.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	elem_symbol.add_theme_font_size_override("font_size", 28)
-	elem_symbol.add_theme_color_override("font_color", CombatConstants.get_element_color(data.element))
-	vbox.add_child(elem_symbol)
+	if has_splash:
+		# Красивый центральный портрет персонажа с золотой/фиолетовой рамкой
+		var frame_container := CenterContainer.new()
+		frame_container.custom_minimum_size = Vector2(0, 240)
+		vbox.add_child(frame_container)
+
+		var frame := PanelContainer.new()
+		frame.custom_minimum_size = Vector2(190, 235)
+		frame.clip_contents = true
+		var frame_sb := StyleBoxFlat.new()
+		frame_sb.bg_color = Color(0.04, 0.05, 0.08, 0.90)
+		frame_sb.border_color = rarity_color
+		frame_sb.set_border_width_all(2)
+		frame_sb.set_corner_radius_all(12)
+		frame.add_theme_stylebox_override("panel", frame_sb)
+		frame_container.add_child(frame)
+
+		var portrait_rect := TextureRect.new()
+		portrait_rect.texture = splash_tex
+		portrait_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		portrait_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		portrait_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		frame.add_child(portrait_rect)
+
+		# Стильная плашка элемента в углу рамки
+		var elem_tag := Label.new()
+		elem_tag.text = "%s %s" % [CombatConstants.ELEMENT_SYMBOLS.get(data.element, ""), CombatConstants.get_element_name(data.element)]
+		elem_tag.add_theme_font_size_override("font_size", 12)
+		elem_tag.add_theme_color_override("font_color", CombatConstants.get_element_color(data.element))
+		elem_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vbox.add_child(elem_tag)
+	else:
+		var elem_symbol := Label.new()
+		elem_symbol.text = "%s  %s" % [CombatConstants.ELEMENT_SYMBOLS[data.element], CombatConstants.get_element_name(data.element)]
+		elem_symbol.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		elem_symbol.add_theme_font_size_override("font_size", 28)
+		elem_symbol.add_theme_color_override("font_color", CombatConstants.get_element_color(data.element))
+		vbox.add_child(elem_symbol)
 
 	var name_lbl := Label.new()
 	name_lbl.text = data.name
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_lbl.add_theme_font_size_override("font_size", 34)
+	name_lbl.add_theme_font_size_override("font_size", 30 if has_splash else 34)
 	vbox.add_child(name_lbl)
 
 	var info_lbl := Label.new()
 	info_lbl.text = "Путь: %s" % CharacterRegistry.get_path_name(data.path)
 	info_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	info_lbl.add_theme_font_size_override("font_size", 16)
+	info_lbl.add_theme_font_size_override("font_size", 15 if has_splash else 16)
 	info_lbl.add_theme_color_override("font_color", Color(0.7, 0.8, 0.9))
 	vbox.add_child(info_lbl)
 
 	var btn_cont := Button.new()
 	btn_cont.text = "Далее ➔" if not step_txt.is_empty() else "Продолжить"
-	btn_cont.custom_minimum_size = Vector2(220, 50)
+	btn_cont.custom_minimum_size = Vector2(220, 48)
 	btn_cont.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn_cont.add_theme_font_size_override("font_size", 18)
 	
@@ -3560,15 +4429,17 @@ func _show_character_unlock_animation(char_id: String, is_new: bool, eidolon_lvl
 
 	# ПЕРЕХОД ИЗ БЕЛИЗНЫ + САЛЮТ ИЗ 28 ЗОЛОТЫХ ИСКР ИЗ ЦЕНТРА ЭКРАНА ДЛЯ 5★
 	if data.rarity >= 5:
-		var card_flash := ColorRect.new()
-		card_flash.color = Color(1.0, 1.0, 1.0, 1.0)
-		card_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		card_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		overlay.add_child(card_flash)
+		var card_flash: ColorRect = null
+		if step_txt.is_empty():
+			card_flash = ColorRect.new()
+			card_flash.color = Color(1.0, 1.0, 1.0, 1.0)
+			card_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			card_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			overlay.add_child(card_flash)
 
-		var f_tween := create_tween()
-		f_tween.tween_property(card_flash, "color:a", 0.0, 0.6)
-		f_tween.chain().tween_callback(card_flash.queue_free)
+			var f_tween := create_tween()
+			f_tween.tween_property(card_flash, "color:a", 0.0, 0.6)
+			f_tween.chain().tween_callback(card_flash.queue_free)
 
 		var screen_center := Vector2(get_viewport_rect().size.x * 0.5, get_viewport_rect().size.y * 0.5)
 		var gold_shades := [
@@ -3582,7 +4453,8 @@ func _show_character_unlock_animation(char_id: String, is_new: bool, eidolon_lvl
 			var card_sparkle := SparkleStar.new(gold_col, randf_range(0.35, 0.7))
 			card_sparkle.position = screen_center
 			overlay.add_child(card_sparkle)
-			overlay.move_child(card_sparkle, card_flash.get_index())
+			if card_flash != null and is_instance_valid(card_flash):
+				overlay.move_child(card_sparkle, card_flash.get_index())
 
 			var random_angle := randf_range(0, TAU)
 			var random_dist := randf_range(180, 500)
@@ -3869,15 +4741,17 @@ func _show_light_cone_unlock_animation(lc_id: String, step_txt: String = "", on_
 
 	# ПЕРЕХОД ИЗ БЕЛИЗНЫ + ВЗРЫВ 28 ЗОЛОТЫХ ИСКР ДЛЯ 5★ КОНУСОВ
 	if rarity >= 5:
-		var card_flash := ColorRect.new()
-		card_flash.color = Color(1.0, 1.0, 1.0, 1.0)
-		card_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		card_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		overlay.add_child(card_flash)
+		var card_flash: ColorRect = null
+		if step_txt.is_empty():
+			card_flash = ColorRect.new()
+			card_flash.color = Color(1.0, 1.0, 1.0, 1.0)
+			card_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			card_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			overlay.add_child(card_flash)
 
-		var f_tween := create_tween()
-		f_tween.tween_property(card_flash, "color:a", 0.0, 0.6)
-		f_tween.chain().tween_callback(card_flash.queue_free)
+			var f_tween := create_tween()
+			f_tween.tween_property(card_flash, "color:a", 0.0, 0.6)
+			f_tween.chain().tween_callback(card_flash.queue_free)
 
 		var screen_center := Vector2(get_viewport_rect().size.x * 0.5, get_viewport_rect().size.y * 0.5)
 		var gold_shades := [
@@ -3891,7 +4765,8 @@ func _show_light_cone_unlock_animation(lc_id: String, step_txt: String = "", on_
 			var card_sparkle := SparkleStar.new(gold_col, randf_range(0.35, 0.7))
 			card_sparkle.position = screen_center
 			overlay.add_child(card_sparkle)
-			overlay.move_child(card_sparkle, card_flash.get_index())
+			if card_flash != null and is_instance_valid(card_flash):
+				overlay.move_child(card_sparkle, card_flash.get_index())
 
 			var random_angle := randf_range(0, TAU)
 			var random_dist := randf_range(180, 500)
@@ -3912,7 +4787,235 @@ func _show_light_cone_unlock_animation(lc_id: String, step_txt: String = "", on_
 	tween.tween_property(card_panel, "scale", Vector2(1.08, 1.08), 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.tween_property(card_panel, "modulate:a", 1.0, 0.25)
 	tween.chain().tween_property(card_panel, "scale", Vector2(1.0, 1.0), 0.12)
-	
+
+# Проигрывание стилизованной анимации открытия 5★ при 10 крутках (по референсу HSR)
+func _play_hsr_five_star_warp_reveal(on_complete: Callable) -> void:
+	var reveal := HsrFiveStarWarpReveal.new(on_complete)
+	add_child(reveal)
+
+# Стилизованная кинематографическая анимация открытия 5★ при 10 крутках в стиле Honkai: Star Rail
+class HsrFiveStarWarpReveal extends Control:
+	var _on_complete: Callable
+	var _anim_time: float = 0.0
+	var _completed: bool = false
+
+	func _init(on_complete_cb: Callable) -> void:
+		name = "HsrFiveStarWarpReveal"
+		_on_complete = on_complete_cb
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		z_index = 160
+
+	func _process(delta: float) -> void:
+		_anim_time += delta
+		queue_redraw()
+		if _anim_time >= 1.85 and not _completed:
+			_completed = true
+			if _on_complete.is_valid():
+				_on_complete.call()
+			queue_free()
+
+	func _draw() -> void:
+		var w: float = size.x if size.x > 0.0 else 1920.0
+		var h: float = size.y if size.y > 0.0 else 1080.0
+		var screen_rect := Rect2(Vector2.ZERO, Vector2(w, h))
+		var c := Vector2(w * 0.5, h * 0.5)
+		var t: float = _anim_time
+
+		# 1. Глубокий тёмный космический фон
+		var bg_alpha: float = clampf(t / 0.15, 0.0, 1.0)
+		if t >= 1.50:
+			bg_alpha *= (1.0 - clampf((t - 1.50) / 0.35, 0.0, 1.0))
+		draw_rect(screen_rect, Color(0.005, 0.003, 0.008, 0.98 * bg_alpha), true)
+
+		# 2. Мягкое центральное сияние Бездны
+		if t < 1.75:
+			var nebula_fade: float = 1.0 if t < 1.48 else (1.0 - (t - 1.48) / 0.27)
+			var breathe: float = 1.0 + 0.05 * sin(t * 7.0)
+			draw_circle(c, 360.0 * breathe, Color(0.14, 0.09, 0.32, 0.30 * nebula_fade * bg_alpha))
+			draw_circle(c, 170.0 * breathe, Color(0.28, 0.18, 0.55, 0.25 * nebula_fade * bg_alpha))
+
+		# 3. Атмосферные вертикальные световые колонны позади пар звёзд (интрига)
+		if t < 0.90:
+			var side_beams_a: float = smoothstep(0.0, 0.30, t)
+			if t > 0.65:
+				side_beams_a *= (1.0 - smoothstep(0.65, 0.90, t))
+			if side_beams_a > 0.01:
+				draw_line(Vector2(c.x - 168.0, 0.0), Vector2(c.x - 168.0, h), Color(0.18, 0.30, 0.55, 0.16 * side_beams_a), 50.0)
+				draw_line(Vector2(c.x + 168.0, 0.0), Vector2(c.x + 168.0, h), Color(0.18, 0.30, 0.55, 0.16 * side_beams_a), 50.0)
+
+		# 4. Центральная вертикальная световая расщелина (активируется при появлении 5-й звезды)
+		if t >= 0.65:
+			var c_beam_prog: float = smoothstep(0.65, 1.10, t)
+			var c_beam_a: float = c_beam_prog
+			if t >= 1.48:
+				c_beam_a *= (1.0 - clampf((t - 1.48) / 0.32, 0.0, 1.0))
+			if c_beam_a > 0.01:
+				var beam_w: float = lerp(1.0, 2.2, c_beam_prog)
+				draw_line(Vector2(c.x, 0.0), Vector2(c.x, h), Color(0.35, 0.55, 0.95, 0.28 * c_beam_a), beam_w * 3.5)
+				draw_line(Vector2(c.x, 0.0), Vector2(c.x, h), Color(0.92, 0.96, 1.00, 0.85 * c_beam_a), beam_w)
+
+		# 5. Импульсная кольцевая волна (Кадр 5: расширяется и угасает)
+		if t >= 1.48:
+			var w_prog: float = clampf((t - 1.48) / 0.37, 0.0, 1.0)
+			var wave_r: float = lerp(45.0, 780.0, 1.0 - pow(1.0 - w_prog, 2.5))
+			var wave_a: float = (1.0 - w_prog) * 0.95
+			if wave_a > 0.005:
+				draw_arc(c, wave_r, 0.0, TAU, 72, Color(1.0, 0.96, 0.72, 0.90 * wave_a), 2.5, true)
+				draw_arc(c, wave_r, 0.0, TAU, 72, Color(0.85, 0.68, 1.0, 0.45 * wave_a), 6.5, true)
+				draw_circle(c, wave_r, Color(0.9, 0.85, 1.0, 0.06 * wave_a))
+
+		# 6. Отрисовка созвездия звёзд с интригующим появлением 5-й звезды
+		_draw_suspense_stars(c, t)
+
+	func _draw_suspense_stars(c: Vector2, t: float) -> void:
+		# Базовые координаты: 4 боковые звезды строго на уровне y = 0.0
+		var star_defs: Array[Dictionary] = [
+			{"base_pos": Vector2(-225.0, 0.0), "out_r": 25.0, "in_r": 5.8},  # Звезда 0 (крайняя левая)
+			{"base_pos": Vector2(-112.0, 0.0), "out_r": 36.0, "in_r": 8.2},  # Звезда 1 (внутренняя левая)
+			{"base_pos": Vector2(0.0, 0.0),     "out_r": 74.0, "in_r": 15.5}, # Звезда 2 (центральная 5-я)
+			{"base_pos": Vector2(112.0, 0.0),  "out_r": 36.0, "in_r": 8.2},  # Звезда 3 (внутренняя правая)
+			{"base_pos": Vector2(225.0, 0.0),  "out_r": 25.0, "in_r": 5.8}   # Звезда 4 (крайняя правая)
+		]
+
+		# Прогресс финального засасывания в центр
+		var s_prog: float = 0.0
+		if t >= 1.48:
+			s_prog = pow(clampf((t - 1.48) / 0.35, 0.0, 1.0), 2.2)
+
+		# Вспышка радости/воодушевления при встраивании 5-й звезды (t = 1.05..1.25)
+		var lock_flash: float = 0.0
+		if t >= 1.05 and t < 1.30:
+			lock_flash = sin(clampf((t - 1.05) / 0.25, 0.0, 1.0) * PI)
+
+		for i in range(5):
+			var sd: Dictionary = star_defs[i]
+			var spos: Vector2 = sd["base_pos"]
+			var out_r: float = float(sd["out_r"])
+			var in_r: float = float(sd["in_r"])
+			var fill_col: Color = Color(1.0, 0.86, 0.35)
+			var core_col: Color = Color(1.0, 0.96, 0.85)
+			var alpha: float = 0.0
+			var scale_mul: float = 1.0
+			var ray_len: float = 0.0
+
+			if i != 2:
+				# --- 4 БОКОВЫЕ ЗВЕЗДЫ (2 слева, 2 справа) ---
+				# Появляются плавно первыми, создавая интригу
+				var enter_start: float = 0.05 if (i == 1 or i == 3) else 0.18
+				var enter_dur: float = 0.32
+				var enter_prog: float = smoothstep(enter_start, enter_start + enter_dur, t)
+				alpha = enter_prog
+				scale_mul = enter_prog
+
+				# Тонкое дыхание во время интригующего ожидания (t < 0.65)
+				if t < 0.65:
+					scale_mul *= (1.0 + 0.04 * sin(t * 8.0 + float(i)))
+
+				# При встраивании 5-й звезды все 4 звезды насыщаются триумфальным золотом
+				if t >= 1.05:
+					scale_mul *= (1.0 + 0.12 * lock_flash)
+					ray_len = out_r * 0.6 * lock_flash
+					fill_col = Color(1.0, 0.90, 0.42)
+					core_col = Color(1.0, 1.0, 0.92)
+
+			else:
+				# --- 5-Я ЦЕНТРАЛЬНАЯ ЗВЕЗДА (Кульминация) ---
+				if t < 0.65:
+					continue
+
+				# 1. Появление чуть ниже уровня остальных (y = +40.0)
+				var appear_prog: float = smoothstep(0.65, 0.85, t)
+				alpha = appear_prog
+				scale_mul = lerp(0.35, 1.0, appear_prog)
+
+				# 2. Плавное движение снизу вверх и встраивание в ряд (y: 40.0 -> 0.0)
+				var rise_prog: float = smoothstep(0.80, 1.10, t)
+				var cur_y: float = lerp(40.0, 0.0, rise_prog)
+				spos.y = cur_y
+
+				# 3. Эволюция цвета: от ослепительного серебристо-белого до триумфального золота
+				if t < 1.05:
+					# Первоначально ослепительно серебряная/алмазная звезда
+					var silver_t: float = smoothstep(0.65, 1.00, t)
+					fill_col = Color(0.95, 0.98, 1.0)
+					core_col = Color(1.0, 1.0, 1.0)
+					ray_len = out_r * 0.8 * silver_t
+				else:
+					# Встраивание и триумфальное озарение золотом!
+					var gold_prog: float = smoothstep(1.05, 1.25, t)
+					fill_col = Color(0.95, 0.98, 1.0).lerp(Color(1.0, 0.94, 0.62), gold_prog)
+					core_col = Color(1.0, 1.0, 1.0).lerp(Color(1.0, 0.98, 0.90), gold_prog)
+					# Вспышка масштаба при замковом соединении в ряд
+					scale_mul *= (1.0 + 0.18 * lock_flash)
+					ray_len = out_r * (0.8 + 0.6 * lock_flash)
+
+			# 4. Финальное засасывание в центр (Кадр 5)
+			if s_prog > 0.0:
+				spos = spos.lerp(Vector2.ZERO, s_prog)
+				var r_target: float = lerp(out_r, 15.0, clampf(s_prog * 2.0, 0.0, 1.0))
+				out_r = r_target * (1.0 - s_prog)
+				in_r = out_r * 0.22
+				alpha *= (1.0 - s_prog)
+				ray_len *= (1.0 - s_prog)
+
+			out_r *= scale_mul
+			in_r *= scale_mul
+
+			_draw_star_shape(c + spos, out_r, in_r, fill_col, core_col, alpha, ray_len)
+
+	func _draw_star_shape(spos: Vector2, out_r: float, in_r: float, fill_col: Color, core_col: Color, alpha: float, ray_len: float = 0.0) -> void:
+		if alpha <= 0.005 or out_r <= 0.5:
+			return
+		var col := fill_col
+		col.a *= alpha
+		var c_col := core_col
+		c_col.a *= alpha
+
+		# Лучи сияния (Lens flare rays) для вдохновляющего блеска
+		if ray_len > 1.0:
+			var ray_col := Color(fill_col.r, fill_col.g, fill_col.b, 0.35 * alpha)
+			var core_ray_col := Color(1.0, 1.0, 1.0, 0.65 * alpha)
+			var r_ext: float = out_r + ray_len
+			# Горизонтальный и вертикальный световые лучи
+			draw_line(spos + Vector2(-r_ext, 0.0), spos + Vector2(r_ext, 0.0), ray_col, 2.2)
+			draw_line(spos + Vector2(0.0, -r_ext), spos + Vector2(0.0, r_ext), ray_col, 2.2)
+			draw_line(spos + Vector2(-r_ext * 0.6, 0.0), spos + Vector2(r_ext * 0.6, 0.0), core_ray_col, 1.0)
+			draw_line(spos + Vector2(0.0, -r_ext * 0.6), spos + Vector2(0.0, r_ext * 0.6), core_ray_col, 1.0)
+
+		# Внешнее сияющее гало
+		if out_r > 15.0:
+			draw_circle(spos, out_r * 1.5, Color(fill_col.r, fill_col.g, fill_col.b, 0.22 * alpha))
+			draw_circle(spos, out_r * 0.8, Color(fill_col.r, fill_col.g, fill_col.b, 0.40 * alpha))
+
+		# 4-конечная звезда
+		var pts := PackedVector2Array([
+			spos + Vector2(0.0, -out_r),
+			spos + Vector2(in_r, -in_r),
+			spos + Vector2(out_r, 0.0),
+			spos + Vector2(in_r, in_r),
+			spos + Vector2(0.0, out_r),
+			spos + Vector2(-in_r, in_r),
+			spos + Vector2(-out_r, 0.0),
+			spos + Vector2(-in_r, -in_r)
+		])
+		draw_colored_polygon(pts, col)
+
+		# Яркое внутреннее алмазное ядро
+		var c_out: float = out_r * 0.44
+		var c_in: float = in_r * 0.35
+		var core_pts := PackedVector2Array([
+			spos + Vector2(0.0, -c_out),
+			spos + Vector2(c_in, -c_in),
+			spos + Vector2(c_out, 0.0),
+			spos + Vector2(c_in, c_in),
+			spos + Vector2(0.0, c_out),
+			spos + Vector2(-c_in, c_in),
+			spos + Vector2(-c_out, 0.0),
+			spos + Vector2(-c_in, -c_in)
+		])
+		draw_colored_polygon(core_pts, c_col)
+
 # ВНУТРЕННИЙ КЛАСС ПРОГРАММНОЙ ОТРИСОВКИ ДВОЙНОЙ ЗВЕЗДОЧКИ ✨
 class SparkleStar extends Control:
 	var fill_color: Color
@@ -3983,9 +5086,14 @@ func _run_menu_tut_step(step: int) -> void:
 		if menu_tut_pointer:
 			menu_tut_pointer.visible = false
 
-	_lock_hub_buttons(true)
-	if hub_overview_panel:
-		hub_overview_panel.visible = false
+	if step != 20:
+		_lock_hub_buttons(true)
+		if hub_overview_panel:
+			hub_overview_panel.visible = false
+	else:
+		_lock_hub_buttons(false)
+		if hub_overview_panel:
+			hub_overview_panel.visible = true
 
 	match step:
 		1:
@@ -4030,7 +5138,10 @@ func _run_menu_tut_step(step: int) -> void:
 		3:
 			_set_menu_tut_text("Сейчас у тебя имеются 3 бесплатных персонажа. Давай настроим Вику!\n\nСначала выбери световой конус [b]«Апокалипсис»[/b] — он увеличивает урон её навыков.", 6, "🗡 Световой конус")
 			_select_char_for_build("vika")
-			if opt_light_cone and is_instance_valid(opt_light_cone):
+			if btn_choose_light_cone and is_instance_valid(btn_choose_light_cone):
+				btn_choose_light_cone.disabled = false
+				_show_menu_pointer_for_control(btn_choose_light_cone, "right")
+			elif opt_light_cone and is_instance_valid(opt_light_cone):
 				opt_light_cone.disabled = false
 				_show_menu_pointer_for_control(opt_light_cone, "right")
 		4:
@@ -4134,6 +5245,33 @@ func _run_menu_tut_step(step: int) -> void:
 			_set_menu_tut_text("Это гача! Здесь ты можешь получить Лимитированных 5* персонажей, которых нельзя получить никаким другим способом. Сверху ты можешь выбрать баннер персонажа, которого хочешь покрутить. Перед тем, как кого-то крутить, рекомендую почитать, что этот персонаж делает. Сейчас я дам тебе один Блеск Свечения — это валюта, за которую можно крутить Баннеры. 1 Блеск Свечения = 1 крутка. Давай посмотрим, что тебе выпадет!", 23, "✨ Испытай удачу")
 			_lock_gacha_except_one_pull()
 		20:
+			# Немедленно разблокируем все элементы экрана гачи и хаба
+			is_menu_tutorial = false
+			TeamConfig.menu_tutorial_completed = true
+			TeamConfig.save_game()
+
+			if gacha_screen and is_instance_valid(gacha_screen):
+				var btn_b: Button = gacha_screen.find_child("BtnGachaBack", true, false)
+				if btn_b: btn_b.disabled = false
+				var btn_1: Button = gacha_screen.find_child("BtnPull1", true, false)
+				if btn_1: btn_1.disabled = false
+				var btn_10: Button = gacha_screen.find_child("BtnPull10", true, false)
+				if btn_10: btn_10.disabled = false
+				if banner_select_option:
+					banner_select_option.disabled = false
+
+			if btn_shop_back: btn_shop_back.disabled = false
+			if btn_inv_back: btn_inv_back.disabled = false
+
+			_lock_hub_buttons(false)
+			_set_hub_card_disabled(btn_menu_levels, false)
+			_set_hub_card_disabled(btn_menu_chars, false)
+			_set_hub_card_disabled(btn_menu_relics, false)
+			_set_hub_card_disabled(btn_menu_db, false)
+			_set_hub_card_disabled(btn_menu_inv, false)
+			_set_hub_card_disabled(btn_menu_shop, false)
+			_set_hub_card_disabled(btn_menu_gacha, false)
+
 			var finish_txt := "Отлично! Тебе выпала [b]Сара[/b]. Сара — хиллер. Она может лечить союзников. Более того — она может блокировать смерть и оставлять союзников живыми на 1 ед. ХП. Она точно будет тебе полезна!\n\nКогда ты пройдёшь 5 уровень, то бесплатно получишь сразу [b]10 Блесков Свечения[/b] и сможешь погрузиться в гачу на полную катушку! Так что быстрее — я жду тебя на пятом уровне!"
 			if menu_guide_overlay and is_instance_valid(menu_guide_overlay):
 				menu_guide_overlay.hide_pointer()
@@ -4228,6 +5366,8 @@ func _lock_hub_buttons(locked: bool) -> void:
 	_set_hub_card_disabled(btn_menu_inv, locked)
 	_set_hub_card_disabled(btn_menu_shop, locked)
 	_set_hub_card_disabled(btn_menu_gacha, locked)
+	if btn_menu_memory_hall:
+		_set_hub_card_disabled(btn_menu_memory_hall, locked)
 
 func _lock_shop_except_arseniy() -> void:
 	var target_btn: Button = null
@@ -4412,20 +5552,39 @@ func _build_level_team_setup_screen() -> void:
 	roster_label.add_theme_color_override("font_color", Color(0.7, 0.8, 0.95))
 	level_team_setup_screen.add_child(roster_label)
 
-	# Расширенная область под крупные плитки ростера
-	var scroll_roster := ScrollContainer.new()
-	scroll_roster.custom_minimum_size = Vector2(0, 240)
-	level_team_setup_screen.add_child(scroll_roster)
+	# Горизонтальная карусель: 1 ряд крупных карточек персонажей с навигацией и плавной прокруткой
+	var roster_carousel_row := HBoxContainer.new()
+	roster_carousel_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	roster_carousel_row.add_theme_constant_override("separation", 8)
+	roster_carousel_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	level_team_setup_screen.add_child(roster_carousel_row)
 
-	var center_roster := CenterContainer.new()
-	center_roster.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll_roster.add_child(center_roster)
+	var btn_roster_left := Button.new()
+	btn_roster_left.text = "◀"
+	btn_roster_left.custom_minimum_size = Vector2(44, 205)
+	btn_roster_left.add_theme_font_size_override("font_size", 22)
+	roster_carousel_row.add_child(btn_roster_left)
 
-	level_team_roster_container = GridContainer.new()
-	level_team_roster_container.columns = 7
-	level_team_roster_container.add_theme_constant_override("h_separation", 12)
-	level_team_roster_container.add_theme_constant_override("v_separation", 12)
-	center_roster.add_child(level_team_roster_container)
+	var scroll_roster := SmoothScrollContainer.new()
+	scroll_roster.custom_minimum_size = Vector2(1000, 215)
+	scroll_roster.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_roster.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll_roster.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	roster_carousel_row.add_child(scroll_roster)
+
+	btn_roster_left.pressed.connect(func(): scroll_roster.scroll_h_by(-320.0))
+
+	var btn_roster_right := Button.new()
+	btn_roster_right.text = "▶"
+	btn_roster_right.custom_minimum_size = Vector2(44, 205)
+	btn_roster_right.add_theme_font_size_override("font_size", 22)
+	btn_roster_right.pressed.connect(func(): scroll_roster.scroll_h_by(320.0))
+	roster_carousel_row.add_child(btn_roster_right)
+
+	level_team_roster_container = HBoxContainer.new()
+	level_team_roster_container.alignment = BoxContainer.ALIGNMENT_BEGIN
+	level_team_roster_container.add_theme_constant_override("separation", 14)
+	scroll_roster.add_child(level_team_roster_container)
 
 	# Кнопки сохранения и загрузки отряда
 	var team_btn_hbox := HBoxContainer.new()
@@ -4539,7 +5698,11 @@ func _build_level_team_setup_screen() -> void:
 	btn_back.custom_minimum_size = Vector2(160, 48)
 	btn_back.add_theme_font_size_override("font_size", 16)
 	btn_back.pressed.connect(func():
-		if not selected_dungeon_for_battle.is_empty():
+		if selected_memory_hall_floor > 0:
+			selected_memory_hall_floor = 0
+			_refresh_memory_hall_screen()
+			_show_screen("memory_hall")
+		elif not selected_dungeon_for_battle.is_empty():
 			selected_dungeon_for_battle = ""
 			_show_screen("relic_farming")
 		else:
@@ -4551,6 +5714,7 @@ func _build_level_team_setup_screen() -> void:
 func _create_level_slot_panel(slot_idx: int) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(170, 210)
+	panel.clip_contents = true
 	
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.1, 0.12, 0.16)
@@ -4560,6 +5724,8 @@ func _create_level_slot_panel(slot_idx: int) -> PanelContainer:
 	panel.add_theme_stylebox_override("panel", sb)
 
 	var vbox := VBoxContainer.new()
+	vbox.name = "SlotVBox"
+	vbox.z_index = 1
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_theme_constant_override("separation", 8)
 	panel.add_child(vbox)
@@ -4587,6 +5753,79 @@ func _create_level_slot_panel(slot_idx: int) -> PanelContainer:
 	vbox.add_child(remove_btn)
 
 	return panel
+
+# Крупная карточка персонажа в карусели ростера при подготовке к уровню
+func _create_level_roster_card(char_id: String, on_click: Callable) -> Button:
+	var c_data := CharacterRegistry.get_character(char_id)
+	if c_data.is_empty():
+		return null
+
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(165, 195)
+	btn.clip_contents = true
+	btn.pressed.connect(on_click)
+
+	# Сплеш-арт на заднем фоне карточки персонажа
+	var splash_tex: Texture2D = CharacterRegistry.get_character_splash(char_id)
+	if splash_tex != null:
+		var splash_rect := TextureRect.new()
+		splash_rect.name = "RosterCardSplashBG"
+		splash_rect.texture = splash_tex
+		splash_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		splash_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		splash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		splash_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		splash_rect.modulate = Color(0.38, 0.38, 0.45, 0.42)
+		splash_rect.z_index = 0
+		btn.add_child(splash_rect)
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_theme_constant_override("separation", 4)
+	vbox.z_index = 1
+	btn.add_child(vbox)
+
+	var elem_lbl := Label.new()
+	elem_lbl.text = CombatConstants.get_element_label(c_data.element)
+	elem_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	elem_lbl.add_theme_font_size_override("font_size", 14)
+	elem_lbl.add_theme_color_override("font_color", CombatConstants.get_element_color(c_data.element))
+	vbox.add_child(elem_lbl)
+
+	var name_lbl := Label.new()
+	name_lbl.text = c_data.name
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_lbl.custom_minimum_size = Vector2(150, 0)
+	name_lbl.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(name_lbl)
+
+	var path_lbl := Label.new()
+	path_lbl.text = "[%s]" % CharacterRegistry.get_path_name(c_data.path)
+	path_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	path_lbl.add_theme_font_size_override("font_size", 11)
+	path_lbl.add_theme_color_override("font_color", Color(0.7, 0.75, 0.85))
+	vbox.add_child(path_lbl)
+
+	var build := TeamConfig.get_saved_build(char_id)
+	var e_lvl: int = int(build.get("eidolon", 0))
+	var e_lbl := Label.new()
+	e_lbl.text = "★ E%d" % e_lvl
+	e_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	e_lbl.add_theme_font_size_override("font_size", 12)
+	e_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	vbox.add_child(e_lbl)
+
+	var add_lbl := Label.new()
+	add_lbl.text = "+ В отряд"
+	add_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_lbl.add_theme_font_size_override("font_size", 11)
+	add_lbl.add_theme_color_override("font_color", Color(0.4, 0.85, 1.0))
+	vbox.add_child(add_lbl)
+
+	return btn
 
 # Открытие меню подготовки для уровня
 func _open_level_team_setup(level_num: int) -> void:
@@ -4618,33 +5857,15 @@ func _open_level_team_setup(level_num: int) -> void:
 				var c_id := TeamConfig.unlocked_characters[i]
 				_level_team[i] = TeamConfig.get_saved_build(c_id)
 
-	# Заполняем КРУПНЫЕ плитки персонажей (как в Админ-панели!)
+	# Заполняем КРУПНЫЕ плитки персонажей карусели
 	for child in level_team_roster_container.get_children():
+		level_team_roster_container.remove_child(child)
 		child.queue_free()
 
 	for char_id in TeamConfig.unlocked_characters:
-		var c_data := CharacterRegistry.get_character(char_id)
-		if c_data.is_empty():
-			continue
-
-		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(115, 105) # Крупная плитка!
-		btn.pressed.connect(_add_char_to_level_slot.bind(char_id))
-
-		var label := RichTextLabel.new()
-		label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		label.bbcode_enabled = true
-		var elem_color_hex: String = CombatConstants.get_element_color(c_data.element).to_html(false)
-		var elem_label: String = CombatConstants.get_element_label(c_data.element)
-		label.text = "[center]\n[color=#%s][font_size=15][b]%s[/b][/font_size][/color]\n[font_size=13][b]%s[/b][/font_size]\n[color=gray][font_size=11][%s][/font_size][/color][/center]" % [
-			elem_color_hex,
-			elem_label,
-			c_data.name,
-			CharacterRegistry.get_path_name(c_data.path)
-		]
-		btn.add_child(label)
-		level_team_roster_container.add_child(btn)
+		var card := _create_level_roster_card(char_id, _add_char_to_level_slot.bind(char_id))
+		if card != null:
+			level_team_roster_container.add_child(card)
 	
 	if level_num == 6 and not "level_6" in TeamConfig.completed_levels:
 		_show_level_6_setup_tutorial()
@@ -4867,14 +6088,22 @@ func _refresh_level_team_slots() -> void:
 	var children := level_team_slots_container.get_children()
 	for i in mini(children.size(), 4):
 		var panel: PanelContainer = children[i]
-		var vbox: VBoxContainer = panel.get_child(0)
+		var vbox: VBoxContainer = panel.get_node_or_null("SlotVBox") as VBoxContainer
+		if vbox == null:
+			vbox = panel.get_child(0) as VBoxContainer
+		if vbox == null:
+			continue
 		var name_lbl: Label = vbox.get_node("NameLabel")
 		var remove_btn: Button = vbox.get_node("RemoveButton")
 		var slot_data = _level_team[i]
+		var splash_bg: TextureRect = panel.get_node_or_null("LevelSlotSplashBG") as TextureRect
 
 		if slot_data == null:
 			name_lbl.text = "Пусто"
+			name_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 			remove_btn.hide()
+			if splash_bg != null:
+				splash_bg.visible = false
 		else:
 			var c_data := CharacterRegistry.get_character(slot_data.id)
 			var elem: int = int(c_data.get("element", 0))
@@ -4886,6 +6115,23 @@ func _refresh_level_team_slots() -> void:
 			]
 			name_lbl.add_theme_color_override("font_color", CombatConstants.get_element_color(elem))
 			remove_btn.show()
+
+			var splash_tex: Texture2D = CharacterRegistry.get_character_splash(slot_data.id)
+			if splash_tex != null:
+				if splash_bg == null:
+					splash_bg = TextureRect.new()
+					splash_bg.name = "LevelSlotSplashBG"
+					splash_bg.z_index = 0
+					splash_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+					splash_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+					splash_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					splash_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+					panel.add_child(splash_bg)
+				splash_bg.texture = splash_tex
+				splash_bg.modulate = Color(0.38, 0.38, 0.42, 0.35)
+				splash_bg.visible = true
+			elif splash_bg != null:
+				splash_bg.visible = false
 
 	# Обновляем выбор техники
 	_refresh_level_initiator_options()
@@ -4908,12 +6154,11 @@ func _refresh_level_initiator_options() -> void:
 	level_initiator_option.clear()
 	var idx := 0
 	for slot in _level_team:
-		if slot != null:
-			if slot.id in ["pusenkov", "kaori", "shoji", "dasha", "vika", "rimes", "musienko", "joan", "joan_spirit", "isaac_admin", "shoji_swan", "lenskaya_antimatter"]:
-				var data := CharacterRegistry.get_character(slot.id)
-				level_initiator_option.add_item(data.get("name", slot.id))
-				level_initiator_option.set_item_metadata(idx, slot.id)
-				idx += 1
+		if slot != null and MemoryHallManager.has_attack_technique(slot.id):
+			var data := CharacterRegistry.get_character(slot.id)
+			level_initiator_option.add_item(data.get("name", slot.id))
+			level_initiator_option.set_item_metadata(idx, slot.id)
+			idx += 1
 
 	if idx == 0:
 		level_initiator_option.add_item("Без атакующей техники")
@@ -5190,7 +6435,9 @@ func _start_custom_level_battle() -> void:
 		return
 
 	TeamConfig.reset()
-	if not selected_dungeon_for_battle.is_empty():
+	if selected_memory_hall_floor > 0:
+		TeamConfig.battle_mode = "memory_hall_%d" % selected_memory_hall_floor
+	elif not selected_dungeon_for_battle.is_empty():
 		TeamConfig.battle_mode = selected_dungeon_for_battle
 	else:
 		TeamConfig.battle_mode = "level_%d" % selected_level_for_battle
@@ -5202,7 +6449,7 @@ func _start_custom_level_battle() -> void:
 	if init_idx >= 0 and init_idx < level_initiator_option.item_count:
 		TeamConfig.battle_initiator_id = String(level_initiator_option.get_item_metadata(init_idx))
 	else:
-		TeamConfig.battle_initiator_id = team[0].id
+		TeamConfig.battle_initiator_id = ""
 
 	get_tree().change_scene_to_file.call_deferred("res://scenes/battle/battle.tscn")
 
@@ -5741,33 +6988,15 @@ func _open_dungeon_team_setup(dungeon_id: String) -> void:
 
 	level_setup_title.text = "⚔ Подготовка к подземелью: %s %s" % [d_info.icon, d_info.name]
 
-	# Заполняем КРУПНЫЕ плитки персонажей ростера
+	# Заполняем КРУПНЫЕ плитки персонажей карусели ростера
 	for child in level_team_roster_container.get_children():
+		level_team_roster_container.remove_child(child)
 		child.queue_free()
 
 	for char_id in TeamConfig.unlocked_characters:
-		var c_data := CharacterRegistry.get_character(char_id)
-		if c_data.is_empty():
-			continue
-
-		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(115, 105)
-		btn.pressed.connect(_add_char_to_level_slot.bind(char_id))
-
-		var label := RichTextLabel.new()
-		label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		label.bbcode_enabled = true
-		var elem_color_hex: String = CombatConstants.get_element_color(c_data.element).to_html(false)
-		var elem_label: String = CombatConstants.get_element_label(c_data.element)
-		label.text = "[center]\n[color=#%s][font_size=15][b]%s[/b][/font_size][/color]\n[font_size=13][b]%s[/b][/font_size]\n[color=gray][font_size=11][%s][/font_size][/color][/center]" % [
-			elem_color_hex,
-			elem_label,
-			c_data.name,
-			CharacterRegistry.get_path_name(c_data.path)
-		]
-		btn.add_child(label)
-		level_team_roster_container.add_child(btn)
+		var card := _create_level_roster_card(char_id, _add_char_to_level_slot.bind(char_id))
+		if card != null:
+			level_team_roster_container.add_child(card)
 
 	# Если _level_team пустой, подтягиваем текущих бойцов
 	var has_slot := false
@@ -7562,6 +8791,41 @@ func _show_promo_code_dialog() -> void:
 	btn_cancel.pressed.connect(func(): canvas_layer.queue_free())
 	btn_row.add_child(btn_cancel)
 
+	var promo_mgr = null
+	if has_node("/root/NetworkManager"):
+		var nm = get_node("/root/NetworkManager")
+		if nm:
+			promo_mgr = nm.promo
+
+	var on_redeemed: Callable
+	var on_failed: Callable
+
+	var cleanup_promo_signals := func():
+		if promo_mgr != null and is_instance_valid(promo_mgr):
+			if on_redeemed.is_valid() and promo_mgr.promo_redeemed.is_connected(on_redeemed):
+				promo_mgr.promo_redeemed.disconnect(on_redeemed)
+			if on_failed.is_valid() and promo_mgr.promo_failed.is_connected(on_failed):
+				promo_mgr.promo_failed.disconnect(on_failed)
+
+	canvas_layer.tree_exiting.connect(cleanup_promo_signals)
+
+	on_redeemed = func(c: String, rewards: Dictionary):
+		cleanup_promo_signals.call()
+		if is_instance_valid(btn_redeem):
+			btn_redeem.disabled = false
+		if is_instance_valid(result_lbl):
+			result_lbl.text = "🎉 Успешно! Получено: %s" % JSON.stringify(rewards)
+			result_lbl.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))
+		_update_coins_display()
+
+	on_failed = func(c: String, reason: String):
+		cleanup_promo_signals.call()
+		if is_instance_valid(btn_redeem):
+			btn_redeem.disabled = false
+		if is_instance_valid(result_lbl):
+			result_lbl.text = "❌ " + reason
+			result_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+
 	btn_redeem.pressed.connect(func():
 		var code := line_edit.text.strip_edges()
 		if code.is_empty():
@@ -7569,32 +8833,17 @@ func _show_promo_code_dialog() -> void:
 			result_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 			return
 
-		var promo_mgr = null
-		if has_node("/root/NetworkManager"):
-			var nm = get_node("/root/NetworkManager")
-			if nm:
-				promo_mgr = nm.promo
-
 		if promo_mgr == null:
 			result_lbl.text = "❌ Сетевой менеджер недоступен."
 			return
 
+		cleanup_promo_signals.call()
+		promo_mgr.promo_redeemed.connect(on_redeemed)
+		promo_mgr.promo_failed.connect(on_failed)
+
 		btn_redeem.disabled = true
 		result_lbl.text = "⏳ Проверка кода..."
 		result_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
-
-		promo_mgr.promo_redeemed.connect(func(c: String, rewards: Dictionary):
-			btn_redeem.disabled = false
-			result_lbl.text = "🎉 Успешно! Получено: %s" % JSON.stringify(rewards)
-			result_lbl.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))
-			_update_coins_display()
-		, CONNECT_ONE_SHOT)
-
-		promo_mgr.promo_failed.connect(func(c: String, reason: String):
-			btn_redeem.disabled = false
-			result_lbl.text = "❌ " + reason
-			result_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
-		, CONNECT_ONE_SHOT)
 
 		promo_mgr.redeem_promo_code(code)
 	)
@@ -7905,3 +9154,1150 @@ func _show_registration_dialog(is_linking_initial: bool) -> void:
 					status_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 			)
 	)
+
+# ==============================================================================
+# ЗАЛ ВОСПОМИНАНИЙ (MEMORY HALL)
+# ==============================================================================
+
+func _create_hub_memory_hall_card(parent: Control) -> Button:
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(230, 126)
+	btn.text = "ЗАЛ ВОСПОМИНАНИЙ"
+	btn.add_theme_font_size_override("font_size", 1)
+	btn.add_theme_color_override("font_color", Color(0, 0, 0, 0))
+	btn.add_theme_color_override("font_hover_color", Color(0, 0, 0, 0))
+	btn.add_theme_color_override("font_pressed_color", Color(0, 0, 0, 0))
+	btn.add_theme_color_override("font_disabled_color", Color(0, 0, 0, 0))
+
+	var is_completed: bool = TeamConfig.is_memory_hall_completed()
+	var initial_border: Color = Color(0.65, 0.35, 0.90, 0.70) if is_completed else Color(0.80, 0.35, 1.0, 0.95)
+
+	var sb_normal := StyleBoxFlat.new()
+	sb_normal.bg_color = Color(0.10, 0.08, 0.18, 0.92)
+	sb_normal.border_color = initial_border
+	sb_normal.set_border_width_all(2)
+	sb_normal.set_corner_radius_all(14)
+	if not is_completed:
+		sb_normal.shadow_color = Color(0.70, 0.25, 0.95, 0.35)
+		sb_normal.shadow_size = 8
+	btn.add_theme_stylebox_override("normal", sb_normal)
+	btn.set_meta("sb_normal", sb_normal)
+
+	var sb_hover := StyleBoxFlat.new()
+	sb_hover.bg_color = Color(0.16, 0.12, 0.28, 0.96)
+	sb_hover.border_color = Color(0.95, 0.65, 1.0, 1.0)
+	sb_hover.set_border_width_all(2)
+	sb_hover.set_corner_radius_all(14)
+	sb_hover.shadow_color = Color(0.9, 0.5, 1.0, 0.40)
+	sb_hover.shadow_size = 10
+	btn.add_theme_stylebox_override("hover", sb_hover)
+
+	var sb_pressed := StyleBoxFlat.new()
+	sb_pressed.bg_color = Color(0.12, 0.07, 0.22, 0.98)
+	sb_pressed.border_color = Color(1.0, 0.85, 1.0, 1.0)
+	sb_pressed.set_border_width_all(2)
+	sb_pressed.set_corner_radius_all(14)
+	btn.add_theme_stylebox_override("pressed", sb_pressed)
+
+	var sb_disabled := StyleBoxFlat.new()
+	sb_disabled.bg_color = Color(0.04, 0.04, 0.08, 0.95)
+	sb_disabled.border_color = Color(0.18, 0.12, 0.26, 0.40)
+	sb_disabled.set_border_width_all(1)
+	sb_disabled.set_corner_radius_all(14)
+	btn.add_theme_stylebox_override("disabled", sb_disabled)
+
+	var content := VBoxContainer.new()
+	content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	content.alignment = BoxContainer.ALIGNMENT_CENTER
+	content.add_theme_constant_override("separation", 3)
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(content)
+	btn.set_meta("card_content_node", content)
+
+	var icon_lbl := Label.new()
+	icon_lbl.text = "🏛"
+	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	icon_lbl.add_theme_font_size_override("font_size", 28)
+	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(icon_lbl)
+	btn.set_meta("card_icon_lbl", icon_lbl)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "ЗАЛ ВОСПОМИНАНИЙ"
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_font_size_override("font_size", 16)
+	title_lbl.add_theme_color_override("font_color", Color(0.95, 0.88, 1.0))
+	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(title_lbl)
+	btn.set_meta("card_title_lbl", title_lbl)
+
+	var sub_lbl := Label.new()
+	var stars: int = TeamConfig.get_memory_hall_total_stars()
+	sub_lbl.text = "Сезон 1 • ⭐ %d/12" % stars
+	sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub_lbl.add_theme_font_size_override("font_size", 11)
+	sub_lbl.add_theme_color_override("font_color", Color(0.75, 0.65, 0.90))
+	sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(sub_lbl)
+	btn.set_meta("card_sub_lbl", sub_lbl)
+
+	parent.add_child(btn)
+	_setup_memory_hall_shimmer(btn)
+	return btn
+
+func _refresh_memory_hall_card() -> void:
+	if not btn_menu_memory_hall or not is_instance_valid(btn_menu_memory_hall):
+		return
+	var sub_lbl: Label = btn_menu_memory_hall.get_meta("card_sub_lbl", null)
+	if sub_lbl:
+		var stars: int = TeamConfig.get_memory_hall_total_stars()
+		if TeamConfig.is_memory_hall_completed():
+			sub_lbl.text = "Сезон пройден! • ⭐ %d/12" % stars
+			sub_lbl.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
+		else:
+			sub_lbl.text = "Сезон 1 • ⭐ %d/12" % stars
+			sub_lbl.add_theme_color_override("font_color", Color(0.75, 0.65, 0.90))
+	_setup_memory_hall_shimmer(btn_menu_memory_hall)
+
+func _setup_memory_hall_shimmer(btn: Button) -> void:
+	if not btn or not is_instance_valid(btn):
+		return
+	var sb: StyleBoxFlat = btn.get_meta("sb_normal", null)
+	if not sb:
+		return
+	var is_completed: bool = TeamConfig.is_memory_hall_completed()
+	if _memory_hall_shimmer_tween and _memory_hall_shimmer_tween.is_valid():
+		_memory_hall_shimmer_tween.kill()
+		_memory_hall_shimmer_tween = null
+
+	if is_completed:
+		sb.border_color = Color(0.60, 0.35, 0.85, 0.75)
+		sb.shadow_size = 0
+	else:
+		sb.shadow_color = Color(0.75, 0.30, 1.0, 0.35)
+		sb.shadow_size = 8
+		_memory_hall_shimmer_tween = btn.create_tween().set_loops()
+		_memory_hall_shimmer_tween.tween_property(sb, "border_color", Color(0.95, 0.55, 1.0, 1.0), 1.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_memory_hall_shimmer_tween.tween_property(sb, "border_color", Color(0.45, 0.18, 0.70, 0.60), 1.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+func _build_memory_hall_screen() -> void:
+	if memory_hall_screen and is_instance_valid(memory_hall_screen):
+		memory_hall_screen.queue_free()
+
+	memory_hall_screen = VBoxContainer.new()
+	memory_hall_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	memory_hall_screen.add_theme_constant_override("separation", 12)
+	memory_hall_screen.visible = false
+	add_child(memory_hall_screen)
+
+	var top_spacer := Control.new()
+	top_spacer.custom_minimum_size = Vector2(0, 10)
+	memory_hall_screen.add_child(top_spacer)
+
+	var header := Label.new()
+	header.text = "🏛 ЗАЛ ВОСПОМИНАНИЙ"
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.add_theme_font_size_override("font_size", 28)
+	header.add_theme_color_override("font_color", Color(0.92, 0.85, 1.0))
+	memory_hall_screen.add_child(header)
+
+	memory_hall_status_label = Label.new()
+	memory_hall_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	memory_hall_status_label.add_theme_font_size_override("font_size", 15)
+	memory_hall_status_label.add_theme_color_override("font_color", Color(0.80, 0.70, 0.95))
+	memory_hall_screen.add_child(memory_hall_status_label)
+
+	var turb_panel := PanelContainer.new()
+	turb_panel.custom_minimum_size = Vector2(900, 52)
+	turb_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var turb_sb := StyleBoxFlat.new()
+	turb_sb.bg_color = Color(0.12, 0.08, 0.20, 0.90)
+	turb_sb.border_color = Color(0.65, 0.35, 0.95, 0.80)
+	turb_sb.set_border_width_all(2)
+	turb_sb.set_corner_radius_all(10)
+	turb_sb.set_content_margin_all(8)
+	turb_panel.add_theme_stylebox_override("panel", turb_sb)
+	memory_hall_screen.add_child(turb_panel)
+
+	var turb_lbl := RichTextLabel.new()
+	turb_lbl.bbcode_enabled = true
+	turb_lbl.fit_content = true
+	turb_lbl.scroll_active = false
+	turb_lbl.text = "[center]🌪 [b][color=#e0aaff]Турбулентность: «Командная работа»[/color][/b] — Урон союзников фракции «Небожители» [color=#60ff90]+30%[/color]  |  Скорость союзников «Рассвет Хаоса» [color=#60d0ff]+20%[/color][/center]"
+	turb_panel.add_child(turb_lbl)
+
+	var rewards_panel := PanelContainer.new()
+	rewards_panel.custom_minimum_size = Vector2(900, 64)
+	rewards_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var rew_sb := StyleBoxFlat.new()
+	rew_sb.bg_color = Color(0.08, 0.09, 0.14, 0.85)
+	rew_sb.border_color = Color(0.35, 0.40, 0.60, 0.60)
+	rew_sb.set_border_width_all(1)
+	rew_sb.set_corner_radius_all(10)
+	rew_sb.set_content_margin_all(10)
+	rewards_panel.add_theme_stylebox_override("panel", rew_sb)
+	memory_hall_screen.add_child(rewards_panel)
+
+	var rew_vbox := VBoxContainer.new()
+	rew_vbox.add_theme_constant_override("separation", 6)
+	rewards_panel.add_child(rew_vbox)
+
+	var rew_top_hbox := HBoxContainer.new()
+	rew_top_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	rew_top_hbox.add_theme_constant_override("separation", 20)
+	rew_vbox.add_child(rew_top_hbox)
+
+	memory_hall_stars_label = Label.new()
+	memory_hall_stars_label.add_theme_font_size_override("font_size", 16)
+	memory_hall_stars_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.4))
+	rew_top_hbox.add_child(memory_hall_stars_label)
+
+	var btn_claim := Button.new()
+	btn_claim.name = "BtnClaimRewards"
+	btn_claim.text = "🎁 Забрать награды"
+	btn_claim.custom_minimum_size = Vector2(170, 32)
+	btn_claim.pressed.connect(_on_memory_hall_claim_rewards_pressed)
+	rew_top_hbox.add_child(btn_claim)
+
+	memory_hall_rewards_container = HBoxContainer.new()
+	memory_hall_rewards_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	memory_hall_rewards_container.add_theme_constant_override("separation", 14)
+	rew_vbox.add_child(memory_hall_rewards_container)
+
+	var scroll_cards := ScrollContainer.new()
+	scroll_cards.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll_cards.custom_minimum_size = Vector2(0, 300)
+	memory_hall_screen.add_child(scroll_cards)
+
+	var center_cards := CenterContainer.new()
+	center_cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_cards.add_child(center_cards)
+
+	memory_hall_cards_container = GridContainer.new()
+	memory_hall_cards_container.columns = 4
+	memory_hall_cards_container.add_theme_constant_override("h_separation", 18)
+	memory_hall_cards_container.add_theme_constant_override("v_separation", 14)
+	center_cards.add_child(memory_hall_cards_container)
+
+	var bottom_bar := HBoxContainer.new()
+	bottom_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom_bar.custom_minimum_size = Vector2(0, 50)
+	memory_hall_screen.add_child(bottom_bar)
+
+	var btn_back := Button.new()
+	btn_back.text = "↩ Назад в меню"
+	btn_back.custom_minimum_size = Vector2(200, 44)
+	btn_back.pressed.connect(func(): _show_screen("hub"))
+	bottom_bar.add_child(btn_back)
+
+func _refresh_memory_hall_screen() -> void:
+	if not memory_hall_screen or not is_instance_valid(memory_hall_screen):
+		return
+
+	var is_active := MemoryHallManager.is_season_active()
+	if is_active:
+		memory_hall_status_label.text = "Сезон 1: Испытание Безмолвия  |  До завершения: %s (МСК / GMT+3)" % MemoryHallManager.get_season_time_remaining_str()
+		memory_hall_status_label.add_theme_color_override("font_color", Color(0.85, 0.75, 1.0))
+	else:
+		memory_hall_status_label.text = "⛔ Сезон завершён! Режим временно заблокирован до следующего обновления."
+		memory_hall_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+
+	var total_stars: int = TeamConfig.get_memory_hall_total_stars()
+	memory_hall_stars_label.text = "⭐ Всего звёзд: %d / 12" % total_stars
+
+	for c in memory_hall_rewards_container.get_children():
+		memory_hall_rewards_container.remove_child(c)
+		c.queue_free()
+
+	var milestones := [
+		{"key": "stars_3", "label": "3★", "shine": 5},
+		{"key": "stars_6", "label": "6★", "shine": 5},
+		{"key": "stars_9", "label": "9★", "shine": 5},
+		{"key": "stars_12", "label": "12★", "shine": 5},
+		{"key": "floor_4_clear", "label": "4 Этаж (≤28 ц)", "shine": 4}
+	]
+
+	var can_claim_any := false
+	for m in milestones:
+		var key: String = m["key"]
+		var is_claimed: bool = key in TeamConfig.memory_hall_claimed_rewards
+		var is_available: bool = TeamConfig.can_claim_memory_hall_reward(key) and is_active
+
+		if is_available:
+			can_claim_any = true
+
+		var btn_milestone := Button.new()
+		btn_milestone.custom_minimum_size = Vector2(165, 46)
+
+		if is_claimed:
+			btn_milestone.text = "%s: +%d ✨\n✓ Получено" % [m["label"], m["shine"]]
+			btn_milestone.disabled = true
+			btn_milestone.add_theme_color_override("font_disabled_color", Color(0.4, 0.85, 0.5, 0.9))
+		elif is_available:
+			btn_milestone.text = "%s: +%d ✨\n🎁 Забрать!" % [m["label"], m["shine"]]
+			btn_milestone.disabled = false
+			btn_milestone.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2))
+			btn_milestone.pressed.connect(_on_memory_hall_claim_single_reward_pressed.bind(key))
+		else:
+			btn_milestone.text = "%s: +%d ✨\n🔒 Закрыто" % [m["label"], m["shine"]]
+			btn_milestone.disabled = true
+			btn_milestone.add_theme_color_override("font_disabled_color", Color(0.5, 0.55, 0.65, 0.7))
+
+		memory_hall_rewards_container.add_child(btn_milestone)
+
+	var btn_claim: Button = memory_hall_screen.find_child("BtnClaimRewards", true, false)
+	if btn_claim:
+		btn_claim.visible = can_claim_any
+		btn_claim.disabled = not can_claim_any
+
+	for c in memory_hall_cards_container.get_children():
+		memory_hall_cards_container.remove_child(c)
+		c.queue_free()
+
+	for f_num in range(1, 5):
+		var card := _create_memory_hall_floor_card(f_num, is_active)
+		memory_hall_cards_container.add_child(card)
+
+func _on_memory_hall_claim_single_reward_pressed(reward_key: String) -> void:
+	var res: Dictionary = TeamConfig.claim_single_memory_hall_reward(reward_key)
+	if not res.is_empty():
+		_update_coins_display()
+		_refresh_memory_hall_screen()
+		notification_label.text = "🎉 Получено +%d Блеска Свечения за «%s»!" % [int(res.get("shine", 0)), res.get("name", "")]
+
+func _on_memory_hall_claim_rewards_pressed() -> void:
+	var granted: Array[Dictionary] = TeamConfig.claim_memory_hall_rewards()
+	if not granted.is_empty():
+		var total_shine := 0
+		for g in granted:
+			total_shine += int(g.get("shine", 0))
+		_update_coins_display()
+		_refresh_memory_hall_screen()
+		notification_label.text = "🎉 Получено +%d Блеска Свечения за Зал воспоминаний!" % total_shine
+
+func _create_memory_hall_floor_card(floor_num: int, is_active: bool) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(215, 290)
+
+	var is_unlocked: bool = (floor_num <= TeamConfig.memory_hall_unlocked_floor)
+	var floor_info: Dictionary = MemoryHallManager.FLOORS.get(floor_num, {})
+	var title_str: String = String(floor_info.get("title", "Чертог"))
+	var is_two_teams: bool = (floor_num == 4)
+	var stars: int = TeamConfig.memory_hall_stars.get(str(floor_num), 0)
+	var is_cleared: bool = TeamConfig.is_memory_hall_floor_completed(floor_num)
+
+	var sb := StyleBoxFlat.new()
+	if not is_unlocked:
+		sb.bg_color = Color(0.06, 0.07, 0.10, 0.85)
+		sb.border_color = Color(0.2, 0.22, 0.30, 0.5)
+	elif is_cleared:
+		sb.bg_color = Color(0.10, 0.09, 0.18, 0.95)
+		sb.border_color = Color(0.70, 0.40, 1.0, 0.9)
+	else:
+		sb.bg_color = Color(0.09, 0.11, 0.18, 0.92)
+		sb.border_color = Color(0.35, 0.45, 0.70, 0.75)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(12)
+	sb.set_content_margin_all(12)
+	card.add_theme_stylebox_override("panel", sb)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	card.add_child(vbox)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "Этаж %d\n%s" % [floor_num, title_str]
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_font_size_override("font_size", 16)
+	title_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4) if is_unlocked else Color(0.5, 0.55, 0.65))
+	vbox.add_child(title_lbl)
+
+	var diff_lbl := Label.new()
+	diff_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	diff_lbl.add_theme_font_size_override("font_size", 11)
+	match floor_num:
+		1:
+			diff_lbl.text = "Уровень 1 • 1 Волна\n(Для начинающих)"
+			diff_lbl.add_theme_color_override("font_color", Color(0.6, 0.9, 0.7))
+		2:
+			diff_lbl.text = "Уровень 2 • 1 Волна\n(Средняя сложность)"
+			diff_lbl.add_theme_color_override("font_color", Color(0.5, 0.8, 1.0))
+		3:
+			diff_lbl.text = "Уровень 3 • 2 Волны\n(Требуется прокачка!)"
+			diff_lbl.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
+		4:
+			diff_lbl.text = "Уровень 4 • 2 Отряда\n(2 Волны × 2 Половины)"
+			diff_lbl.add_theme_color_override("font_color", Color(1.0, 0.45, 0.6))
+	vbox.add_child(diff_lbl)
+
+	var stars_lbl := Label.new()
+	stars_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stars_lbl.add_theme_font_size_override("font_size", 18)
+	if not is_unlocked:
+		stars_lbl.text = "🔒 Заблокирован"
+		stars_lbl.add_theme_font_size_override("font_size", 13)
+		stars_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))
+	elif is_cleared:
+		var st_text := ""
+		for s in range(3):
+			st_text += "⭐" if s < stars else "☆"
+		stars_lbl.text = st_text
+		stars_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	else:
+		stars_lbl.text = "☆☆☆"
+		stars_lbl.add_theme_color_override("font_color", Color(0.5, 0.55, 0.7))
+	vbox.add_child(stars_lbl)
+
+	var cond_lbl := Label.new()
+	cond_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cond_lbl.add_theme_font_size_override("font_size", 11)
+	cond_lbl.add_theme_color_override("font_color", Color(0.65, 0.7, 0.8))
+	if is_two_teams:
+		cond_lbl.text = "3★: ≥20 ц | 2★: ≥16 ц\n1★: ≥12 ц | Макс: 28 ц"
+	else:
+		cond_lbl.text = "3★: ≥10 ц | 2★: ≥7 ц\n1★: ≥4 ц | Макс: 14 ц"
+	vbox.add_child(cond_lbl)
+
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer)
+
+	var btn_intel := Button.new()
+	btn_intel.text = "🔍 Противники"
+	btn_intel.custom_minimum_size = Vector2(0, 32)
+	btn_intel.pressed.connect(func(): _show_floor_intel_modal(floor_num))
+	vbox.add_child(btn_intel)
+
+	var btn_battle := Button.new()
+	btn_battle.custom_minimum_size = Vector2(0, 36)
+	if not is_active:
+		btn_battle.text = "⛔ Закрыто"
+		btn_battle.disabled = true
+	elif not is_unlocked:
+		btn_battle.text = "🔒 Закрыт"
+		btn_battle.disabled = true
+	else:
+		btn_battle.text = "⚔ В бой!"
+		var b_sb := StyleBoxFlat.new()
+		b_sb.bg_color = Color(0.40, 0.18, 0.65, 0.95) if is_two_teams else Color(0.18, 0.45, 0.75, 0.95)
+		b_sb.border_color = Color(0.85, 0.65, 1.0, 1.0)
+		b_sb.set_border_width_all(1)
+		b_sb.set_corner_radius_all(8)
+		btn_battle.add_theme_stylebox_override("normal", b_sb)
+		if is_two_teams:
+			btn_battle.pressed.connect(func(): _open_memory_hall_two_team_setup())
+		else:
+			btn_battle.pressed.connect(func(): _open_memory_hall_single_team_setup(floor_num))
+	vbox.add_child(btn_battle)
+
+	return card
+
+func _show_floor_intel_modal(floor_num: int) -> void:
+	var intel: Dictionary = MemoryHallManager.get_floor_intel(floor_num)
+	var is_two_teams: bool = bool(intel.get("is_two_teams", false))
+
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.85)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(860, 540)
+	var p_sb := StyleBoxFlat.new()
+	p_sb.bg_color = Color(0.08, 0.08, 0.14, 0.98)
+	p_sb.border_color = Color(0.70, 0.40, 1.0, 0.90)
+	p_sb.set_border_width_all(2)
+	p_sb.set_corner_radius_all(14)
+	p_sb.set_content_margin_all(16)
+	panel.add_theme_stylebox_override("panel", p_sb)
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "🔍 Разведка: Этаж %d — %s" % [floor_num, intel.get("title", "")]
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_font_size_override("font_size", 20)
+	title_lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 1.0))
+	vbox.add_child(title_lbl)
+
+	var sub_lbl := Label.new()
+	var cycles_str := "Лимит: %d циклов" % int(intel.get("cycles", 14))
+	var format_str := "2 Отряда (по 2 волны каждый)" if is_two_teams else "%d волны" % (2 if floor_num == 3 else 1)
+	sub_lbl.text = "%s  •  Формат: %s" % [cycles_str, format_str]
+	sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub_lbl.add_theme_font_size_override("font_size", 13)
+	sub_lbl.add_theme_color_override("font_color", Color(0.7, 0.75, 0.9))
+	vbox.add_child(sub_lbl)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(0, 360)
+	vbox.add_child(scroll)
+
+	var content_vbox := VBoxContainer.new()
+	content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_vbox.add_theme_constant_override("separation", 12)
+	scroll.add_child(content_vbox)
+
+	if not is_two_teams:
+		var waves: Array = intel.get("waves", [])
+		for w_dict in waves:
+			var w_num: int = int(w_dict.get("wave", 1))
+			var w_lbl := Label.new()
+			w_lbl.text = "🌊 ВОЛНА %d / %d:" % [w_num, waves.size()]
+			w_lbl.add_theme_font_size_override("font_size", 15)
+			w_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+			content_vbox.add_child(w_lbl)
+
+			var enemies: Array = w_dict.get("enemies", [])
+			for en in enemies:
+				_build_intel_enemy_row(en, content_vbox)
+	else:
+		var h1_lbl := Label.new()
+		h1_lbl.text = "⚔ ПЕРВАЯ ПОЛОВИНА (Команда 1):"
+		h1_lbl.add_theme_font_size_override("font_size", 16)
+		h1_lbl.add_theme_color_override("font_color", Color(0.5, 0.85, 1.0))
+		content_vbox.add_child(h1_lbl)
+
+		var h1_waves: Array = intel.get("half1_waves", [])
+		for w_dict in h1_waves:
+			var w_num: int = int(w_dict.get("wave", 1))
+			var w_lbl := Label.new()
+			w_lbl.text = "  🌊 Волна %d / 2:" % w_num
+			w_lbl.add_theme_font_size_override("font_size", 14)
+			w_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+			content_vbox.add_child(w_lbl)
+
+			for en in w_dict.get("enemies", []):
+				_build_intel_enemy_row(en, content_vbox)
+
+		var h2_lbl := Label.new()
+		h2_lbl.text = "\n⚔ ВТОРАЯ ПОЛОВИНА (Команда 2):"
+		h2_lbl.add_theme_font_size_override("font_size", 16)
+		h2_lbl.add_theme_color_override("font_color", Color(0.9, 0.6, 1.0))
+		content_vbox.add_child(h2_lbl)
+
+		var h2_waves: Array = intel.get("half2_waves", [])
+		for w_dict in h2_waves:
+			var w_num: int = int(w_dict.get("wave", 1))
+			var w_lbl := Label.new()
+			w_lbl.text = "  🌊 Волна %d / 2:" % w_num
+			w_lbl.add_theme_font_size_override("font_size", 14)
+			w_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+			content_vbox.add_child(w_lbl)
+
+			for en in w_dict.get("enemies", []):
+				_build_intel_enemy_row(en, content_vbox)
+
+	var close_btn := Button.new()
+	close_btn.text = "Закрыть"
+	close_btn.custom_minimum_size = Vector2(160, 40)
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(func(): overlay.queue_free())
+	vbox.add_child(close_btn)
+
+func _build_intel_enemy_row(en: Dictionary, parent: Control) -> void:
+	var row := PanelContainer.new()
+	var r_sb := StyleBoxFlat.new()
+	r_sb.bg_color = Color(0.12, 0.14, 0.20, 0.70)
+	r_sb.set_corner_radius_all(6)
+	r_sb.set_content_margin_all(8)
+	row.add_theme_stylebox_override("panel", r_sb)
+	parent.add_child(row)
+
+	var hbox := HBoxContainer.new()
+	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_theme_constant_override("separation", 16)
+	row.add_child(hbox)
+
+	var is_elite: bool = bool(en.get("is_elite", false))
+	var icon_str := "👹" if is_elite else "👾"
+
+	var name_lbl := RichTextLabel.new()
+	name_lbl.bbcode_enabled = true
+	name_lbl.fit_content = true
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	name_lbl.custom_minimum_size = Vector2(330, 24)
+	var elite_badge := " [color=#ff6070][ЭЛИТА][/color]" if is_elite else ""
+	name_lbl.text = "%s [b]%s[/b]%s (ХП: %d)" % [icon_str, en.get("name", "Враг"), elite_badge, int(en.get("hp", 0))]
+	hbox.add_child(name_lbl)
+
+	var elem_lbl := Label.new()
+	var elem_val: int = int(en.get("element", 0))
+	elem_lbl.text = "Тип: %s" % CombatConstants.get_element_label(elem_val)
+	elem_lbl.add_theme_color_override("font_color", CombatConstants.get_element_color(elem_val))
+	elem_lbl.add_theme_font_size_override("font_size", 12)
+	elem_lbl.custom_minimum_size = Vector2(110, 24)
+	hbox.add_child(elem_lbl)
+
+	var weak_lbl := RichTextLabel.new()
+	weak_lbl.bbcode_enabled = true
+	weak_lbl.fit_content = true
+	weak_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	weak_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	weak_lbl.custom_minimum_size = Vector2(300, 24)
+	var weak_icons: Array[String] = []
+	for w_elem in en.get("weaknesses", []):
+		var w_val: int = int(w_elem)
+		var col_hex := CombatConstants.get_element_color(w_val).to_html(false)
+		var w_name := CombatConstants.get_element_label(w_val)
+		weak_icons.append("[color=#%s]%s[/color]" % [col_hex, w_name])
+	weak_lbl.text = "Уязвимости: " + (", ".join(weak_icons) if not weak_icons.is_empty() else "—")
+	hbox.add_child(weak_lbl)
+
+func _open_memory_hall_single_team_setup(floor_num: int) -> void:
+	selected_memory_hall_floor = floor_num
+	selected_dungeon_for_battle = ""
+	selected_level_for_battle = 0
+
+	var floor_info: Dictionary = MemoryHallManager.FLOORS.get(floor_num, {})
+	var title_str: String = String(floor_info.get("title", "Чертог"))
+	level_setup_title.text = "🏛 Зал воспоминаний — Этаж %d: %s" % [floor_num, title_str]
+
+	var has_slot := false
+	for s in _level_team:
+		if s != null:
+			has_slot = true
+			break
+	if not has_slot:
+		if not TeamConfig.team_members.is_empty():
+			for i in range(mini(4, TeamConfig.team_members.size())):
+				var member: Dictionary = TeamConfig.team_members[i]
+				var c_id: String = String(member.get("id", ""))
+				if TeamConfig.is_character_unlocked(c_id):
+					_level_team[i] = member.duplicate(true)
+		elif not TeamConfig.last_used_team.is_empty():
+			for i in range(mini(4, TeamConfig.last_used_team.size())):
+				var member: Dictionary = TeamConfig.last_used_team[i]
+				var c_id: String = String(member.get("id", ""))
+				if TeamConfig.is_character_unlocked(c_id):
+					_level_team[i] = member.duplicate(true)
+		else:
+			for i in range(mini(4, TeamConfig.unlocked_characters.size())):
+				var c_id := TeamConfig.unlocked_characters[i]
+				_level_team[i] = TeamConfig.get_saved_build(c_id)
+
+	# Заполняем КРУПНЫЕ плитки персонажей карусели ростера
+	for child in level_team_roster_container.get_children():
+		level_team_roster_container.remove_child(child)
+		child.queue_free()
+
+	for char_id in TeamConfig.unlocked_characters:
+		var card := _create_level_roster_card(char_id, _add_char_to_level_slot.bind(char_id))
+		if card != null:
+			level_team_roster_container.add_child(card)
+
+	level_task_label.text = "🎯 Задание: 3★ (≥10 циклов) | 2★ (≥7 циклов) | 1★ (≥4 циклов)\n🌪 Турбулентность: Небожители +30% урона, Рассвет Хаоса +20% скор."
+
+	var intel: Dictionary = MemoryHallManager.get_floor_intel(floor_num)
+	var enemies_str := ""
+	var waves_arr: Array = intel.get("waves", [])
+	for w_idx in range(waves_arr.size()):
+		var w_dict: Dictionary = waves_arr[w_idx]
+		var w_num: int = int(w_dict.get("wave", w_idx + 1))
+		var w_en: Array = w_dict.get("enemies", [])
+		var en_names: Array[String] = []
+		for en in w_en:
+			var is_el: bool = bool(en.get("is_elite", false))
+			var name_str: String = String(en.get("name", "Враг"))
+			if is_el:
+				en_names.append("👹 [b]%s[/b]" % name_str)
+			else:
+				en_names.append("👾 %s" % name_str)
+		enemies_str += "• [color=gold]Волна %d:[/color] %s\n" % [w_num, ", ".join(en_names)]
+	level_enemies_label.text = enemies_str.strip_edges()
+
+	var stars_earned: int = TeamConfig.memory_hall_stars.get(str(floor_num), 0)
+	level_rewards_label.text = "🎁 Награда: Блеск Свечения за звёзды (Текущий результат: %d★)" % stars_earned
+
+	_refresh_level_team_slots()
+	_show_screen("level_team_setup")
+
+func _build_memory_hall_team_setup_screen() -> void:
+	if memory_hall_team_setup_screen and is_instance_valid(memory_hall_team_setup_screen):
+		memory_hall_team_setup_screen.queue_free()
+
+	memory_hall_team_setup_screen = VBoxContainer.new()
+	memory_hall_team_setup_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	memory_hall_team_setup_screen.add_theme_constant_override("separation", 10)
+	memory_hall_team_setup_screen.visible = false
+	add_child(memory_hall_team_setup_screen)
+
+	var title := Label.new()
+	title.text = "🏛 Подготовка: Платиновый чертог (4 Этаж — Два отряда)"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", Color(0.95, 0.85, 1.0))
+	memory_hall_team_setup_screen.add_child(title)
+
+	var sub_lbl := Label.new()
+	sub_lbl.text = "Лимит: 28 Циклов на обе команды (непотраченные циклы Команды 1 переходят к Команде 2). Персонажи не могут повторяться!"
+	sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub_lbl.add_theme_font_size_override("font_size", 13)
+	sub_lbl.add_theme_color_override("font_color", Color(0.75, 0.8, 0.95))
+	memory_hall_team_setup_screen.add_child(sub_lbl)
+
+	var toggle_hbox := HBoxContainer.new()
+	toggle_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	toggle_hbox.add_theme_constant_override("separation", 20)
+	memory_hall_team_setup_screen.add_child(toggle_hbox)
+
+	var btn_toggle_team1 := Button.new()
+	btn_toggle_team1.name = "BtnToggleTeam1"
+	btn_toggle_team1.text = "▶ Редактировать Команду 1 (Половина 1)"
+	btn_toggle_team1.custom_minimum_size = Vector2(300, 36)
+	btn_toggle_team1.pressed.connect(func(): _switch_mh_active_target_team(1))
+	toggle_hbox.add_child(btn_toggle_team1)
+
+	var btn_toggle_team2 := Button.new()
+	btn_toggle_team2.name = "BtnToggleTeam2"
+	btn_toggle_team2.text = "▷ Редактировать Команду 2 (Половина 2)"
+	btn_toggle_team2.custom_minimum_size = Vector2(300, 36)
+	btn_toggle_team2.pressed.connect(func(): _switch_mh_active_target_team(2))
+	toggle_hbox.add_child(btn_toggle_team2)
+
+	var scroll_roster := ScrollContainer.new()
+	scroll_roster.custom_minimum_size = Vector2(0, 160)
+	memory_hall_team_setup_screen.add_child(scroll_roster)
+
+	var center_roster := CenterContainer.new()
+	center_roster.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_roster.add_child(center_roster)
+
+	mh_roster_container = GridContainer.new()
+	mh_roster_container.columns = 7
+	mh_roster_container.add_theme_constant_override("h_separation", 10)
+	mh_roster_container.add_theme_constant_override("v_separation", 10)
+	center_roster.add_child(mh_roster_container)
+
+	var teams_hbox := HBoxContainer.new()
+	teams_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	teams_hbox.add_theme_constant_override("separation", 24)
+	memory_hall_team_setup_screen.add_child(teams_hbox)
+
+	var t1_panel := PanelContainer.new()
+	t1_panel.custom_minimum_size = Vector2(560, 240)
+	var t1_sb := StyleBoxFlat.new()
+	t1_sb.bg_color = Color(0.08, 0.10, 0.16, 0.90)
+	t1_sb.border_color = Color(0.3, 0.6, 1.0, 0.7)
+	t1_sb.set_border_width_all(2)
+	t1_sb.set_corner_radius_all(10)
+	t1_sb.set_content_margin_all(8)
+	t1_panel.add_theme_stylebox_override("panel", t1_sb)
+	teams_hbox.add_child(t1_panel)
+
+	var t1_vbox := VBoxContainer.new()
+	t1_vbox.add_theme_constant_override("separation", 6)
+	t1_panel.add_child(t1_vbox)
+
+	var t1_lbl := Label.new()
+	t1_lbl.text = "🔵 Команда 1 (Первая половина)"
+	t1_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t1_lbl.add_theme_font_size_override("font_size", 15)
+	t1_lbl.add_theme_color_override("font_color", Color(0.5, 0.8, 1.0))
+	t1_vbox.add_child(t1_lbl)
+
+	mh_team1_slots_container = HBoxContainer.new()
+	mh_team1_slots_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	mh_team1_slots_container.add_theme_constant_override("separation", 10)
+	t1_vbox.add_child(mh_team1_slots_container)
+
+	for i in 4:
+		var slot_panel := _create_mh_slot_panel(1, i)
+		mh_team1_slots_container.add_child(slot_panel)
+
+	var init1_hbox := HBoxContainer.new()
+	init1_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	init1_hbox.add_theme_constant_override("separation", 8)
+	t1_vbox.add_child(init1_hbox)
+
+	var init1_lbl := Label.new()
+	init1_lbl.text = "Инициатор:"
+	init1_lbl.add_theme_font_size_override("font_size", 13)
+	init1_hbox.add_child(init1_lbl)
+
+	mh_init_opt_1 = OptionButton.new()
+	mh_init_opt_1.custom_minimum_size = Vector2(200, 30)
+	init1_hbox.add_child(mh_init_opt_1)
+
+	var t2_panel := PanelContainer.new()
+	t2_panel.custom_minimum_size = Vector2(560, 240)
+	var t2_sb := StyleBoxFlat.new()
+	t2_sb.bg_color = Color(0.12, 0.08, 0.18, 0.90)
+	t2_sb.border_color = Color(0.8, 0.4, 1.0, 0.7)
+	t2_sb.set_border_width_all(2)
+	t2_sb.set_corner_radius_all(10)
+	t2_sb.set_content_margin_all(8)
+	t2_panel.add_theme_stylebox_override("panel", t2_sb)
+	teams_hbox.add_child(t2_panel)
+
+	var t2_vbox := VBoxContainer.new()
+	t2_vbox.add_theme_constant_override("separation", 6)
+	t2_panel.add_child(t2_vbox)
+
+	var t2_lbl := Label.new()
+	t2_lbl.text = "🟣 Команда 2 (Вторая половина)"
+	t2_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t2_lbl.add_theme_font_size_override("font_size", 15)
+	t2_lbl.add_theme_color_override("font_color", Color(0.9, 0.6, 1.0))
+	t2_vbox.add_child(t2_lbl)
+
+	mh_team2_slots_container = HBoxContainer.new()
+	mh_team2_slots_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	mh_team2_slots_container.add_theme_constant_override("separation", 10)
+	t2_vbox.add_child(mh_team2_slots_container)
+
+	for i in 4:
+		var slot_panel := _create_mh_slot_panel(2, i)
+		mh_team2_slots_container.add_child(slot_panel)
+
+	var init2_hbox := HBoxContainer.new()
+	init2_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	init2_hbox.add_theme_constant_override("separation", 8)
+	t2_vbox.add_child(init2_hbox)
+
+	var init2_lbl := Label.new()
+	init2_lbl.text = "Инициатор:"
+	init2_lbl.add_theme_font_size_override("font_size", 13)
+	init2_hbox.add_child(init2_lbl)
+
+	mh_init_opt_2 = OptionButton.new()
+	mh_init_opt_2.custom_minimum_size = Vector2(200, 30)
+	init2_hbox.add_child(mh_init_opt_2)
+
+	var btn_hbox := HBoxContainer.new()
+	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_hbox.add_theme_constant_override("separation", 24)
+	memory_hall_team_setup_screen.add_child(btn_hbox)
+
+	var btn_start_f4 := Button.new()
+	btn_start_f4.text = "⚔ В БОЙ (4 ЭТАЖ)"
+	btn_start_f4.custom_minimum_size = Vector2(240, 48)
+	btn_start_f4.add_theme_font_size_override("font_size", 18)
+	var start_sb := StyleBoxFlat.new()
+	start_sb.bg_color = Color(0.50, 0.20, 0.75, 1.0)
+	start_sb.border_color = Color(0.9, 0.7, 1.0, 1.0)
+	start_sb.set_border_width_all(2)
+	start_sb.set_corner_radius_all(10)
+	btn_start_f4.add_theme_stylebox_override("normal", start_sb)
+	btn_start_f4.pressed.connect(_start_memory_hall_floor4_battle)
+	btn_hbox.add_child(btn_start_f4)
+
+	var btn_back := Button.new()
+	btn_back.text = "↩ Назад в Зал"
+	btn_back.custom_minimum_size = Vector2(160, 48)
+	btn_back.add_theme_font_size_override("font_size", 16)
+	btn_back.pressed.connect(func():
+		_refresh_memory_hall_screen()
+		_show_screen("memory_hall")
+	)
+	btn_hbox.add_child(btn_back)
+
+func _create_mh_slot_panel(team_num: int, slot_idx: int) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(125, 150)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.09, 0.13, 0.9)
+	sb.border_color = Color(0.3, 0.35, 0.5, 0.6)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(8)
+	panel.add_theme_stylebox_override("panel", sb)
+
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 4)
+	panel.add_child(vbox)
+
+	var slot_lbl := Label.new()
+	slot_lbl.text = "Слот %d" % (slot_idx + 1)
+	slot_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	slot_lbl.add_theme_font_size_override("font_size", 12)
+	slot_lbl.add_theme_color_override("font_color", Color(0.6, 0.65, 0.75))
+	vbox.add_child(slot_lbl)
+
+	var name_lbl := Label.new()
+	name_lbl.name = "NameLabel"
+	name_lbl.text = "Пусто"
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(name_lbl)
+
+	var remove_btn := Button.new()
+	remove_btn.name = "RemoveButton"
+	remove_btn.text = "Убрать"
+	remove_btn.custom_minimum_size = Vector2(90, 28)
+	remove_btn.pressed.connect(func(): _remove_char_from_mh_team(team_num, slot_idx))
+	remove_btn.visible = false
+	vbox.add_child(remove_btn)
+
+	return panel
+
+func _open_memory_hall_two_team_setup() -> void:
+	selected_memory_hall_floor = 4
+	selected_dungeon_for_battle = ""
+	selected_level_for_battle = 0
+
+	_mh_team_1 = [null, null, null, null]
+	_mh_team_2 = [null, null, null, null]
+
+	if not TeamConfig.memory_hall_team_1.is_empty():
+		for i in range(mini(4, TeamConfig.memory_hall_team_1.size())):
+			var m = TeamConfig.memory_hall_team_1[i]
+			if m != null and TeamConfig.is_character_unlocked(String(m.get("id", ""))):
+				_mh_team_1[i] = m.duplicate(true)
+	elif not TeamConfig.team_members.is_empty():
+		for i in range(mini(4, TeamConfig.team_members.size())):
+			var m = TeamConfig.team_members[i]
+			if m != null and TeamConfig.is_character_unlocked(String(m.get("id", ""))):
+				_mh_team_1[i] = m.duplicate(true)
+
+	if not TeamConfig.memory_hall_team_2.is_empty():
+		for i in range(mini(4, TeamConfig.memory_hall_team_2.size())):
+			var m = TeamConfig.memory_hall_team_2[i]
+			if m != null and TeamConfig.is_character_unlocked(String(m.get("id", ""))):
+				var is_dup := false
+				for s1 in _mh_team_1:
+					if s1 != null and s1.get("id", "") == m.get("id", ""):
+						is_dup = true
+						break
+				if not is_dup:
+					_mh_team_2[i] = m.duplicate(true)
+
+	for child in mh_roster_container.get_children():
+		mh_roster_container.remove_child(child)
+		child.queue_free()
+
+	for char_id in TeamConfig.unlocked_characters:
+		var c_data := CharacterRegistry.get_character(char_id)
+		if c_data.is_empty():
+			continue
+
+		var btn := Button.new()
+		btn.name = "MhRoster_%s" % char_id
+		btn.set_meta("char_id", char_id)
+		btn.custom_minimum_size = Vector2(105, 90)
+		btn.pressed.connect(_on_mh_roster_char_clicked.bind(char_id))
+
+		var label := RichTextLabel.new()
+		label.name = "RosterLabel"
+		label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		label.bbcode_enabled = true
+		btn.add_child(label)
+		mh_roster_container.add_child(btn)
+
+	_mh_active_target_team = 1
+	_switch_mh_active_target_team(1)
+	_refresh_mh_team_slots()
+	_show_screen("memory_hall_team_setup")
+
+func _switch_mh_active_target_team(team_num: int) -> void:
+	_mh_active_target_team = team_num
+	var btn1: Button = memory_hall_team_setup_screen.find_child("BtnToggleTeam1", true, false)
+	var btn2: Button = memory_hall_team_setup_screen.find_child("BtnToggleTeam2", true, false)
+	if btn1 and btn2:
+		if team_num == 1:
+			btn1.text = "▶ Редактировать Команду 1 (Половина 1)"
+			btn2.text = "▷ Редактировать Команду 2 (Половина 2)"
+		else:
+			btn1.text = "▷ Редактировать Команду 1 (Половина 1)"
+			btn2.text = "▶ Редактировать Команду 2 (Половина 2)"
+
+func _on_mh_roster_char_clicked(char_id: String) -> void:
+	if _mh_active_target_team == 1:
+		for s in _mh_team_2:
+			if s != null and s.get("id", "") == char_id:
+				notification_label.text = "❌ Герой уже во 2-й команде! Дубликаты запрещены."
+				return
+		for i in 4:
+			if _mh_team_1[i] != null and _mh_team_1[i].get("id", "") == char_id:
+				_mh_team_1[i] = null
+				_refresh_mh_team_slots()
+				return
+		var free_idx := -1
+		for i in 4:
+			if _mh_team_1[i] == null:
+				free_idx = i
+				break
+		if free_idx != -1:
+			_mh_team_1[free_idx] = TeamConfig.get_saved_build(char_id)
+		else:
+			notification_label.text = "Команда 1 уже заполнена (4 героя)."
+	else:
+		for s in _mh_team_1:
+			if s != null and s.get("id", "") == char_id:
+				notification_label.text = "❌ Герой уже в 1-й команде! Дубликаты запрещены."
+				return
+		for i in 4:
+			if _mh_team_2[i] != null and _mh_team_2[i].get("id", "") == char_id:
+				_mh_team_2[i] = null
+				_refresh_mh_team_slots()
+				return
+		var free_idx := -1
+		for i in 4:
+			if _mh_team_2[i] == null:
+				free_idx = i
+				break
+		if free_idx != -1:
+			_mh_team_2[free_idx] = TeamConfig.get_saved_build(char_id)
+		else:
+			notification_label.text = "Команда 2 уже заполнена (4 героя)."
+
+	_refresh_mh_team_slots()
+
+func _remove_char_from_mh_team(team_num: int, slot_idx: int) -> void:
+	if team_num == 1:
+		_mh_team_1[slot_idx] = null
+	else:
+		_mh_team_2[slot_idx] = null
+	_refresh_mh_team_slots()
+
+func _refresh_mh_team_slots() -> void:
+	var t1_children := mh_team1_slots_container.get_children()
+	for i in mini(t1_children.size(), 4):
+		var panel: PanelContainer = t1_children[i]
+		var vbox: VBoxContainer = panel.get_child(0)
+		var name_lbl: Label = vbox.get_node("NameLabel")
+		var remove_btn: Button = vbox.get_node("RemoveButton")
+		var slot_data = _mh_team_1[i]
+		if slot_data == null:
+			name_lbl.text = "Пусто"
+			name_lbl.add_theme_color_override("font_color", Color(0.5, 0.55, 0.65))
+			remove_btn.hide()
+		else:
+			var c_data := CharacterRegistry.get_character(slot_data.id)
+			var elem: int = int(c_data.get("element", 0))
+			name_lbl.text = "%s\n%s" % [c_data.get("name", "?"), CombatConstants.get_element_label(elem)]
+			name_lbl.add_theme_color_override("font_color", CombatConstants.get_element_color(elem))
+			remove_btn.show()
+
+	var t2_children := mh_team2_slots_container.get_children()
+	for i in mini(t2_children.size(), 4):
+		var panel: PanelContainer = t2_children[i]
+		var vbox: VBoxContainer = panel.get_child(0)
+		var name_lbl: Label = vbox.get_node("NameLabel")
+		var remove_btn: Button = vbox.get_node("RemoveButton")
+		var slot_data = _mh_team_2[i]
+		if slot_data == null:
+			name_lbl.text = "Пусто"
+			name_lbl.add_theme_color_override("font_color", Color(0.5, 0.55, 0.65))
+			remove_btn.hide()
+		else:
+			var c_data := CharacterRegistry.get_character(slot_data.id)
+			var elem: int = int(c_data.get("element", 0))
+			name_lbl.text = "%s\n%s" % [c_data.get("name", "?"), CombatConstants.get_element_label(elem)]
+			name_lbl.add_theme_color_override("font_color", CombatConstants.get_element_color(elem))
+			remove_btn.show()
+
+	var t1_ids := {}
+	for s in _mh_team_1:
+		if s != null: t1_ids[s.id] = true
+	var t2_ids := {}
+	for s in _mh_team_2:
+		if s != null: t2_ids[s.id] = true
+
+	for btn in mh_roster_container.get_children():
+		var char_id: String = String(btn.get_meta("char_id", btn.name.trim_prefix("MhRoster_")))
+		var c_data := CharacterRegistry.get_character(char_id)
+		var label: RichTextLabel = btn.get_node_or_null("RosterLabel")
+		if label and not c_data.is_empty():
+			var elem_col: String = CombatConstants.get_element_color(c_data.element).to_html(false)
+			var team_tag := ""
+			if t1_ids.has(char_id):
+				team_tag = "\n[color=#50b0ff][b][Отряд 1][/b][/color]"
+			elif t2_ids.has(char_id):
+				team_tag = "\n[color=#d070ff][b][Отряд 2][/b][/color]"
+			label.text = "[center]\n[color=#%s][font_size=12]%s[/font_size][/color]\n[font_size=12][b]%s[/b][/font_size]%s[/center]" % [
+				elem_col,
+				CombatConstants.get_element_label(c_data.element),
+				c_data.name,
+				team_tag
+			]
+
+	mh_init_opt_1.clear()
+	var idx1 := 0
+	for s in _mh_team_1:
+		if s != null and MemoryHallManager.has_attack_technique(s.id):
+			var c_data := CharacterRegistry.get_character(s.id)
+			mh_init_opt_1.add_item(c_data.get("name", s.id))
+			mh_init_opt_1.set_item_metadata(idx1, s.id)
+			idx1 += 1
+	if idx1 == 0:
+		mh_init_opt_1.add_item("Без атакующей техники")
+		mh_init_opt_1.set_item_metadata(0, "")
+
+	mh_init_opt_2.clear()
+	var idx2 := 0
+	for s in _mh_team_2:
+		if s != null and MemoryHallManager.has_attack_technique(s.id):
+			var c_data := CharacterRegistry.get_character(s.id)
+			mh_init_opt_2.add_item(c_data.get("name", s.id))
+			mh_init_opt_2.set_item_metadata(idx2, s.id)
+			idx2 += 1
+	if idx2 == 0:
+		mh_init_opt_2.add_item("Без атакующей техники")
+		mh_init_opt_2.set_item_metadata(0, "")
+
+func _start_memory_hall_floor4_battle() -> void:
+	if not MemoryHallManager.is_season_active():
+		notification_label.text = "⛔ Сезон Зала воспоминаний завершён!"
+		return
+
+	var t1: Array[Dictionary] = []
+	for i in 4:
+		if _mh_team_1[i] != null:
+			var d: Dictionary = _mh_team_1[i].duplicate(true)
+			d["slot_idx"] = i
+			t1.append(d)
+
+	var t2: Array[Dictionary] = []
+	for i in 4:
+		if _mh_team_2[i] != null:
+			var d: Dictionary = _mh_team_2[i].duplicate(true)
+			d["slot_idx"] = i
+			t2.append(d)
+
+	if t1.is_empty():
+		notification_label.text = "❌ В первой команде должен быть хотя бы 1 герой!"
+		return
+	if t2.is_empty():
+		notification_label.text = "❌ Во второй команде должен быть хотя бы 1 герой!"
+		return
+
+	var set1 := {}
+	for m in t1: set1[m.id] = true
+	for m in t2:
+		if set1.has(m.id):
+			notification_label.text = "❌ Персонаж «%s» выбран в обеих командах!" % m.id
+			return
+
+	var init1_id: String = ""
+	if mh_init_opt_1 and mh_init_opt_1.selected >= 0 and mh_init_opt_1.item_count > 0:
+		var meta = mh_init_opt_1.get_item_metadata(mh_init_opt_1.selected)
+		if meta != null and String(meta) != "":
+			init1_id = String(meta)
+
+	var init2_id: String = ""
+	if mh_init_opt_2 and mh_init_opt_2.selected >= 0 and mh_init_opt_2.item_count > 0:
+		var meta = mh_init_opt_2.get_item_metadata(mh_init_opt_2.selected)
+		if meta != null and String(meta) != "":
+			init2_id = String(meta)
+
+	TeamConfig.reset()
+	TeamConfig.battle_mode = "memory_hall_4"
+	TeamConfig.team_members = t1
+	TeamConfig.memory_hall_team_1 = t1
+	TeamConfig.memory_hall_team_2 = t2
+	TeamConfig.battle_initiator_id = init1_id
+	TeamConfig.memory_hall_initiator_1 = init1_id
+	TeamConfig.memory_hall_initiator_2 = init2_id
+	TeamConfig.save_game()
+
+	get_tree().change_scene_to_file.call_deferred("res://scenes/battle/battle.tscn")

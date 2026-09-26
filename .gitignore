@@ -21,6 +21,10 @@ godot.log
 .DS_Store
 Thumbs.db
 
+# Python cache
+__pycache__/
+*.pyc
+
 # User runtime data
 user/
 user_data/

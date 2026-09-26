@@ -1,6 +1,7 @@
 extends Control
 
 const LenskayaAntimatterAbilities = preload("res://scripts/characters/lenskaya_antimatter.gd")
+const MemoryHallManager = preload("res://scripts/combat/memory_hall_manager.gd")
 
 @onready var battle_manager: BattleManager = %BattleManager
 @onready var allies_container: HBoxContainer = %AlliesContainer
@@ -40,6 +41,19 @@ const LenskayaAntimatterAbilities = preload("res://scripts/characters/lenskaya_a
 @onready var btn_support_action: Button = %BtnSupportAction
 @onready var chorus_dark_overlay: ColorRect = %ChorusDarkOverlay
 var _chorus_glow_tween: Tween = null
+
+const BGM_DEFAULT_PATH: String = "res://assets/audio/most_wanted.mp3"
+const BGM_VELZEBUL_PATH: String = "res://assets/audio/my_heart.mp3"
+const BGM_RIMES_P1_PATH: String = "res://assets/audio/unbridled_growth.mp3"
+const BGM_RIMES_CHORUS_PATH: String = "res://assets/audio/hopes_and_dreams.mp3"
+var _bgm_player: AudioStreamPlayer = null
+var _current_bgm_path: String = ""
+var _is_rimes_battle: bool = false
+var _chorus_bgm_triggered: bool = false
+var _is_exiting_battle: bool = false
+var _rimes_glass_shatter_triggered: bool = false
+var _rimes_chorus_fire_triggered: bool = false
+var _rimes_void_bg: Control = null
 
 # === Новые переменные для 3-вкладочного окна Инфо персонажа ===
 var _btn_inspect_tab_info: Button
@@ -108,6 +122,8 @@ var _selecting_target: bool = false
 var _target_mode: String = ""
 var _multi_targets: Array[CombatUnit] = []
 var _skills_help_open: bool = false
+var _targeting_allies: bool = false
+var _is_ally_turn_active: bool = false
 
 # Элементы мягкого золотого фона «Формы духа»
 var _spirit_vfx_container: Control = null
@@ -146,6 +162,9 @@ var _highlighted_unit_panel: PanelContainer = null
 var _skill_tooltip_panel: PanelContainer = null
 var _skill_tooltip_text: RichTextLabel = null
 var _selected_target_unit: CombatUnit = null
+var _target_border_style: StyleBoxFlat = null
+var _card_anim_time: float = 0.0
+var _highlight_start_time: float = 0.0
 
 static func _create_opaque_panel_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -170,6 +189,8 @@ func _ready() -> void:
 	btn_toggle_log.pressed.connect(_toggle_log)
 	inspect_overlay.gui_input.connect(_on_inspect_overlay_input)
 	battle_manager.ult_targeting_requested.connect(_on_ult_targeting_requested)
+	battle_manager.ultimate_started.connect(_on_ultimate_started)
+	battle_manager.set_meta("is_battle_ui_active", true)
 	
 	battle_manager.enemies_reshuffled.connect(_build_unit_displays)
 	battle_manager.log_added.connect(_on_log)
@@ -191,8 +212,15 @@ func _ready() -> void:
 	battle_manager.lenskaya_am_inverted_exit_requested.connect(_on_lenskaya_am_inverted_exit)
 	btn_support_action.pressed.connect(_on_btn_support_action_pressed)
 	battle_manager.chorus_charges_changed.connect(_on_chorus_charges_changed)
+	battle_manager.chorus_activated.connect(_on_chorus_activated_bgm)
 	battle_manager.moon_maiden_hits_changed.connect(func(_val): _update_moon_maiden_hud())
+	battle_manager.boss_phase_changed.connect(_on_boss_phase_changed)
+	battle_manager.memory_hall_wave_advanced.connect(_on_memory_hall_wave_advanced)
+	battle_manager.memory_hall_half1_cleared.connect(_on_memory_hall_half1_cleared)
+	_init_bgm_player()
 	_refresh_support_button()
+	if is_instance_valid(enemies_container):
+		enemies_container.sort_children.connect(_on_enemies_container_sort_children)
 
 	result_panel.hide()
 	action_panel.hide()
@@ -260,6 +288,7 @@ func _ready() -> void:
 	_setup_inspect_ui()
 
 	battle_manager.start_battle(TeamConfig.team_members, TeamConfig.battle_initiator_id)
+	_setup_battle_bgm()
 	_build_unit_displays()
 	_on_sp_changed(battle_manager.skill_points)
 	_refresh_action_bar()
@@ -305,10 +334,193 @@ func _on_give_up_pressed() -> void:
 	_return_to_previous_screen()
 	
 func _return_to_previous_screen() -> void:
-	if TeamConfig.battle_mode.begins_with("level_") or TeamConfig.battle_mode == "fiction" or TeamConfig.battle_mode == "boss" or TeamConfig.battle_mode.begins_with("dungeon_") or TeamConfig.battle_mode.begins_with("planar_"):
-		get_tree().change_scene_to_file("res://scenes/main_menu/main_menu.tscn")
+	if _is_exiting_battle:
+		return
+	_is_exiting_battle = true
+	if is_instance_valid(btn_return):
+		btn_return.disabled = true
+	if is_instance_valid(_bgm_player) and _bgm_player.playing:
+		var tween: Tween = create_tween()
+		if tween != null:
+			tween.tween_property(_bgm_player, "volume_db", -60.0, 0.75)
+			tween.finished.connect(_finish_return_to_previous_screen)
+			return
+	_finish_return_to_previous_screen()
+
+func _finish_return_to_previous_screen() -> void:
+	_stop_bgm()
+	var target_scene := "res://scenes/team_setup/team_setup.tscn"
+	if TeamConfig.battle_mode.begins_with("level_") or TeamConfig.battle_mode == "fiction" or TeamConfig.battle_mode == "boss" or TeamConfig.battle_mode.begins_with("dungeon_") or TeamConfig.battle_mode.begins_with("planar_") or TeamConfig.battle_mode.begins_with("memory_hall_"):
+		target_scene = "res://scenes/main_menu/main_menu.tscn"
+	get_tree().change_scene_to_file.call_deferred(target_scene)
+
+func _exit_tree() -> void:
+	_stop_bgm()
+
+# =============================================================================
+# Фоновая музыка (BGM): динамический выбор треков и зацикливание
+# =============================================================================
+func _init_bgm_player() -> void:
+	if _bgm_player == null:
+		_bgm_player = AudioStreamPlayer.new()
+		_bgm_player.name = "BGMPlayer"
+		_bgm_player.bus = "Master"
+		_bgm_player.volume_db = -3.0
+		add_child(_bgm_player)
+		_bgm_player.finished.connect(_on_bgm_finished)
+
+func _setup_battle_bgm() -> void:
+	_is_rimes_battle = false
+	_chorus_bgm_triggered = false
+	_rimes_glass_shatter_triggered = false
+	_rimes_chorus_fire_triggered = false
+	if is_instance_valid(_rimes_void_bg):
+		_rimes_void_bg.queue_free()
+		_rimes_void_bg = null
+	var has_velzebul: bool = false
+	for enemy in battle_manager.enemies:
+		if enemy != null:
+			if enemy.id == "rimes_final_boss":
+				_is_rimes_battle = true
+				break
+			elif enemy.id == "velzebul_boss":
+				has_velzebul = true
+
+	if _is_rimes_battle:
+		_play_bgm(BGM_RIMES_P1_PATH, "Unbridled Growth — HOYO-MiX")
+	elif has_velzebul:
+		_play_bgm(BGM_VELZEBUL_PATH, "my heart *+ — jdmfessh, nudness")
 	else:
-		get_tree().change_scene_to_file("res://scenes/team_setup/team_setup.tscn")
+		_play_bgm(BGM_DEFAULT_PATH, "Most Wanted — Honkai: Star Rail")
+
+func _on_boss_phase_changed(_boss_unit: CombatUnit, _new_phase: int) -> void:
+	pass
+
+func _on_chorus_activated_bgm(_chosen_ally: CombatUnit) -> void:
+	if not _is_rimes_battle or _chorus_bgm_triggered:
+		return
+	_chorus_bgm_triggered = true
+	_play_bgm(BGM_RIMES_CHORUS_PATH, "Hopes And Dreams — Toby Fox (Mash-up)")
+
+func _play_bgm(track_path: String, track_title: String) -> void:
+	if _current_bgm_path == track_path and _bgm_player != null and _bgm_player.playing:
+		return
+	_current_bgm_path = track_path
+	if _bgm_player == null:
+		_init_bgm_player()
+	if ResourceLoader.exists(track_path):
+		var stream: AudioStream = load(track_path) as AudioStream
+		if stream != null:
+			if stream is AudioStreamMP3:
+				(stream as AudioStreamMP3).loop = true
+			_bgm_player.stream = stream
+			_bgm_player.volume_db = -3.0
+			_bgm_player.play()
+			if track_title != "":
+				battle_manager.log_message("🎵 Звучит тема битвы: %s!" % track_title)
+
+func _on_bgm_finished() -> void:
+	if _current_bgm_path != "" and is_instance_valid(_bgm_player) and _bgm_player.stream != null:
+		_bgm_player.play()
+
+func _stop_bgm() -> void:
+	_current_bgm_path = ""
+	if is_instance_valid(_bgm_player):
+		_bgm_player.stop()
+
+func _process(delta: float) -> void:
+	_card_anim_time += delta
+	_update_card_idle_dynamics(delta)
+	_check_rimes_glass_shatter()
+	_check_rimes_chorus_fire_transition()
+	if _selecting_target and _selected_target_unit != null:
+		var targets_to_redraw: Array[CombatUnit] = [_selected_target_unit]
+		for sec in _get_affected_secondary_targets(_selected_target_unit):
+			if sec != null and not targets_to_redraw.has(sec):
+				targets_to_redraw.append(sec)
+		for u in _multi_targets:
+			if u != null and not targets_to_redraw.has(u):
+				targets_to_redraw.append(u)
+		for t_unit in targets_to_redraw:
+			if t_unit != null and _unit_panels.has(t_unit):
+				var p: PanelContainer = _unit_panels[t_unit]
+				if is_instance_valid(p):
+					var ret := p.get_node_or_null("TargetReticle") as Control
+					if is_instance_valid(ret):
+						ret.queue_redraw()
+
+func _check_rimes_glass_shatter() -> void:
+	if not _is_rimes_battle or _rimes_glass_shatter_triggered:
+		return
+	if is_instance_valid(_bgm_player) and _bgm_player.playing and _current_bgm_path == BGM_RIMES_P1_PATH:
+		var pos: float = _bgm_player.get_playback_position()
+		if pos >= 11.05:
+			_trigger_rimes_glass_shatter()
+
+func _trigger_rimes_glass_shatter() -> void:
+	if _rimes_glass_shatter_triggered:
+		return
+	_rimes_glass_shatter_triggered = true
+
+	# Создаем персистентный фон Пустоты под сценой боя (скрыт до момента взрыва осколков)
+	if _rimes_void_bg == null or not is_instance_valid(_rimes_void_bg):
+		_rimes_void_bg = RimesVoidBackground.new()
+		_rimes_void_bg.visible = false
+		add_child(_rimes_void_bg)
+		move_child(_rimes_void_bg, 1)
+
+	# Запускаем зрелищный эффект растрескивания стекла и разлета осколков
+	var shatter_vfx := RimesGlassShatterVFX.new(self)
+	add_child(shatter_vfx)
+
+	battle_manager.log_message("⚡ [Реальность раскалывается под натиском Пустоты!]")
+
+func _on_rimes_glass_break_moment() -> void:
+	if is_instance_valid(_rimes_void_bg):
+		_rimes_void_bg.visible = true
+		_rimes_void_bg.modulate.a = 1.0
+	var bg_node := get_node_or_null("Background") as ColorRect
+	if is_instance_valid(bg_node):
+		bg_node.color = Color(0.008, 0.004, 0.012, 1.0)
+
+func _check_rimes_chorus_fire_transition() -> void:
+	if not _is_rimes_battle or _rimes_chorus_fire_triggered:
+		return
+	if not _chorus_bgm_triggered or _current_bgm_path != BGM_RIMES_CHORUS_PATH:
+		return
+	if is_instance_valid(_bgm_player) and _bgm_player.playing:
+		var pos: float = _bgm_player.get_playback_position()
+		if pos >= 21.0:
+			_start_rimes_chorus_fire_transition()
+
+func _start_rimes_chorus_fire_transition() -> void:
+	if _rimes_chorus_fire_triggered:
+		return
+	_rimes_chorus_fire_triggered = true
+
+	# Полноэкранный побелеть-розовеющий оверлей за 2 секунды с последующей вспышкой
+	var white_pink_overlay := ColorRect.new()
+	white_pink_overlay.name = "ChorusWhitePinkOverlay"
+	white_pink_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	white_pink_overlay.color = Color(1.0, 0.88, 0.94, 1.0)
+	white_pink_overlay.modulate.a = 0.0
+	white_pink_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	white_pink_overlay.z_index = 240
+	add_child(white_pink_overlay)
+
+	var tw := create_tween()
+	# 1. За 2 секунды экран плавно белеет-розовеет
+	tw.tween_property(white_pink_overlay, "modulate:a", 0.95, 2.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	# 2. Вспышка и смена сфер Пустоты на горящий розово-золотой огонь
+	tw.tween_callback(func():
+		_on_screen_impact_requested(Color(1.0, 0.95, 0.98, 1.0), 16.0, 0.55)
+		if is_instance_valid(_rimes_void_bg) and _rimes_void_bg.has_method("set_mode_rose_gold_fire"):
+			_rimes_void_bg.set_mode_rose_gold_fire()
+		battle_manager.log_message("🔥 [Розово-золотое пламя Человечества охватывает поле боя!]")
+	)
+	# 3. Мягкое рассеивание оверлея
+	tw.tween_property(white_pink_overlay, "modulate:a", 0.0, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(white_pink_overlay.queue_free)
 		
 func _init_factions_panel() -> void:
 	btn_factions = Button.new()
@@ -557,6 +769,7 @@ func _create_unit_panel(unit: CombatUnit, is_ally: bool) -> PanelContainer:
 	if is_memo:
 		panel.size_flags_vertical = Control.SIZE_SHRINK_END
 	panel.set_meta("unit", unit)
+	panel.clip_contents = true
 
 	if is_memo:
 		var elem_col: Color = CombatConstants.get_element_color(unit.element)
@@ -569,8 +782,24 @@ func _create_unit_panel(unit: CombatUnit, is_ally: bool) -> PanelContainer:
 		panel.add_theme_stylebox_override("panel", memo_style)
 
 	var vbox := VBoxContainer.new()
+	vbox.name = "UnitVBox"
+	vbox.z_index = 1
 	vbox.add_theme_constant_override("separation", 2 if is_memo else 6) 
 	panel.add_child(vbox)
+
+	var splash_tex: Texture2D = CharacterRegistry.get_character_splash(unit.id)
+	if splash_tex != null:
+		var bg_tex := TextureRect.new()
+		bg_tex.name = "CharacterSplashBG"
+		bg_tex.texture = splash_tex
+		bg_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		bg_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg_tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var tint_col := Color(0.35, 0.35, 0.40, 0.36) if is_ally else Color(0.38, 0.28, 0.38, 0.34)
+		bg_tex.modulate = tint_col
+		bg_tex.z_index = 0
+		panel.add_child(bg_tex)
 
 	var name_lbl := Label.new()
 	var elite_tag := " ★" if unit.is_elite else ""
@@ -1605,6 +1834,28 @@ func _open_inspect(unit: CombatUnit) -> void:
 	
 	# 4. Вкладка "Световой конус"
 	_populate_light_cone(unit)
+
+	# Атмосферный сплеш-арт на заднем фоне панели инспекции
+	var inspect_panel: PanelContainer = %InspectPanel
+	if inspect_panel:
+		inspect_panel.clip_contents = true
+		var splash_bg: TextureRect = inspect_panel.get_node_or_null("InspectSplashBG") as TextureRect
+		var splash_tex := CharacterRegistry.get_character_splash(unit.id)
+		if splash_tex != null:
+			if splash_bg == null:
+				splash_bg = TextureRect.new()
+				splash_bg.name = "InspectSplashBG"
+				splash_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				splash_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+				splash_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				splash_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+				inspect_panel.add_child(splash_bg)
+				inspect_panel.move_child(splash_bg, 0)
+			splash_bg.texture = splash_tex
+			splash_bg.modulate = Color(0.35, 0.35, 0.40, 0.22)
+			splash_bg.visible = true
+		elif splash_bg != null:
+			splash_bg.visible = false
 	
 	# По умолчанию всегда открываем 1-ю вкладку ("Инфо")
 	_switch_inspect_tab(0)
@@ -1954,6 +2205,7 @@ func _on_skills_help_pressed() -> void:
 # === ПОЛНОСТЬЮ ЗАМЕНИТЕ ЭТОТ МЕТОД В SCENES/BATTLE/BATTLE.GD ===
 # === ПОЛНОСТЬЮ ЗАМЕНИТЕ ЭТОТ МЕТОД В SCENES/BATTLE/BATTLE.GD ===
 func _set_target_buttons_visible(show_enemies: bool, show_allies: bool) -> void:
+	_targeting_allies = (show_allies and not show_enemies)
 	var active_char: CombatUnit = battle_manager.current_unit
 	
 	for unit in _unit_panels:
@@ -2025,15 +2277,76 @@ func _set_target_buttons_visible(show_enemies: bool, show_allies: bool) -> void:
 			var b: Button = vbox_node.get_node_or_null("TargetButton")
 			if b and b.visible and u.is_alive():
 				valid_targets.append(u)
-		if not valid_targets.has(_selected_target_unit):
-			if not valid_targets.is_empty():
-				_selected_target_unit = valid_targets[0]
-			else:
-				_selected_target_unit = null
+		if show_enemies:
+			_selected_target_unit = _pick_highest_priority_target(valid_targets)
+		else:
+			if not valid_targets.has(_selected_target_unit):
+				if not valid_targets.is_empty():
+					_selected_target_unit = valid_targets[0]
+				else:
+					_selected_target_unit = null
 	else:
 		_selected_target_unit = null
 
 	_update_targeting_visuals()
+	_update_all_card_modulates(true)
+
+func _get_enemy_priority(unit: CombatUnit) -> int:
+	if unit == null or not is_instance_valid(unit) or unit.is_ally or not unit.is_alive():
+		return 0
+	
+	# Ранг 4: Недельный босс
+	if bool(unit.get_meta("is_weekly_boss", false)) \
+		or unit.id == "rimes_final_boss" \
+		or "(Недельный босс)" in unit.display_name:
+		return 4
+	
+	# Ранг 3: Босс
+	if bool(unit.get_meta("is_boss", false)) \
+		or unit.id in ["void_boss", "masked_silhouette", "server_virus", "shoji_vz", "velzebul_boss", "kyle_rebel_leader", "test_boss"] \
+		or unit.id.ends_with("_boss") \
+		or "(Босс)" in unit.display_name \
+		or (unit.stats != null and unit.stats.max_hp >= 50000.0 and not unit.is_elite):
+		return 3
+	
+	# Ранг 2: Элита
+	if unit.is_elite \
+		or bool(unit.get_meta("is_elite", false)) \
+		or unit.id in ["void_elite", "void_armored", "ortho_mutant", "ortofetamin_horror", "your_memories", "insurgent"] \
+		or "(Элита)" in unit.display_name:
+		return 2
+	
+	# Ранг 1: Обычный противник
+	return 1
+
+func _pick_highest_priority_target(targets: Array[CombatUnit]) -> CombatUnit:
+	if targets.is_empty():
+		return null
+	var best_target: CombatUnit = targets[0]
+	var best_priority: int = _get_enemy_priority(best_target)
+	var best_hp_ratio: float = 1.0
+	if best_target.stats != null and best_target.stats.max_hp > 0.0:
+		best_hp_ratio = best_target.stats.hp / best_target.stats.max_hp
+	
+	for i in range(1, targets.size()):
+		var cand: CombatUnit = targets[i]
+		var cand_priority: int = _get_enemy_priority(cand)
+		var cand_hp_ratio: float = 1.0
+		if cand.stats != null and cand.stats.max_hp > 0.0:
+			cand_hp_ratio = cand.stats.hp / cand.stats.max_hp
+		
+		if cand_priority > best_priority:
+			best_target = cand
+			best_priority = cand_priority
+			best_hp_ratio = cand_hp_ratio
+		elif cand_priority == best_priority:
+			# При равной важности выбираем противника с наименьшим % здоровья
+			if cand_hp_ratio < best_hp_ratio:
+				best_target = cand
+				best_priority = cand_priority
+				best_hp_ratio = cand_hp_ratio
+	
+	return best_target
 					
 func _refresh_action_bar() -> void:
 	for child in action_bar.get_children():
@@ -2166,7 +2479,40 @@ func _unit_color(unit: CombatUnit) -> Color:
 		_: return Color(0.6, 0.6, 0.6)
 
 func _on_turn_started(unit: CombatUnit) -> void:
-	turn_label.text = "Цикл: %d | Ход: %s" % [battle_manager.get_current_cycles(), unit.display_name]
+	_is_ally_turn_active = unit != null and unit.is_ally and unit.is_alive()
+	_targeting_allies = false
+	if battle_manager.battle_mode.begins_with("memory_hall_"):
+		var remaining: int = 0
+		var limit: int = 14
+		var floor_name: String = ""
+		match battle_manager.battle_mode:
+			"memory_hall_1":
+				floor_name = "Бронза"
+				limit = 14
+				remaining = maxi(0, 14 - battle_manager.get_current_cycles())
+			"memory_hall_2":
+				floor_name = "Серебро"
+				limit = 14
+				remaining = maxi(0, 14 - battle_manager.get_current_cycles())
+			"memory_hall_3":
+				floor_name = "Золото"
+				limit = 14
+				remaining = maxi(0, 14 - battle_manager.get_current_cycles())
+			"memory_hall_4":
+				floor_name = "Платина (Отряд %d/2)" % battle_manager.memory_hall_half
+				limit = 28
+				var spent: int = (battle_manager.memory_hall_half1_spent_cycles + battle_manager.get_current_cycles()) if battle_manager.memory_hall_half == 2 else battle_manager.get_current_cycles()
+				remaining = maxi(0, 28 - spent)
+		turn_label.text = "🌌 Зал: %s [Волна %d/%d] | Ост. циклов: %d/%d | Ход: %s" % [
+			floor_name,
+			battle_manager.memory_hall_wave,
+			battle_manager.memory_hall_total_waves,
+			remaining,
+			limit,
+			unit.display_name
+		]
+	else:
+		turn_label.text = "Цикл: %d | Ход: %s" % [battle_manager.get_current_cycles(), unit.display_name]
 	
 	if _target_mode != "ult" and _target_mode != "chorus":
 		_selecting_target = false
@@ -2187,7 +2533,7 @@ func _on_turn_started(unit: CombatUnit) -> void:
 
 	_highlight_active_unit(unit)
 
-	if unit.id == "moon_maiden":
+	if unit.id == "moon_maiden" or unit.id == "sanguinia_prep" or unit.id == "sanguinia_settlement":
 		action_panel.hide()
 		_update_targeting_visuals()
 		return
@@ -2205,6 +2551,24 @@ func _on_turn_started(unit: CombatUnit) -> void:
 	if unit.is_ally:
 		action_panel.show()
 		_update_action_buttons(unit)
+		# ТАЛАНТ САНГИНИИ: Принудительный Навык Е союзника, продвинутого на 47 стаках
+		if unit.has_meta("sanguinia_forced_skill_e") and bool(unit.get_meta("sanguinia_forced_skill_e", false)):
+			_set_action_buttons_disabled(true)
+			_play_sanguinia_forced_skill_vignette()
+			_on_log("[🌊 Талант Сангинии: %s находится под зовом волн и принудительно применяет Навык E...]" % unit.display_name)
+			
+			await get_tree().create_timer(1.0).timeout
+			
+			# Ожидаем завершения ультимейтов, если они были запущены
+			while battle_manager._is_processing_ult_queue or not battle_manager.ult_queue.is_empty():
+				await get_tree().process_frame
+				
+			if is_instance_valid(unit) and unit.is_alive() and battle_manager.current_unit == unit:
+				if SanguiniaAbilities.can_unit_execute_skill_e(unit, battle_manager):
+					SanguiniaAbilities.execute_forced_skill_e(unit, battle_manager)
+					battle_manager._end_turn(unit)
+					return
+
 		# ТАЛАНТ ЖОАНА: До формы духа он бьет авто-базовой по цели с максимальным ХП
 		if unit.id == "joan_spirit" and not bool(unit.get_meta("joan_spirit_form", false)):
 			_set_action_buttons_disabled(true)
@@ -2214,10 +2578,21 @@ func _on_turn_started(unit: CombatUnit) -> void:
 			var my_auto_id := _joan_auto_turn_id
 			
 			await get_tree().create_timer(0.6).timeout
+			if my_auto_id != _joan_auto_turn_id:
+				return
 			
-			# ПРОВЕРКА ПРЕРЫВАНИЯ УЛЬТОЙ:
-			# Если игрок успел прожать Ульту и Жоан вошел в Форму духа — НЕМЕДЛЕННО ОТМЕНЯЕМ АВТО-АТАКУ!
-			if my_auto_id != _joan_auto_turn_id or bool(unit.get_meta("joan_spirit_form", false)) or battle_manager._is_processing_ult_queue or not battle_manager.ult_queue.is_empty():
+			# Ожидаем завершения выбора цели ульты и всей очереди ультимейтов, если игрок прожал ульту
+			while battle_manager._is_processing_ult_queue or not battle_manager.ult_queue.is_empty() or (battle_manager.has_meta("is_selecting_ult_target") and bool(battle_manager.get_meta("is_selecting_ult_target", false))):
+				await get_tree().process_frame
+				if my_auto_id != _joan_auto_turn_id:
+					return
+			
+			# Проверяем состояние после завершения всех ультимейтов
+			if not is_instance_valid(unit) or not unit.is_alive() or battle_manager.current_unit != unit:
+				return
+			
+			# Если Жоан вошел в Форму духа — разблокируем ручное управление!
+			if bool(unit.get_meta("joan_spirit_form", false)):
 				_on_log("[🌟 Управление Жоаном разблокировано после перехода в Форму духа!]")
 				_set_action_buttons_disabled(false)
 				_update_action_buttons(unit)
@@ -2353,15 +2728,16 @@ func _update_action_buttons(unit: CombatUnit) -> void:
 			btn_skill.text = "🔷 Навык Q (1 ОН)"
 			btn_skill_e.text = "🔹 Навык E (2 ОН)"
 		ArseniyAbilities.ID:
-			btn_basic.text = "⚔ Базовая (60%)"
-			btn_enhanced_basic.visible = in_new_dev
-			btn_enhanced_basic.disabled = battle_manager.skill_points < 1
+			btn_enhanced_basic.visible = false
 			if in_new_dev:
+				btn_basic.text = "⚔ Усил. Базовая (+1 ОН)"
 				btn_skill.text = "🔷 Усил. Q (1 ОН)"
-			elif q_free:
-				btn_skill.text = "🔷 Q — 3 врага (беспл.)"
 			else:
-				btn_skill.text = "🔷 Q (1 ОН) — 3 врага"
+				btn_basic.text = "⚔ Базовая (60%, +1 ОН)"
+				if q_free:
+					btn_skill.text = "🔷 Q — 3 врага (беспл.)"
+				else:
+					btn_skill.text = "🔷 Q (1 ОН) — 3 врага"
 			btn_skill_e.text = "🔹 E (2 ОН) — Нов. разраб."
 		MarinaAbilities.ID:
 			btn_basic.text = "⚔ Базовая"
@@ -2836,6 +3212,8 @@ func _update_action_buttons(unit: CombatUnit) -> void:
 
 func _on_turn_ended(_unit: CombatUnit) -> void:
 	_multi_targets.clear()
+	_is_ally_turn_active = false
+	_targeting_allies = false
 	_set_target_buttons_visible(false, false)
 	_reset_active_unit_visual()
 	_hide_skill_tooltip()
@@ -3255,41 +3633,14 @@ func _on_card_ult_pressed(unit: CombatUnit) -> void:
 	if unit.id == "joan_spirit":
 		_joan_auto_turn_id += 1
 		
-	# ИСПРАВЛЕНО: Добавлен ID Вики в список ультимейтов, требующих выбора цели на поле боя
-	var requires_target := (
-		unit.id == ArseniyAbilities.ID 
-		or unit.id == PusenkovAbilities.ID 
-		or unit.id == KaoriAbilities.ID 
-		or unit.id == ShojiAbilities.ID
-		or unit.id == "vika"
-		or unit.id == "rimes"
-		or unit.id == "isaac"
-		or unit.id == "musienko"
-		or unit.id == "joan"
-		or unit.id == "valramors"
-		or unit.id == "katarina"
-		or unit.id == "arseniy_admin"
-	)
-	
-	if requires_target:
-		_original_active_unit = battle_manager.current_unit
-		
-		battle_manager.current_unit = unit
-		_target_mode = "ult"
-		_selecting_target = true
-		
-		# ИСПРАВЛЕНО: Открываем кнопки выбора на союзниках, если ультует Айзек
-		var targets_allies_ult := (unit.id == "isaac")
-		_set_target_buttons_visible(not targets_allies_ult, targets_allies_ult)
-		
-		_set_action_buttons_disabled(true) 
-		battle_manager.set_meta("is_selecting_ult_target", true)
-		
-		_on_log("[Выберите %s для Сверхспособности %s]" % ["союзника" if targets_allies_ult else "противника", unit.display_name])
-	else:
-		battle_manager.queue_ultimate(unit)
-		for u in _unit_panels:
-			_refresh_unit_panel(u)
+	# Эффект ударной волны от кнопки Сверхспособности на 1 секунду
+	_spawn_ult_button_shockwave(unit)
+
+	# Сразу ставим ультимейт в очередь боевого менеджера:
+	# СНАЧАЛА воспроизводится кат-сцена, а уже затем запрашивается выбор цели (если способность направленная).
+	battle_manager.queue_ultimate(unit)
+	for u in _unit_panels:
+		_refresh_unit_panel(u)
 
 func _on_target_pressed(unit: CombatUnit, is_ally: bool) -> void:
 	if _selecting_target:
@@ -3363,9 +3714,13 @@ func _on_target_pressed(unit: CombatUnit, is_ally: bool) -> void:
 					
 				if _original_active_unit:
 					battle_manager.current_unit = _original_active_unit
+					_is_ally_turn_active = _original_active_unit.is_ally and _original_active_unit.is_alive()
 					_original_active_unit = null
 					_update_action_buttons(battle_manager.current_unit)
+				else:
+					_is_ally_turn_active = false
 				_target_mode = ""
+				_update_all_card_modulates(true)
 			"skill", "skill_e":
 				var current_char_id := battle_manager.current_unit.id
 				var targets_allies := (
@@ -3428,8 +3783,123 @@ func _on_battle_ended(victory: bool) -> void:
 	_set_target_buttons_visible(false, false)
 	result_panel.show()
 	result_panel.move_to_front()
-	result_label.text = "Победа!" if victory else "Поражение"
-	LevelManager.on_battle_ended(victory, battle_manager)
+
+	if battle_manager.battle_mode.begins_with("memory_hall_"):
+		var f_num: int = int(battle_manager.battle_mode.trim_prefix("memory_hall_"))
+		if victory:
+			var remaining: int = 0
+			if f_num == 4:
+				var total_spent := battle_manager.memory_hall_half1_spent_cycles + battle_manager.get_current_cycles()
+				remaining = maxi(0, 28 - total_spent)
+			else:
+				remaining = maxi(0, 14 - battle_manager.get_current_cycles())
+				
+			var stars: int = MemoryHallManager.calculate_stars(f_num, remaining)
+			var old_stars: int = int(TeamConfig.memory_hall_stars.get("floor_%d" % f_num, 0))
+			if stars > old_stars:
+				TeamConfig.memory_hall_stars["floor_%d" % f_num] = stars
+			elif not TeamConfig.memory_hall_stars.has("floor_%d" % f_num):
+				TeamConfig.memory_hall_stars["floor_%d" % f_num] = stars
+				
+			if f_num < 4 and TeamConfig.memory_hall_unlocked_floor < f_num + 1:
+				TeamConfig.memory_hall_unlocked_floor = f_num + 1
+				
+			TeamConfig.save_game()
+			
+			var stars_str := ""
+			match stars:
+				3: stars_str = "★ ★ ★"
+				2: stars_str = "★ ★ ☆"
+				1: stars_str = "★ ☆ ☆"
+				_: stars_str = "☆☆☆ (0 звёзд)"
+				
+			var reward_hint := "\n✨ Награды доступны для сбора в Зале воспоминаний!"
+				
+			result_label.text = "🎉 ПОБЕДА В ЗАЛЕ ВОСПОМИНАНИЙ!\n%s\nОсталось циклов: %d%s" % [
+				stars_str,
+				remaining,
+				reward_hint
+			]
+		else:
+			result_label.text = "Поражение в Зале воспоминаний\n(Лимит циклов исчерпан или все союзники пали)"
+	else:
+		result_label.text = "Победа!" if victory else "Поражение"
+		LevelManager.on_battle_ended(victory, battle_manager)
+
+func _on_memory_hall_wave_advanced(wave: int, total: int) -> void:
+	_build_unit_displays()
+	_refresh_action_bar()
+	battle_manager.log_message("🌊 Внимание: Волна %d из %d началась!" % [wave, total])
+
+func _on_memory_hall_half1_cleared(spent_cycles: int, remaining_cycles: int) -> void:
+	action_panel.hide()
+	skills_panel.hide()
+	graphs_panel.hide()
+	_close_inspect()
+	_set_target_buttons_visible(false, false)
+
+	var overlay := ColorRect.new()
+	overlay.name = "MemoryHallHalfTransition"
+	overlay.color = Color(0, 0, 0, 0.88)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 120
+	add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(560, 320)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.09, 0.15, 0.98)
+	sb.border_color = Color(0.75, 0.45, 1.0, 1.0)
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(16)
+	sb.set_content_margin_all(24)
+	panel.add_theme_stylebox_override("panel", sb)
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 18)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "🎉 Победа 1-го отряда!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(0.85, 0.65, 1.0))
+	vbox.add_child(title)
+
+	var desc := Label.new()
+	desc.text = "Первая половина Платинового этажа успешно пройдена!\n\n⏳ Потрачено циклов 1-м отрядом: %d\n⏱ Осталось циклов для 2-го отряда: %d из 28" % [spent_cycles, remaining_cycles]
+	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.add_theme_font_size_override("font_size", 16)
+	desc.add_theme_color_override("font_color", Color(0.9, 0.92, 1.0))
+	vbox.add_child(desc)
+
+	var btn_proceed := Button.new()
+	btn_proceed.text = "⚔ Перейти ко второй команде"
+	btn_proceed.custom_minimum_size = Vector2(280, 52)
+	btn_proceed.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var btn_sb := StyleBoxFlat.new()
+	btn_sb.bg_color = Color(0.45, 0.20, 0.70, 0.95)
+	btn_sb.border_color = Color(0.9, 0.6, 1.0, 1.0)
+	btn_sb.set_border_width_all(2)
+	btn_sb.set_corner_radius_all(10)
+	btn_proceed.add_theme_stylebox_override("normal", btn_sb)
+	btn_proceed.add_theme_font_size_override("font_size", 18)
+	btn_proceed.pressed.connect(func():
+		overlay.queue_free()
+		battle_manager.setup_memory_hall_team2(TeamConfig.memory_hall_team_2, TeamConfig.memory_hall_initiator_2)
+		_build_unit_displays()
+		_refresh_action_bar()
+		_refresh_support_button()
+		_update_antimatter_hud()
+		_update_moon_maiden_hud()
+	)
+	vbox.add_child(btn_proceed)
 
 func _on_return_pressed() -> void:
 	_return_to_previous_screen()
@@ -3444,15 +3914,48 @@ func _get_unit_base_modulate(unit: CombatUnit) -> Color:
 	if not _unit_panels.has(unit):
 		return Color.WHITE
 	var panel: PanelContainer = _unit_panels[unit]
+	
+	if not unit.is_alive():
+		return Color(0.45, 0.45, 0.45, 0.80)
 	if panel == _highlighted_unit_panel:
 		return Color(1.25, 1.25, 1.25, 1.0)
 	elif unit in _multi_targets:
-		return Color(1.2, 1.0, 0.6)
-	elif not unit.is_alive():
-		return Color(0.4, 0.4, 0.4, 0.7)
-	elif unit.is_elite:
-		return Color(1.1, 0.85, 1.0)
-	return Color.WHITE
+		return Color(1.2, 1.0, 0.6, 1.0)
+	
+	var base_rgb := Color.WHITE
+	if unit.is_elite:
+		base_rgb = Color(1.1, 0.85, 1.0)
+		
+	var alpha: float = 1.0
+	if _is_ally_turn_active:
+		var current_u := battle_manager.current_unit
+		if _targeting_allies:
+			# Целью умения является союзник — полупрозрачными становятся враги
+			if not unit.is_ally:
+				alpha = 0.60
+		else:
+			# Обычный ход союзника / атака по врагам — полупрозрачными становятся остальные союзники (уменьшена прозрачность)
+			if unit.is_ally and unit != current_u:
+				alpha = 0.60
+				
+	if bool(unit.get_meta("lenskaya_am_in_inverted", false)):
+		alpha = minf(alpha, 0.48)
+		
+	return Color(base_rgb.r, base_rgb.g, base_rgb.b, alpha)
+
+func _update_all_card_modulates(animate: bool = true) -> void:
+	for u in _unit_panels:
+		var p: PanelContainer = _unit_panels[u]
+		if not is_instance_valid(p):
+			continue
+		if p.has_meta("damage_tween"):
+			continue
+		var target_col: Color = _get_unit_base_modulate(u)
+		if animate:
+			var tw := create_tween()
+			tw.tween_property(p, "modulate", target_col, 0.15).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		else:
+			p.modulate = target_col
 
 func _play_damage_flash(unit: CombatUnit) -> void:
 	if not _unit_panels.has(unit):
@@ -3956,8 +4459,6 @@ func _update_lenskaya_antimatter_card_vfx(unit: CombatUnit, panel: PanelContaine
 	var in_inv := bool(unit.get_meta("lenskaya_am_in_inverted", false))
 	if in_inv:
 		panel.modulate.a = 0.38
-	elif panel.modulate.a < 0.9:
-		panel.modulate.a = 1.0
 
 	var stance: String = String(unit.get_meta("lenskaya_am_stance", "none"))
 	match stance:
@@ -4479,6 +4980,7 @@ class LenskayaKeeperProjectilesCanvas extends Control:
 	var _explosions: Array[Dictionary] = []
 	var _time: float = 0.0
 	var _respawn_called: bool = false
+	var _rng := RandomNumberGenerator.new()
 
 	func _init(start_pos: Vector2, target_positions: Array, orbs_ctrl: LenskayaKeeperOrbs = null) -> void:
 		name = "LenskayaKeeperProjectilesCanvas"
@@ -4520,7 +5022,7 @@ class LenskayaKeeperProjectilesCanvas extends Control:
 				var p_tg: Vector2 = p.target
 				var mid: Vector2 = (p_st + p_tg) * 0.5
 				var perp: Vector2 = (p_tg - p_st).orthogonal().normalized()
-				var curve_h: float = randf_range(40.0, 90.0) * (1.0 if randf() < 0.5 else -1.0)
+				var curve_h: float = _rng.randf_range(40.0, 90.0) * (1.0 if _rng.randf() < 0.5 else -1.0)
 				p.ctrl = mid + perp * curve_h
 				
 			p.progress += delta * 2.8
@@ -4600,6 +5102,7 @@ class LenskayaWarriorSlashVFXCanvas extends Control:
 	var _beams: Array[Dictionary] = []
 	var _lightning_pts: PackedVector2Array = []
 	var _impact_triggered: bool = false
+	var _rng := RandomNumberGenerator.new()
 
 	func _init(battle_ctrl: Control, target_positions: Array, is_inverted: bool) -> void:
 		name = "LenskayaWarriorSlashVFXCanvas"
@@ -4617,7 +5120,6 @@ class LenskayaWarriorSlashVFXCanvas extends Control:
 
 		if _is_from_inverted:
 			_duration = 0.75
-			# Центр удара: чуть выше центра экрана (на уровне карточек врагов)
 			var def_center := Vector2(vp_size.x * 0.5, vp_size.y * 0.38)
 			if not target_positions.is_empty():
 				var t_pos: Vector2 = target_positions[0]
@@ -4633,11 +5135,11 @@ class LenskayaWarriorSlashVFXCanvas extends Control:
 	func _init_stars() -> void:
 		_stars.clear()
 		for i in range(40):
-			var sx := randf_range(-440.0, 440.0)
-			var sy := randf_range(-90.0, 90.0)
-			var r := randf_range(0.9, 2.4)
-			var phase := randf_range(0.0, TAU)
-			var col := Color(0.95, 0.90, 1.0) if randf() < 0.65 else Color(0.80, 0.70, 1.0)
+			var sx := _rng.randf_range(-440.0, 440.0)
+			var sy := _rng.randf_range(-90.0, 90.0)
+			var r := _rng.randf_range(0.9, 2.4)
+			var phase := _rng.randf_range(0.0, TAU)
+			var col := Color(0.95, 0.90, 1.0) if _rng.randf() < 0.65 else Color(0.80, 0.70, 1.0)
 			_stars.append({
 				"x": sx,
 				"y": sy,
@@ -4650,11 +5152,11 @@ class LenskayaWarriorSlashVFXCanvas extends Control:
 		_beams.clear()
 		var count := 24
 		for i in range(count):
-			var frac := randf_range(-0.75, 0.75)
-			var is_up := randf() < 0.5
-			var angle := (-PI * 0.5 if is_up else PI * 0.5) + randf_range(-0.28, 0.28)
-			var length := randf_range(70.0, 160.0)
-			var width := randf_range(2.0, 4.5)
+			var frac := _rng.randf_range(-0.75, 0.75)
+			var is_up := _rng.randf() < 0.5
+			var angle := (-PI * 0.5 if is_up else PI * 0.5) + _rng.randf_range(-0.28, 0.28)
+			var length := _rng.randf_range(70.0, 160.0)
+			var width := _rng.randf_range(2.0, 4.5)
 			_beams.append({
 				"frac": frac,
 				"is_up": is_up,
@@ -4665,11 +5167,11 @@ class LenskayaWarriorSlashVFXCanvas extends Control:
 
 	func _init_center_lightning() -> void:
 		_lightning_pts.clear()
-		var cur := Vector2(randf_range(-8.0, 8.0), -65.0)
+		var cur := Vector2(_rng.randf_range(-8.0, 8.0), -65.0)
 		_lightning_pts.append(cur)
 		var steps := 6
 		for s in range(steps):
-			cur += Vector2(randf_range(-20.0, 20.0), randf_range(18.0, 24.0))
+			cur += Vector2(_rng.randf_range(-20.0, 20.0), _rng.randf_range(18.0, 24.0))
 			_lightning_pts.append(cur)
 
 	func _get_rift_half_height(dx: float, W: float, max_h: float, open_factor: float) -> float:
@@ -5071,6 +5573,613 @@ class LenskayaSupernovaVFXCanvas extends Control:
 				draw_circle(p_end, 18.0, Color(0.04, 0.0, 0.08, 0.95 * alpha))
 				draw_circle(p_end, 10.0, Color(1.0, 1.0, 1.0, alpha))
 
+# Персистентный фон Пустоты для битвы с Раймсом:
+# - Фаза 1: глубокий черный с переливающимся красно-фиолетовым слабым светом сфер
+# - Фаза 2 (после Хора Человечества на 0:21): плавный стилизованный розово-золотой огонь с парящими кусками огня и сферами
+class RimesVoidBackground extends Control:
+	enum BackgroundMode {
+		RED_VIOLET_SPHERES,
+		ROSE_GOLD_FIRE
+	}
+	
+	var _mode: BackgroundMode = BackgroundMode.RED_VIOLET_SPHERES
+	var _time: float = 0.0
+	var _motes: Array[Dictionary] = []
+	
+	# Параметры огненной системы
+	const PLUME_COUNT: int = 22
+	var _plumes: Array[Dictionary] = []
+	var _flying_flame_chunks: Array[Dictionary] = []
+	var _rng := RandomNumberGenerator.new()
+
+	func _init() -> void:
+		name = "RimesVoidBackground"
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		z_index = 0
+		_init_motes()
+		_init_fire_system()
+
+	func _init_motes() -> void:
+		_motes.clear()
+		for i in range(32):
+			_motes.append({
+				"pos": Vector2(_rng.randf_range(0.0, 1920.0), _rng.randf_range(0.0, 1080.0)),
+				"vel": Vector2(_rng.randf_range(-12.0, 12.0), _rng.randf_range(-18.0, -35.0)),
+				"radius": _rng.randf_range(1.5, 3.8),
+				"base_alpha": _rng.randf_range(0.18, 0.48),
+				"pulse_speed": _rng.randf_range(1.2, 2.5),
+				"phase": _rng.randf_range(0.0, TAU),
+				"is_crimson": (_rng.randf() > 0.45)
+			})
+
+	func _init_fire_system() -> void:
+		var w: float = size.x if size.x > 0.0 else 1920.0
+		
+		# 1. 22 выразительных языка пламени по низу экрана (разная высота и вспышки горения)
+		_plumes.clear()
+		for i in range(PLUME_COUNT):
+			var cx: float = float(i) * (w / float(PLUME_COUNT - 1))
+			_plumes.append({
+				"cx": cx,
+				"base_w": _rng.randf_range(110.0, 160.0),
+				"base_h": _rng.randf_range(220.0, 340.0),
+				"phase": float(i) * 1.45 + _rng.randf_range(-0.4, 0.4),
+				"surge_speed": _rng.randf_range(4.2, 5.8),
+				"flutter_speed": _rng.randf_range(6.5, 9.5)
+			})
+			
+		# 2. 50 летящих кусков огня / искр с горячим восходящим потоком
+		_flying_flame_chunks.clear()
+		for i in range(50):
+			_flying_flame_chunks.append(_create_flying_chunk(true))
+
+	func _create_flying_chunk(random_y: bool = false) -> Dictionary:
+		var w: float = size.x if size.x > 0.0 else 1920.0
+		var h: float = size.y if size.y > 0.0 else 1080.0
+		var start_y: float = _rng.randf_range(0.0, h) if random_y else h - _rng.randf_range(40.0, 160.0)
+		var base_x: float = _rng.randf_range(0.0, w)
+		return {
+			"x": base_x,
+			"y": start_y,
+			"base_x": base_x,
+			"vy": _rng.randf_range(-170.0, -360.0),
+			"flutter_speed": _rng.randf_range(6.0, 11.0),
+			"flutter_amp": _rng.randf_range(5.0, 14.0),
+			"phase": _rng.randf_range(0.0, TAU),
+			"size": _rng.randf_range(3.5, 9.5),
+			"rot_speed": _rng.randf_range(-2.5, 2.5),
+			"is_gold": (_rng.randf() > 0.45)
+		}
+
+	func set_mode_rose_gold_fire() -> void:
+		_mode = BackgroundMode.ROSE_GOLD_FIRE
+		queue_redraw()
+
+	func _process(delta: float) -> void:
+		_time += delta
+		var screen_w: float = size.x if size.x > 0.0 else 1920.0
+		var screen_h: float = size.y if size.y > 0.0 else 1080.0
+
+		# Всегда обновляем парящие пылинки
+		for m in _motes:
+			m.pos.x += m.vel.x * delta + sin(_time * 0.8 + m.phase) * 0.35
+			m.pos.y += m.vel.y * delta
+			if m.pos.y < -15.0:
+				m.pos.y = screen_h + 10.0
+				m.pos.x = _rng.randf_range(0.0, screen_w)
+			if m.pos.x < -15.0:
+				m.pos.x = screen_w + 10.0
+			elif m.pos.x > screen_w + 15.0:
+				m.pos.x = -10.0
+
+		# В режиме огня обновляем летящие куски огня (быстрый подъем с горячим восходящим потоком)
+		if _mode == BackgroundMode.ROSE_GOLD_FIRE:
+			for ch in _flying_flame_chunks:
+				ch.y += ch.vy * delta
+				ch.x = ch.base_x + sin(_time * ch.flutter_speed + ch.phase) * ch.flutter_amp
+				if ch.y < -35.0:
+					var fresh: Dictionary = _create_flying_chunk(false)
+					ch.x = fresh.x
+					ch.y = fresh.y
+					ch.base_x = fresh.base_x
+					ch.vy = fresh.vy
+					ch.flutter_speed = fresh.flutter_speed
+					ch.flutter_amp = fresh.flutter_amp
+					ch.size = fresh.size
+					ch.is_gold = fresh.is_gold
+
+		queue_redraw()
+
+	func _draw() -> void:
+		var w: float = size.x if size.x > 0.0 else 1920.0
+		var h: float = size.y if size.y > 0.0 else 1080.0
+		var screen_rect := Rect2(Vector2.ZERO, Vector2(w, h))
+
+		# Базовый глубокий черный фон
+		draw_rect(screen_rect, Color(0.008, 0.004, 0.012, 1.0), true)
+
+		if _mode == BackgroundMode.RED_VIOLET_SPHERES:
+			_draw_red_violet_spheres(w, h)
+		else:
+			_draw_rose_gold_fire(w, h)
+
+		_draw_vignette(w, h)
+
+	func _draw_red_violet_spheres(w: float, h: float) -> void:
+		var c1 := Vector2(
+			w * 0.50 + sin(_time * 0.35) * 55.0,
+			h * 0.38 + cos(_time * 0.28) * 35.0
+		)
+		var p1: float = 0.5 + 0.5 * sin(_time * 0.7)
+		var col1 := Color(0.65, 0.04, 0.25).lerp(Color(0.48, 0.06, 0.52), p1)
+		_draw_soft_radial_glow(c1, 480.0 + sin(_time * 0.45) * 40.0, col1, 0.22 + p1 * 0.08)
+
+		var c2 := Vector2(
+			w * 0.28 + cos(_time * 0.4) * 45.0,
+			h * 0.68 + sin(_time * 0.3) * 30.0
+		)
+		var p2: float = 0.5 + 0.5 * sin(_time * 0.6 + 1.8)
+		var col2 := Color(0.38, 0.05, 0.58).lerp(Color(0.55, 0.08, 0.32), p2)
+		_draw_soft_radial_glow(c2, 420.0 + cos(_time * 0.38) * 35.0, col2, 0.18 + p2 * 0.07)
+
+		var c3 := Vector2(
+			w * 0.74 + sin(_time * 0.42 + 2.4) * 50.0,
+			h * 0.45 + cos(_time * 0.5) * 35.0
+		)
+		var p3: float = 0.5 + 0.5 * sin(_time * 0.75 + 3.1)
+		var col3 := Color(0.58, 0.06, 0.20).lerp(Color(0.35, 0.04, 0.45), p3)
+		_draw_soft_radial_glow(c3, 440.0 + sin(_time * 0.52) * 35.0, col3, 0.20 + p3 * 0.06)
+
+		for m in _motes:
+			var pulse: float = 0.7 + 0.3 * sin(_time * m.pulse_speed + m.phase)
+			var a: float = m.base_alpha * pulse
+			var col: Color = Color(0.92, 0.20, 0.42, a) if m.is_crimson else Color(0.72, 0.28, 0.95, a)
+			draw_circle(m.pos, m.radius * 2.2, Color(col.r, col.g, col.b, a * 0.3))
+			draw_circle(m.pos, m.radius, col)
+
+	func _draw_rose_gold_fire(w: float, h: float) -> void:
+		# 1. Заполняем верхний/средний фон: дышащие небесные сферы (фон больше не пустой и не слишком чёрный!)
+		_draw_red_violet_spheres(w, h)
+		
+		# 2. Парящие и летящие искры/куски огня по всему пространству экрана
+		for ch in _flying_flame_chunks:
+			var frac: float = clampf(ch.y / h, 0.0, 1.0)
+			var spark_flicker: float = 0.7 + 0.3 * sin(_time * 14.0 + ch.phase)
+			var alpha: float = (0.40 + 0.55 * frac) * spark_flicker
+			var col: Color = Color(1.0, 0.82, 0.25, alpha) if ch.is_gold else Color(1.0, 0.36, 0.56, alpha)
+			var sz: float = ch.size
+			var pos := Vector2(ch.x, ch.y)
+			var pts := PackedVector2Array([
+				pos + Vector2(0.0, -sz * 1.5),
+				pos + Vector2(sz * 0.45, 0.0),
+				pos + Vector2(0.0, sz * 0.55),
+				pos + Vector2(-sz * 0.45, 0.0)
+			])
+			draw_colored_polygon(pts, col)
+			draw_circle(pos, sz * 0.32, Color(1.0, 0.98, 0.92, alpha * 0.95))
+
+		# 3. Мягкое фоновое зарево жара по всему низу экрана
+		_draw_soft_radial_glow(Vector2(w * 0.50, h), 620.0, Color(1.0, 0.42, 0.26), 0.36)
+		_draw_soft_radial_glow(Vector2(w * 0.20, h), 480.0, Color(0.96, 0.24, 0.54), 0.32)
+		_draw_soft_radial_glow(Vector2(w * 0.80, h), 480.0, Color(1.0, 0.68, 0.20), 0.32)
+		
+		# 4. Кипящее огненное ложе у основания (с резкими восходящими языками пламени вместо плавного покачивания)
+		var wave_pts_outer := PackedVector2Array()
+		wave_pts_outer.append(Vector2(0.0, h))
+		for s in range(65):
+			var wx: float = float(s) * (w / 64.0)
+			var lick_outer: float = pow(abs(sin(wx * 0.018 + _time * 5.2 + cos(wx * 0.009) * 1.6)), 1.8) * 58.0
+			var micro_outer: float = sin(wx * 0.045 - _time * 11.0) * 8.0
+			var wy: float = h - (110.0 + lick_outer + micro_outer)
+			wave_pts_outer.append(Vector2(wx, wy))
+		wave_pts_outer.append(Vector2(w, h))
+		draw_colored_polygon(wave_pts_outer, Color(0.96, 0.20, 0.44, 0.88))
+
+		var wave_pts_gold := PackedVector2Array()
+		wave_pts_gold.append(Vector2(0.0, h))
+		for s in range(65):
+			var wx: float = float(s) * (w / 64.0)
+			var lick_gold: float = pow(abs(sin(wx * 0.024 - _time * 5.8 + sin(wx * 0.012) * 1.4)), 1.9) * 42.0
+			var micro_gold: float = cos(wx * 0.055 + _time * 13.0) * 6.0
+			var wy: float = h - (72.0 + lick_gold + micro_gold)
+			wave_pts_gold.append(Vector2(wx, wy))
+		wave_pts_gold.append(Vector2(w, h))
+		draw_colored_polygon(wave_pts_gold, Color(1.0, 0.78, 0.16, 0.94))
+
+		var wave_pts_white := PackedVector2Array()
+		wave_pts_white.append(Vector2(0.0, h))
+		for s in range(65):
+			var wx: float = float(s) * (w / 64.0)
+			var lick_white: float = pow(abs(sin(wx * 0.030 + _time * 6.5)), 2.0) * 26.0
+			var micro_white: float = sin(wx * 0.070 - _time * 15.0) * 4.0
+			var wy: float = h - (38.0 + lick_white + micro_white)
+			wave_pts_white.append(Vector2(wx, wy))
+		wave_pts_white.append(Vector2(w, h))
+		draw_colored_polygon(wave_pts_white, Color(1.0, 0.98, 0.92, 0.98))
+
+		# 5. Стилизованные языки пламени (быстрые восходящие выбросы, сужение и дрожание)
+		for pl in _plumes:
+			var cx: float = pl.cx
+			var phase: float = pl.phase
+			var s_speed: float = pl.surge_speed
+			var f_speed: float = pl.flutter_speed
+			
+			var surge: float = pow(maxf(0.0, sin(_time * s_speed + phase)), 2.2) * 85.0
+			var micro_flicker: float = sin(_time * 12.5 + phase * 2.2) * 15.0 + sin(_time * 19.0 + phase * 3.7) * 7.0
+			var h_flame: float = pl.base_h + surge + micro_flicker
+			
+			var surge_ratio: float = clampf(surge / 85.0, 0.0, 1.0)
+			var cur_w: float = pl.base_w * (1.0 - 0.22 * surge_ratio)
+			var flutter: float = sin(_time * f_speed + phase) * 8.0 + sin(_time * 14.0 + phase * 2.5) * 4.0 + sin(_time * 2.8 + phase) * 10.0
+			
+			_draw_stylized_flame_plume(cx, h, h_flame, flutter, cur_w, phase)
+
+	func _draw_stylized_flame_plume(cx: float, screen_h: float, h_flame: float, flutter: float, base_w: float, phase: float) -> void:
+		# 1. Внешний огненно-розовый / янтарный лепесток
+		var outer_pts := _build_flame_contour(cx, screen_h, base_w, h_flame, flutter, phase)
+		if outer_pts.size() >= 3:
+			draw_colored_polygon(outer_pts, Color(0.98, 0.24, 0.44, 0.90))
+
+		# 2. Среднее сияющее золотисто-янтарное пламя (70% от внешнего)
+		var mid_pts := _build_flame_contour(cx, screen_h, base_w * 0.70, h_flame * 0.72, flutter * 0.75, phase + 0.5)
+		if mid_pts.size() >= 3:
+			draw_colored_polygon(mid_pts, Color(1.0, 0.80, 0.16, 0.95))
+
+		# 3. Внутреннее раскалённое бело-золотое ядро (38% от внешнего)
+		var core_pts := _build_flame_contour(cx, screen_h, base_w * 0.38, h_flame * 0.42, flutter * 0.45, phase + 1.0)
+		if core_pts.size() >= 3:
+			draw_colored_polygon(core_pts, Color(1.0, 0.98, 0.94, 0.98))
+
+		# 4. Непрерывно отрывающиеся и взлетающие вверх капли пламени
+		var drop_cycle: float = fmod(_time * 3.4 + phase * 0.35, 1.0)
+		var drop_y: float = screen_h - h_flame - lerpf(8.0, 95.0, drop_cycle)
+		var drop_x: float = cx + flutter * 1.25 + sin(_time * 5.5 + phase + drop_cycle * 3.5) * 8.0
+		var drop_r: float = lerpf(8.0, 2.0, drop_cycle)
+		var drop_alpha: float = (1.0 - drop_cycle) * 0.92
+		if drop_alpha > 0.05 and drop_r > 1.5:
+			var drop_pts := PackedVector2Array([
+				Vector2(drop_x, drop_y - drop_r * 1.8),
+				Vector2(drop_x + drop_r * 0.65, drop_y),
+				Vector2(drop_x, drop_y + drop_r * 0.5),
+				Vector2(drop_x - drop_r * 0.65, drop_y)
+			])
+			draw_colored_polygon(drop_pts, Color(1.0, 0.55, 0.20, drop_alpha))
+			draw_circle(Vector2(drop_x, drop_y), drop_r * 0.40, Color(1.0, 0.96, 0.75, drop_alpha))
+
+	func _build_flame_contour(cx: float, base_y: float, bw: float, fh: float, flutter: float, phase: float) -> PackedVector2Array:
+		var pts := PackedVector2Array()
+		var w2: float = bw * 0.5
+		
+		pts.append(Vector2(cx - w2, base_y))
+		
+		var u1 := 0.32
+		var lick1 := sin(u1 * 7.0 - _time * 8.5 + phase) * 7.0
+		pts.append(Vector2(cx - w2 * 1.12 + flutter * 0.15 + lick1, base_y - fh * u1))
+		
+		var u2 := 0.68
+		var lick2 := sin(u2 * 7.0 - _time * 8.5 + phase) * 5.0
+		pts.append(Vector2(cx - w2 * 0.38 + flutter * 0.55 + lick2, base_y - fh * u2))
+		
+		pts.append(Vector2(cx + flutter * 1.15, base_y - fh))
+		
+		var lick3 := cos(u2 * 7.0 - _time * 8.5 + phase) * 5.0
+		pts.append(Vector2(cx + w2 * 0.34 + flutter * 0.58 + lick3, base_y - fh * u2))
+		
+		var lick4 := cos(u1 * 7.0 - _time * 8.5 + phase) * 7.0
+		pts.append(Vector2(cx + w2 * 1.12 + flutter * 0.18 + lick4, base_y - fh * u1))
+		
+		pts.append(Vector2(cx + w2, base_y))
+		return pts
+
+	func _draw_soft_radial_glow(center: Vector2, radius: float, color: Color, max_alpha: float) -> void:
+		const STEPS: int = 10
+		for i in range(STEPS, 0, -1):
+			var frac: float = float(i) / float(STEPS)
+			var r: float = radius * frac
+			var falloff: float = (1.0 - frac) * (1.0 - frac)
+			var a: float = max_alpha * falloff
+			draw_circle(center, r, Color(color.r, color.g, color.b, a))
+
+	func _draw_vignette(w: float, h: float) -> void:
+		var v_col := Color(0.0, 0.0, 0.0, 0.35)
+		draw_rect(Rect2(0, 0, w, 60), v_col, true)
+		draw_rect(Rect2(0, h - 60, w, 60), v_col, true)
+		draw_rect(Rect2(0, 0, 50, h), v_col, true)
+		draw_rect(Rect2(w - 50, 0, 50, h), v_col, true)
+
+# Динамический эффект растрескивания стекла и разлетающихся осколков
+class RimesGlassShatterVFX extends Control:
+	var _parent_battle: Control = null
+	var _time: float = 0.0
+	var _shattered: bool = false
+	var _epicenter: Vector2 = Vector2.ZERO
+	
+	var _crack_branches: Array[Array] = []
+	var _cross_arcs: Array[Dictionary] = []
+	var _shards: Array[Dictionary] = []
+	var _rng := RandomNumberGenerator.new()
+	
+	const CRACK_SPREAD_DURATION: float = 0.38
+	const SHATTER_DELAY: float = 1.65
+	const TOTAL_DURATION: float = 2.95
+
+	func _init(battle_ctrl: Control) -> void:
+		name = "RimesGlassShatterVFX"
+		_parent_battle = battle_ctrl
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		z_index = 35
+		_generate_cracks_and_shards()
+
+	func _generate_cracks_and_shards() -> void:
+		var w: float = 1920.0
+		var h: float = 1080.0
+		if is_instance_valid(_parent_battle) and _parent_battle.size.x > 0.0:
+			w = _parent_battle.size.x
+			h = _parent_battle.size.y
+		_epicenter = Vector2(w * 0.50, h * 0.38)
+		
+		var branch_count := 14
+		_crack_branches.clear()
+		var branch_endpoints: Array[Array] = []
+		
+		for b in range(branch_count):
+			var base_angle: float = float(b) * (TAU / float(branch_count)) + _rng.randf_range(-0.08, 0.08)
+			var branch_pts: Array[Vector2] = [_epicenter]
+			var ring_pts: Array[Vector2] = [_epicenter]
+			
+			var max_dist: float = maxf(w, h) * 1.15
+			var steps := 6
+			var step_dist: float = max_dist / float(steps)
+			
+			for s in range(1, steps + 1):
+				var cur_r := step_dist * float(s) + _rng.randf_range(-15.0, 15.0)
+				var angle_jitter := base_angle + _rng.randf_range(-0.16, 0.16)
+				var pt := _epicenter + Vector2(cos(angle_jitter), sin(angle_jitter)) * cur_r
+				branch_pts.append(pt)
+				ring_pts.append(pt)
+			
+			_crack_branches.append(branch_pts)
+			branch_endpoints.append(ring_pts)
+		
+		_cross_arcs.clear()
+		for ring in range(1, 6):
+			for b in range(branch_count):
+				var b_next := (b + 1) % branch_count
+				if _rng.randf() > 0.15:
+					var pt1: Vector2 = branch_endpoints[b][ring]
+					var pt2: Vector2 = branch_endpoints[b_next][ring]
+					var mid: Vector2 = pt1.lerp(pt2, 0.5) + Vector2(_rng.randf_range(-18.0, 18.0), _rng.randf_range(-18.0, 18.0))
+					_cross_arcs.append({
+						"p1": pt1,
+						"mid": mid,
+						"p2": pt2,
+						"ring": ring
+					})
+		
+		_shards.clear()
+		for ring in range(1, 6):
+			for b in range(branch_count):
+				var b_next := (b + 1) % branch_count
+				var p_in1: Vector2 = branch_endpoints[b][ring - 1]
+				var p_in2: Vector2 = branch_endpoints[b_next][ring - 1]
+				var p_out1: Vector2 = branch_endpoints[b][ring]
+				var p_out2: Vector2 = branch_endpoints[b_next][ring]
+				
+				var poly_a := PackedVector2Array([p_in1, p_out1, p_out2])
+				var poly_b := PackedVector2Array([p_in1, p_out2, p_in2])
+				_create_shard(poly_a)
+				_create_shard(poly_b)
+				
+				if ring <= 3 and _rng.randf() > 0.5:
+					var m_center := (p_in1 + p_out1 + p_out2) / 3.0
+					var m_poly := PackedVector2Array([
+						m_center + Vector2(_rng.randf_range(-12, 12), _rng.randf_range(-12, 12)),
+						m_center + Vector2(_rng.randf_range(-12, 12), _rng.randf_range(-12, 12)),
+						m_center + Vector2(_rng.randf_range(-12, 12), _rng.randf_range(-12, 12))
+					])
+					_create_shard(m_poly, 1.4)
+
+	func _create_shard(world_pts: PackedVector2Array, speed_mult: float = 1.0) -> void:
+		if world_pts.size() < 3:
+			return
+		var center := Vector2.ZERO
+		for pt in world_pts:
+			center += pt
+		center /= float(world_pts.size())
+		
+		var local_pts := PackedVector2Array()
+		for pt in world_pts:
+			local_pts.append(pt - center)
+		
+		var dir := (center - _epicenter).normalized()
+		if dir.length_squared() < 0.001:
+			dir = Vector2.RIGHT.rotated(_rng.randf_range(0.0, TAU))
+		
+		var dist_from_center := center.distance_to(_epicenter)
+		var speed: float = _rng.randf_range(520.0, 1250.0) * speed_mult * (1.0 + (dist_from_center / 700.0) * 0.45)
+		var velocity := dir * speed + Vector2(_rng.randf_range(-130.0, 130.0), _rng.randf_range(-90.0, 90.0))
+		
+		# Реалистичный монохромный нейтральный цвет стекла (серебристо-белый)
+		var glass_col := Color(0.92, 0.95, 0.98, 0.30)
+		
+		var offset_angle := _rng.randf_range(0.0, TAU)
+		var offset_dist := _rng.randf_range(5.0, 12.0)
+		var facet_offset := Vector2(cos(offset_angle), sin(offset_angle)) * offset_dist
+		
+		_shards.append({
+			"local_pts": local_pts,
+			"pos": center,
+			"facet_offset": facet_offset,
+			"facet_tint": glass_col,
+			"sheen_phase": _rng.randf_range(0.0, TAU),
+			"velocity": velocity,
+			"rot": _rng.randf_range(0.0, TAU),
+			"rot_speed": _rng.randf_range(-7.5, 7.5),
+			"flip_phase": _rng.randf_range(0.0, TAU),
+			"flip_speed": _rng.randf_range(5.0, 14.0),
+			"color": glass_col,
+			"scale": _rng.randf_range(0.85, 1.15)
+		})
+
+	func _process(delta: float) -> void:
+		_time += delta
+		
+		if not _shattered and _time >= SHATTER_DELAY:
+			_shattered = true
+			if is_instance_valid(_parent_battle):
+				if _parent_battle.has_method("_on_rimes_glass_break_moment"):
+					_parent_battle._on_rimes_glass_break_moment()
+				if _parent_battle.has_method("_on_screen_impact_requested"):
+					_parent_battle._on_screen_impact_requested(Color(0.98, 0.95, 1.0, 0.85), 20.0, 0.55)
+		
+		if _shattered:
+			for sh in _shards:
+				sh.pos += sh.velocity * delta
+				sh.velocity *= (1.0 - 0.45 * delta)
+				sh.rot += sh.rot_speed * delta
+				sh.flip_phase += sh.flip_speed * delta
+				sh.scale = maxf(0.0, sh.scale - delta * 0.10)
+		
+		if _time >= TOTAL_DURATION:
+			queue_free()
+		else:
+			queue_redraw()
+
+	func _draw() -> void:
+		if not _shattered:
+			_draw_cracking_phase()
+		else:
+			_draw_shattered_phase()
+
+	func _draw_cracking_phase() -> void:
+		var progress := clampf(_time / CRACK_SPREAD_DURATION, 0.0, 1.0)
+		var ease_prog := 1.0 - pow(1.0 - progress, 2.5)
+		var max_draw_dist: float = maxf(size.x, size.y) * 1.25 * ease_prog
+		
+		var jitter := Vector2.ZERO
+		if _time > 1.15:
+			var tension: float = (_time - 1.15) / (SHATTER_DELAY - 1.15)
+			jitter = Vector2(randf_range(-1.8, 1.8), randf_range(-1.8, 1.8)) * tension
+		
+		# Сжатие фасет для образования пустого свободного пространства с чернотой между осколками
+		var shrink_factor: float = lerpf(1.0, 0.88, ease_prog)
+		
+		# 1. Отрисовка смещённых монохромных осколков с черными зазорами между ними
+		for sh in _shards:
+			var facet_dist: float = sh.pos.distance_to(_epicenter)
+			if facet_dist > max_draw_dist:
+				continue
+			
+			var pts: PackedVector2Array = sh.local_pts
+			var current_offset: Vector2 = (sh.facet_offset + jitter) * ease_prog
+			var facet_center: Vector2 = sh.pos + current_offset
+			
+			var world_facet := PackedVector2Array()
+			for pt in pts:
+				world_facet.append(facet_center + pt * shrink_factor)
+			
+			if world_facet.size() >= 3:
+				# Тело осколка (монохромное серебристо-прозрачное стекло с бликом)
+				var sheen: float = 0.5 + 0.5 * sin(_time * 3.5 + sh.sheen_phase)
+				var facet_col := Color(0.90, 0.93, 0.98, (0.22 + 0.14 * sheen) * ease_prog)
+				draw_colored_polygon(world_facet, facet_col)
+				
+				# Острые сияющие грани осколков
+				var edge_col := Color(1.0, 1.0, 1.0, 0.92 * ease_prog)
+				for i in range(world_facet.size()):
+					var next_i := (i + 1) % world_facet.size()
+					draw_line(world_facet[i], world_facet[next_i], edge_col, 1.8)
+				
+				# Блик на вершине осколка
+				draw_circle(world_facet[0], 2.2, Color(1.0, 1.0, 1.0, 0.95 * ease_prog))
+		
+		# 2. Свечение эпицентра раскола
+		var epic_pulse: float = 0.8 + 0.2 * sin(_time * 35.0)
+		draw_circle(_epicenter + jitter, 45.0 * epic_pulse, Color(0.85, 0.90, 1.0, 0.35 * ease_prog))
+		draw_circle(_epicenter + jitter, 24.0 * epic_pulse, Color(1.0, 1.0, 1.0, 0.85 * ease_prog))
+		draw_circle(_epicenter + jitter, 10.0, Color(1.0, 1.0, 1.0, 0.98))
+		
+		# 3. Основные лучи трещин (с глубокими черными разломами под ними)
+		for branch in _crack_branches:
+			for i in range(branch.size() - 1):
+				var orig_a: Vector2 = branch[i]
+				var orig_b: Vector2 = branch[i + 1]
+				var p_a: Vector2 = orig_a + jitter
+				var p_b: Vector2 = orig_b + jitter
+				var d_a: float = orig_a.distance_to(_epicenter)
+				var d_b: float = orig_b.distance_to(_epicenter)
+				
+				if d_a > max_draw_dist:
+					break
+				
+				var end_pt: Vector2 = p_b
+				if d_b > max_draw_dist:
+					var segment_len: float = orig_a.distance_to(orig_b)
+					if segment_len > 0.001:
+						var seg_frac: float = (max_draw_dist - d_a) / segment_len
+						end_pt = p_a.lerp(p_b, clampf(seg_frac, 0.0, 1.0))
+				
+				# Черный глубокий зазор разлома между осколками
+				draw_line(p_a, end_pt, Color(0.005, 0.002, 0.008, 0.95 * ease_prog), 9.0 * ease_prog)
+				# Острое кристаллическое ядро трещины
+				draw_line(p_a, end_pt, Color(0.98, 0.99, 1.0, 0.95), 2.2)
+		
+		# 4. Поперечные трещины паутины с черными просветами
+		for arc in _cross_arcs:
+			var ring_level: int = arc.ring
+			var ring_dist: float = float(ring_level) * (maxf(size.x, size.y) / 5.0) * 0.28
+			if ring_dist <= max_draw_dist:
+				var p1: Vector2 = arc.p1 + jitter
+				var mid: Vector2 = arc.mid + jitter
+				var p2: Vector2 = arc.p2 + jitter
+				# Черный зазор паутины
+				draw_line(p1, mid, Color(0.005, 0.002, 0.008, 0.90 * ease_prog), 6.0 * ease_prog)
+				draw_line(mid, p2, Color(0.005, 0.002, 0.008, 0.90 * ease_prog), 6.0 * ease_prog)
+				# Кристаллические линии
+				draw_line(p1, mid, Color(0.96, 0.98, 1.0, 0.90), 1.6)
+				draw_line(mid, p2, Color(0.96, 0.98, 1.0, 0.90), 1.6)
+
+	func _draw_shattered_phase() -> void:
+		var elapsed := _time - SHATTER_DELAY
+		var fly_duration := TOTAL_DURATION - SHATTER_DELAY
+		var alpha: float = clampf(1.0 - (elapsed / fly_duration), 0.0, 1.0)
+		alpha = pow(alpha, 1.3)
+		
+		if alpha <= 0.0:
+			return
+		
+		for sh in _shards:
+			var pos: Vector2 = sh.pos
+			var rot: float = sh.rot
+			var flip_scale_x: float = cos(sh.flip_phase)
+			var base_scale: float = sh.scale
+			var scale_vec := Vector2(base_scale * flip_scale_x, base_scale)
+			
+			var pts: PackedVector2Array = sh.local_pts
+			var transformed_pts := PackedVector2Array()
+			var cos_r := cos(rot)
+			var sin_r := sin(rot)
+			
+			for pt in pts:
+				var scaled := Vector2(pt.x * scale_vec.x, pt.y * scale_vec.y)
+				var rotated := Vector2(
+					scaled.x * cos_r - scaled.y * sin_r,
+					scaled.x * sin_r + scaled.y * cos_r
+				)
+				transformed_pts.append(pos + rotated)
+			
+			if transformed_pts.size() >= 3:
+				var fill_col: Color = sh.color
+				fill_col.a *= alpha * (0.35 + 0.65 * absf(flip_scale_x))
+				draw_colored_polygon(transformed_pts, fill_col)
+				
+				var edge_col := Color(1.0, 1.0, 1.0, alpha * 0.95 * absf(flip_scale_x))
+				for i in range(transformed_pts.size()):
+					var next_i := (i + 1) % transformed_pts.size()
+					draw_line(transformed_pts[i], transformed_pts[next_i], edge_col, 1.8)
+
 # Эффект удара: сотрясение экрана и бело-фиолетовая вспышка
 func _on_screen_impact_requested(flash_color: Color, intensity: float, duration: float = 0.32) -> void:
 	# 1. Вспышка на весь экран
@@ -5101,6 +6210,34 @@ func _on_screen_impact_requested(flash_color: Color, intensity: float, duration:
 		)
 		shake_tween.tween_property(self, "position", orig_pos + offset, 0.035)
 	shake_tween.tween_property(self, "position", orig_pos, 0.04)
+
+# Плавное голубое свечение по краям экрана на 1 секунду при принудительном ходе от Сангинии
+func _play_sanguinia_forced_skill_vignette() -> void:
+	var vig := Control.new()
+	vig.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vig.z_index = 251
+	
+	var panel := Panel.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.border_color = Color(0.25, 0.75, 1.0, 0.75) # мягкий голубой свет
+	sb.set_border_width_all(70)
+	sb.border_blend = true # плавный градиент от краев внутрь
+	sb.set_corner_radius_all(30)
+	panel.add_theme_stylebox_override("panel", sb)
+	vig.add_child(panel)
+	
+	vig.modulate.a = 0.0
+	add_child(vig)
+	
+	var tw := create_tween()
+	tw.tween_property(vig, "modulate:a", 1.0, 0.35).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(vig, "modulate:a", 0.0, 0.65).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.tween_callback(vig.queue_free)
 
 func _on_lenskaya_am_supernova_vfx(attacker: CombatUnit, target: CombatUnit) -> void:
 	var p_start := Vector2(240, 480)
@@ -6327,9 +7464,20 @@ func _highlight_active_unit(unit: CombatUnit) -> void:
 	if not is_instance_valid(panel):
 		return
 
+	if panel.has_meta("resetting_visual"):
+		panel.remove_meta("resetting_visual")
+
 	_highlighted_unit_panel = panel
+	_highlight_start_time = _card_anim_time
 	panel.z_index = 10
 	panel.pivot_offset = Vector2(panel.size.x * 0.5, panel.size.y)
+
+	# Сбрасываем смещение дрейфа, если юнит переходит в активную фазу своего хода
+	if panel.has_meta("drift_offset"):
+		var drift: Vector2 = panel.get_meta("drift_offset", Vector2.ZERO)
+		if drift != Vector2.ZERO:
+			panel.position -= drift
+		panel.set_meta("drift_offset", Vector2.ZERO)
 	
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(panel, "scale", Vector2(1.08, 1.08), 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
@@ -6345,18 +7493,20 @@ func _reset_active_unit_visual() -> void:
 	var unit: CombatUnit = p.get_meta("unit", null)
 	_highlighted_unit_panel = null
 	p.z_index = 0
+	p.set_meta("resetting_visual", true)
 	
-	var target_mod := Color.WHITE
-	if unit:
-		if not unit.is_alive():
-			target_mod = Color(0.4, 0.4, 0.4, 0.7)
-		elif unit.is_elite:
-			target_mod = Color(1.1, 0.85, 1.0)
+	var target_mod := _get_unit_base_modulate(unit) if unit != null else Color.WHITE
 	
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(p, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.tween_property(p, "rotation", 0.0, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	if not p.has_meta("damage_tween"):
 		tw.tween_property(p, "modulate", target_mod, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.finished.connect(func():
+		if is_instance_valid(p):
+			p.remove_meta("resetting_visual")
+			p.rotation = 0.0
+	)
 
 func _highlight_active_ally(unit: CombatUnit) -> void:
 	_highlight_active_unit(unit)
@@ -6364,16 +7514,148 @@ func _highlight_active_ally(unit: CombatUnit) -> void:
 func _reset_active_ally_visual() -> void:
 	_reset_active_unit_visual()
 
+func _on_enemies_container_sort_children() -> void:
+	if not is_instance_valid(enemies_container):
+		return
+	for child in enemies_container.get_children():
+		if child is Control and child.has_meta("drift_offset"):
+			child.set_meta("drift_offset", Vector2.ZERO)
+
+func _update_card_idle_dynamics(delta: float) -> void:
+	var t: float = _card_anim_time
+
+	# --- 1. АКТИВНЫЙ СОЮЗНИК ВО ВРЕМЯ ХОДА: очень плавное покачивание (метроном) ---
+	if _highlighted_unit_panel != null and is_instance_valid(_highlighted_unit_panel):
+		var active_unit: CombatUnit = _highlighted_unit_panel.get_meta("unit", null)
+		if active_unit != null and active_unit.is_alive() and active_unit.is_ally:
+			var time_since_hl: float = maxf(0.0, t - _highlight_start_time)
+			var sway_weight: float = clampf(time_since_hl / 0.30, 0.0, 1.0)
+			
+			_highlighted_unit_panel.pivot_offset = Vector2(
+				_highlighted_unit_panel.size.x * 0.5,
+				_highlighted_unit_panel.size.y
+			)
+			# Плавный наклон влево-вправо с точкой опоры внизу карточки (±1.25 градуса)
+			var sway_rot: float = sin(t * 2.2) * deg_to_rad(1.25) * sway_weight
+			_highlighted_unit_panel.rotation = sway_rot
+			
+			# Мягкое дыхание приподнятой карточки в такт покачиванию
+			var sway_breath_y: float = 1.08 + sin(t * 2.2 + 0.5) * 0.012 * sway_weight
+			var sway_breath_x: float = 1.08 - sin(t * 2.2 + 0.5) * 0.006 * sway_weight
+			_highlighted_unit_panel.scale = Vector2(sway_breath_x, sway_breath_y)
+
+	# --- 2. ВРАГИ ВНЕ ИХ ХОДА: парение по экрану, дыхание (увеличение / уменьшение) ---
+	if is_instance_valid(enemies_container) and battle_manager != null:
+		var enemies_count: int = battle_manager.enemies.size()
+		for i in range(enemies_count):
+			var enemy: CombatUnit = battle_manager.enemies[i]
+			if enemy == null or not _unit_panels.has(enemy):
+				continue
+			var p: PanelContainer = _unit_panels[enemy]
+			if not is_instance_valid(p):
+				continue
+			
+			# Если враг повержен — аккуратно убираем дрейф и оставляем карточку на месте
+			if not enemy.is_alive():
+				if p.has_meta("drift_offset"):
+					var old_drift: Vector2 = p.get_meta("drift_offset", Vector2.ZERO)
+					p.position -= old_drift
+					p.remove_meta("drift_offset")
+				p.rotation = lerpf(p.rotation, 0.0, delta * 6.0)
+				p.scale = p.scale.lerp(Vector2.ONE, delta * 6.0)
+				continue
+
+			# Если сейчас активен ход этого врага или он возвращается из фокуса — пропускаем
+			if p == _highlighted_unit_panel or p.has_meta("resetting_visual"):
+				continue
+
+			# Индивидуальная фаза колебаний для гармоничного несинхронного парения
+			var phase: float = float(i) * 1.62 + float(enemy.id.hash() % 80) * 0.04
+			
+			# Пивот в центре карточки для дыхания от центра
+			p.pivot_offset = p.size * 0.5
+			
+			# Плавное увеличение и уменьшение (период ~3.6с, амплитуда ±1.6%)
+			var breath_wave: float = sin(t * 1.55 + phase)
+			var breath_scale_x: float = 1.0 + breath_wave * 0.014
+			var breath_scale_y: float = 1.0 + breath_wave * 0.018
+			p.scale = Vector2(breath_scale_x, breath_scale_y)
+			
+			# Легчайший наклон карточки в такт плаванию (±0.8 градуса)
+			var tilt: float = sin(t * 1.15 + phase * 1.2) * deg_to_rad(0.80)
+			p.rotation = tilt
+			
+			# Парение по экрану (дрейф по Y на ±3.5px, микро-дрейф по X на ±1.8px)
+			var drift_y: float = sin(t * 1.25 + phase) * 3.2 + sin(t * 2.1 + phase * 0.7) * 0.6
+			var drift_x: float = cos(t * 0.90 + phase * 1.1) * 1.8
+			var new_drift := Vector2(drift_x, drift_y)
+			var old_drift: Vector2 = p.get_meta("drift_offset", Vector2.ZERO)
+			
+			p.position = p.position - old_drift + new_drift
+			p.set_meta("drift_offset", new_drift)
+
+	# --- 3. СОЮЗНИКИ ВНЕ ИХ ХОДА: микро-дыхание жизни без сдвига позиций ---
+	if battle_manager != null and is_instance_valid(allies_container):
+		var allies_count: int = battle_manager.allies.size()
+		for i in range(allies_count):
+			var ally: CombatUnit = battle_manager.allies[i]
+			if ally == null or not _unit_panels.has(ally):
+				continue
+			var p: PanelContainer = _unit_panels[ally]
+			if not is_instance_valid(p):
+				continue
+			
+			if p == _highlighted_unit_panel or p.has_meta("resetting_visual"):
+				continue
+				
+			if not ally.is_alive():
+				p.scale = Vector2.ONE
+				p.rotation = 0.0
+				continue
+
+			var a_phase: float = float(i) * 1.75 + float(ally.id.hash() % 60) * 0.03
+			p.pivot_offset = Vector2(p.size.x * 0.5, p.size.y)
+			p.rotation = 0.0
+			var ally_breath_y: float = 1.0 + sin(t * 1.4 + a_phase) * 0.007
+			p.scale = Vector2(1.0, ally_breath_y)
+
+		# Духи памяти вне хода
+		if "memosprites" in battle_manager and battle_manager.memosprites != null:
+			for sprite in battle_manager.memosprites:
+				if sprite != null and sprite.is_alive() and _unit_panels.has(sprite):
+					var p_spr: PanelContainer = _unit_panels[sprite]
+					if is_instance_valid(p_spr) and p_spr != _highlighted_unit_panel and not p_spr.has_meta("resetting_visual"):
+						var m_phase: float = float(sprite.id.hash() % 70) * 0.04
+						p_spr.pivot_offset = Vector2(p_spr.size.x * 0.5, p_spr.size.y)
+						p_spr.rotation = 0.0
+						p_spr.scale = Vector2(1.0, 1.0 + sin(t * 1.6 + m_phase) * 0.009)
+
 func _draw_target_reticle(reticle: Control, unit: CombatUnit) -> void:
 	if not _selecting_target or unit == null or not unit.is_alive():
 		return
 	
-	var is_primary: bool = (unit == _selected_target_unit)
+	var is_multi: bool = (unit in _multi_targets)
+	var is_primary: bool = (unit == _selected_target_unit) or is_multi
 	var secondaries := _get_affected_secondary_targets(_selected_target_unit)
 	var is_secondary: bool = (unit in secondaries)
 	
 	if not is_primary and not is_secondary:
 		return
+
+	# Плавная переливающаяся голубая обводка вокруг карточки цели
+	var t: float = float(Time.get_ticks_msec()) * 0.003
+	var wave: float = (sin(t) + 1.0) * 0.5
+	var border_alpha: float = lerpf(0.55, 0.95, wave) if is_primary else lerpf(0.40, 0.75, wave)
+	var border_color := Color(0.40, 0.78, 1.0, border_alpha)
+	
+	if _target_border_style == null:
+		_target_border_style = StyleBoxFlat.new()
+		_target_border_style.draw_center = false
+		_target_border_style.set_border_width_all(2)
+		_target_border_style.set_corner_radius_all(8)
+	
+	_target_border_style.border_color = border_color
+	reticle.draw_style_box(_target_border_style, Rect2(Vector2.ZERO, reticle.size))
 		
 	var center := reticle.size * 0.5
 	if is_primary:
@@ -6387,11 +7669,14 @@ func _draw_target_reticle(reticle: Control, unit: CombatUnit) -> void:
 		reticle.draw_line(Vector2(center.x + radius - tick_len, center.y), Vector2(center.x + radius + tick_len, center.y), pastel_blue, 2.0)
 		reticle.draw_line(Vector2(center.x, center.y - radius - tick_len), Vector2(center.x, center.y - radius + tick_len), pastel_blue, 2.0)
 		reticle.draw_line(Vector2(center.x, center.y + radius - tick_len), Vector2(center.x, center.y + radius + tick_len), pastel_blue, 2.0)
+		reticle.draw_circle(center, 3.5, pastel_blue)
 	elif is_secondary:
 		var radius_sec: float = minf(reticle.size.x, reticle.size.y) * 0.28
-		var pastel_sec := Color(0.60, 0.82, 1.0, 0.60)
-		reticle.draw_arc(center, radius_sec, 0.0, TAU, 48, pastel_sec, 2.0, true)
-		reticle.draw_arc(center, radius_sec - 3.0, 0.0, TAU, 32, Color(0.75, 0.90, 1.0, 0.30), 1.0, true)
+		var col_sec: Color = Color(0.55, 0.82, 1.0, 0.85) if unit.is_ally else Color(1.0, 0.72, 0.45, 0.80)
+		var col_sec_inner: Color = Color(0.75, 0.90, 1.0, 0.45) if unit.is_ally else Color(1.0, 0.85, 0.65, 0.40)
+		reticle.draw_arc(center, radius_sec, 0.0, TAU, 48, col_sec, 2.0, true)
+		reticle.draw_arc(center, radius_sec - 3.5, 0.0, TAU, 36, col_sec_inner, 1.0, true)
+		reticle.draw_circle(center, 2.5, col_sec)
 
 func _draw_tgh_preview(tgh_bar: ProgressBar, unit: CombatUnit) -> void:
 	if not unit.has_meta("projected_tgh_reduction") or unit.max_toughness <= 0.0:
@@ -6491,10 +7776,17 @@ func _update_targeting_reticles() -> void:
 
 func _get_affected_secondary_targets(primary: CombatUnit) -> Array[CombatUnit]:
 	var secondaries: Array[CombatUnit] = []
-	if primary == null or not primary.is_alive() or primary.is_ally:
+	if primary == null or not primary.is_alive():
 		return secondaries
 	var active := battle_manager.current_unit
 	if active == null:
+		return secondaries
+	
+	if primary.is_ally:
+		if active.id == "jeff" and _target_mode == "skill":
+			for adj in battle_manager.get_adjacent_allies(primary):
+				if adj != primary and adj.is_alive():
+					secondaries.append(adj)
 		return secondaries
 	
 	var is_blast: bool = false
@@ -6802,3 +8094,283 @@ func _execute_chorus_ui(chosen_ally: CombatUnit) -> void:
 	_refresh_support_button()
 	for u in _unit_panels:
 		_refresh_unit_panel(u)
+
+func _on_ultimate_started(unit: CombatUnit) -> void:
+	if unit == null or battle_manager == null:
+		return
+	battle_manager.set_meta("is_playing_ult_cutin", true)
+	_play_ultimate_cutin(unit)
+
+func _spawn_ult_button_shockwave(unit: CombatUnit) -> void:
+	if unit == null:
+		return
+	var target_pos := Vector2.ZERO
+	var panel: PanelContainer = _unit_panels.get(unit, null)
+	if panel != null and is_instance_valid(panel):
+		var ult_btn: Button = panel.find_child("UltButtonOnCard", true, false)
+		if ult_btn != null and is_instance_valid(ult_btn):
+			target_pos = ult_btn.global_position + ult_btn.size * 0.5
+		else:
+			target_pos = panel.global_position + panel.size * 0.5
+	else:
+		target_pos = get_viewport_rect().size * 0.5
+
+	var shockwave := Control.new()
+	shockwave.name = "UltButtonShockwave"
+	shockwave.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shockwave.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shockwave.z_index = 245
+	add_child(shockwave)
+
+	var elem_col: Color = CombatConstants.get_element_color(unit.element)
+	var anim_data := {
+		"radius": 15.0,
+		"alpha": 1.0,
+		"thickness": 4.5
+	}
+	shockwave.draw.connect(func():
+		var r: float = anim_data.radius
+		var a: float = anim_data.alpha
+		var th: float = anim_data.thickness
+		if a <= 0.001:
+			return
+		var col := elem_col
+		col.a = a * 0.95
+		var halo_col := elem_col
+		halo_col.a = a * 0.40
+		var inner_col := elem_col
+		inner_col.a = a * 0.20
+		shockwave.draw_circle(target_pos, r * 0.55, inner_col)
+		shockwave.draw_arc(target_pos, r + 4.0, 0.0, TAU, 36, halo_col, th * 2.2, true)
+		shockwave.draw_arc(target_pos, r, 0.0, TAU, 48, col, th, true)
+		for i in range(8):
+			var angle: float = (TAU / 8.0) * float(i)
+			var spark_pos := target_pos + Vector2(cos(angle), sin(angle)) * (r * 1.18)
+			var sp_col := elem_col
+			sp_col.a = a * 0.85
+			shockwave.draw_circle(spark_pos, 3.0 * a, sp_col)
+	)
+
+	var tw := create_tween()
+	tw.tween_method(func(val: float):
+		if not is_instance_valid(shockwave):
+			return
+		anim_data.radius = lerpf(15.0, 115.0, 1.0 - pow(1.0 - val, 2.0))
+		anim_data.alpha = lerpf(1.0, 0.0, val * val)
+		anim_data.thickness = lerpf(4.5, 1.0, 1.0 - pow(1.0 - val, 2.0))
+		shockwave.queue_redraw()
+	, 0.0, 1.0, 1.0)
+	tw.chain().tween_callback(func():
+		if is_instance_valid(shockwave):
+			shockwave.queue_free()
+	)
+
+func _play_ultimate_cutin(unit: CombatUnit) -> void:
+	if unit == null:
+		if battle_manager != null:
+			battle_manager.remove_meta("is_playing_ult_cutin")
+		return
+
+	# Контейнер верхнего уровня для кат-сцены вылета карточки
+	var cutin_root := Control.new()
+	cutin_root.name = "UltimateCutInRoot"
+	cutin_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cutin_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	cutin_root.z_index = 250
+	add_child(cutin_root)
+
+	# 1. Полноэкранное затемнение поля боя (на 20% темнее — глубокий чистый черный цвет)
+	var dimmer := ColorRect.new()
+	dimmer.name = "CutinDimmer"
+	dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dimmer.color = Color(0.0, 0.0, 0.0, 1.0)
+	dimmer.modulate.a = 0.0
+	dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cutin_root.add_child(dimmer)
+
+	var vp_size := get_viewport_rect().size
+	# Увеличенный размер карточки
+	var card_w := 460.0
+	var card_h := 660.0
+	var card_size := Vector2(card_w, card_h)
+	var center_pos := (vp_size - card_size) * 0.5
+
+	# Карточка персонажа в центре экрана
+	var card := PanelContainer.new()
+	card.name = "CutinCard"
+	card.custom_minimum_size = card_size
+	card.size = card_size
+	card.pivot_offset = card_size * 0.5
+	card.position = center_pos
+	card.clip_contents = true
+
+	var elem_col: Color = CombatConstants.get_element_color(unit.element)
+	var card_sb := StyleBoxFlat.new()
+	card_sb.bg_color = Color(0.05, 0.07, 0.10, 0.98)
+	card_sb.border_color = elem_col
+	card_sb.set_border_width_all(3)
+	card_sb.set_corner_radius_all(18)
+	card_sb.shadow_color = Color(elem_col.r, elem_col.g, elem_col.b, 0.55)
+	card_sb.shadow_size = 32
+	card_sb.shadow_offset = Vector2(0, 8)
+	card.add_theme_stylebox_override("panel", card_sb)
+
+	# Сплеш-арт персонажа (при наличии)
+	var splash_tex: Texture2D = CharacterRegistry.get_character_splash(unit.id)
+	if splash_tex != null:
+		var splash_rect := TextureRect.new()
+		splash_rect.name = "CutinSplashBG"
+		splash_rect.texture = splash_tex
+		splash_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		splash_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		splash_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		splash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		splash_rect.modulate = Color(0.96, 0.96, 0.98, 0.95)
+		card.add_child(splash_rect)
+
+		var splash_shadow := ColorRect.new()
+		splash_shadow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		splash_shadow.color = Color(0.01, 0.02, 0.04, 0.35)
+		splash_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(splash_shadow)
+	else:
+		var center_symbol := Label.new()
+		center_symbol.text = CombatConstants.ELEMENT_SYMBOLS.get(unit.element, "✦")
+		center_symbol.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		center_symbol.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		center_symbol.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		center_symbol.add_theme_font_size_override("font_size", 140)
+		center_symbol.add_theme_color_override("font_color", Color(elem_col.r, elem_col.g, elem_col.b, 0.25))
+		center_symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(center_symbol)
+
+	# Контейнер интерфейса внутри карточки
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_top", 18)
+	margin.add_theme_constant_override("margin_bottom", 18)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 8)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_child(vbox)
+
+	# Верхний бейдж "⚡ СВЕРХСПОСОБНОСТЬ"
+	var top_badge := PanelContainer.new()
+	var top_sb := StyleBoxFlat.new()
+	top_sb.bg_color = Color(0.04, 0.06, 0.10, 0.92)
+	top_sb.border_color = elem_col
+	top_sb.set_border_width_all(1)
+	top_sb.set_corner_radius_all(8)
+	top_sb.set_content_margin_all(7)
+	top_badge.add_theme_stylebox_override("panel", top_sb)
+
+	var top_lbl := Label.new()
+	top_lbl.text = "⚡ СВЕРХСПОСОБНОСТЬ"
+	top_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	top_lbl.add_theme_font_size_override("font_size", 14)
+	top_lbl.add_theme_color_override("font_color", Color(1.0, 0.90, 0.40))
+	top_badge.add_child(top_lbl)
+	vbox.add_child(top_badge)
+
+	# Пружинный отступ
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(spacer)
+
+	# Нижняя панель персонажа
+	var bot_panel := PanelContainer.new()
+	var bot_sb := StyleBoxFlat.new()
+	bot_sb.bg_color = Color(0.03, 0.05, 0.08, 0.94)
+	bot_sb.border_color = Color(elem_col.r, elem_col.g, elem_col.b, 0.60)
+	bot_sb.set_border_width_all(1)
+	bot_sb.set_corner_radius_all(12)
+	bot_sb.set_content_margin_all(12)
+	bot_panel.add_theme_stylebox_override("panel", bot_sb)
+
+	var bot_vbox := VBoxContainer.new()
+	bot_vbox.add_theme_constant_override("separation", 4)
+	bot_panel.add_child(bot_vbox)
+
+	var name_lbl := Label.new()
+	name_lbl.text = "%s %s" % [CombatConstants.ELEMENT_SYMBOLS.get(unit.element, "✦"), unit.display_name]
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_font_size_override("font_size", 22)
+	name_lbl.add_theme_color_override("font_color", elem_col)
+	bot_vbox.add_child(name_lbl)
+
+	var path_lbl := Label.new()
+	var p_name: String = CharacterRegistry.get_path_name(unit.path)
+	var e_name: String = CombatConstants.get_element_name(unit.element)
+	path_lbl.text = "%s • %s" % [p_name, e_name] if p_name != "" else e_name
+	path_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	path_lbl.add_theme_font_size_override("font_size", 13)
+	path_lbl.add_theme_color_override("font_color", Color(0.85, 0.88, 0.95))
+	bot_vbox.add_child(path_lbl)
+
+	var char_data := CharacterRegistry.get_character(unit.id)
+	var rarity: int = char_data.get("rarity", 4)
+	var stars_lbl := Label.new()
+	var star_str := ""
+	for s in range(rarity):
+		star_str += "★"
+	stars_lbl.text = star_str
+	stars_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stars_lbl.add_theme_font_size_override("font_size", 16)
+	stars_lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25) if rarity >= 5 else Color(0.75, 0.55, 0.95))
+	bot_vbox.add_child(stars_lbl)
+
+	vbox.add_child(bot_panel)
+	cutin_root.add_child(card)
+
+	# Начальное состояние: сверху экрана крупный черный силуэт (scale 1.80)
+	card.scale = Vector2(1.80, 1.80)
+	card.position = Vector2(center_pos.x, center_pos.y - 50.0)
+	card.modulate = Color(0.04, 0.04, 0.05, 0.0)
+
+	var tw := create_tween()
+
+	# 1. Экран темнеет
+	tw.tween_property(dimmer, "modulate:a", 1.0, 0.17).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	# ФАЗА 1 (0.64с — ускорена на 15%):
+	# Сверху экрана проявляется черный силуэт, удерживается черным 0.38с,
+	# а затем в течение 0.26с плавно возвращает себе цвет к концу фазы.
+	# В этот момент карточка уменьшается, подготавливаясь ко второй фазе.
+	tw.parallel().tween_method(func(t: float):
+		if not is_instance_valid(card):
+			return
+		var a: float = clampf(t / 0.07, 0.0, 1.0)
+		var c_prog: float = clampf((t - 0.38) / 0.26, 0.0, 1.0)
+		var c: float = lerpf(0.04, 1.0, c_prog)
+		card.modulate = Color(c, c, c, a)
+	, 0.0, 0.64, 0.64).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(card, "scale", Vector2(1.08, 1.08), 0.64).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(card, "position:y", center_pos.y, 0.64).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+	# ФАЗА 2 (0.60с — сокращена еще на 0.2с и ускорена на 15%):
+	# Падение плавно замедляется на 80%. Карточка цветная и плывет 0.60 секунды.
+	tw.chain().tween_property(card, "scale", Vector2(0.95, 0.95), 0.60).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.parallel().tween_property(card, "position:y", center_pos.y + 12.0, 0.60).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.parallel().tween_property(card, "rotation", deg_to_rad(0.8), 0.60).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+	# ФАЗА 3 (0.38с — ускорена на 10% под конец):
+	# Карточка плавно увеличивает скорость падения на 70%. Карточка растворяется, затемнение проходит.
+	tw.chain().tween_property(card, "scale", Vector2(0.68, 0.68), 0.38).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(card, "position:y", center_pos.y + 36.0, 0.38).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(card, "modulate:a", 0.0, 0.34).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(dimmer, "modulate:a", 0.0, 0.27).set_delay(0.10).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	# Завершение кат-сцены: очистка и передача управления (на выбор цели или исполнение)
+	tw.chain().tween_callback(func():
+		if is_instance_valid(cutin_root):
+			cutin_root.queue_free()
+		if battle_manager != null:
+			battle_manager.remove_meta("is_playing_ult_cutin")
+	)

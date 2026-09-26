@@ -34,9 +34,17 @@ static func apply_traces(unit: CombatUnit) -> void:
 
 # Накопление зарядов Манипуляции
 static func add_manipulation_stack(unit: CombatUnit, count: int, bm: BattleManager) -> void:
+	var sanguinia: CombatUnit = bm.get_sanguinia_unit()
+	if sanguinia != null and sanguinia.is_alive():
+		var s_val: int = int(sanguinia.get_meta("sanguinia_waves", 0))
+		var l_val: int = int(unit.get_meta("lenskaya_manipulation", 0))
+		if s_val != l_val:
+			var synced: int = maxi(s_val, l_val)
+			sanguinia.set_meta("sanguinia_waves", synced)
+			unit.set_meta("lenskaya_manipulation", synced)
+		return
+
 	var current: int = int(unit.get_meta("lenskaya_manipulation", 0))
-	
-	# ИСПРАВЛЕНО: Лимит Манипуляций занерфлен и ограничен на уровне 47 стаков
 	var new_stacks: int = clampi(current + count, 0, 47)
 	
 	unit.set_meta("lenskaya_manipulation", new_stacks)
@@ -170,6 +178,12 @@ static func execute_skill_e(attacker: CombatUnit, target: CombatUnit, bm: Battle
 			
 	# ИСПРАВЛЕНО: Сбрасываем стаки Манипуляции строго ПОСЛЕ того, как весь урон рассчитан и нанесен!
 	attacker.set_meta("lenskaya_manipulation", 0)
+	var sanguinia: CombatUnit = bm.get_sanguinia_unit()
+	if sanguinia != null:
+		sanguinia.set_meta("sanguinia_waves", 0)
+		sanguinia.remove_meta("sanguinia_waves_pending_reset_target")
+		sanguinia.remove_meta("sanguinia_pending_forced_skill_unit")
+		bm.unit_updated.emit(sanguinia)
 	
 	bm.gain_energy_with_err(attacker, 30.0)
 	bm.unit_updated.emit(attacker)

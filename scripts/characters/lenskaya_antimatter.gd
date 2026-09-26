@@ -69,9 +69,9 @@ static func execute_basic_attack(attacker: CombatUnit, target: CombatUnit, bm: B
 	bm.deal_damage(target, dmg, attacker, elem, bool(res.get("crit", false)), "Binary" if is_binary else "Basic")
 	if is_binary:
 		attacker.remove_meta("is_binary_attack")
-	attacker.remove_meta("current_attack_element")
 		
 	ToughnessSystem.apply_weakness_hit(attacker, target, bm, 1.0)
+	attacker.remove_meta("current_attack_element")
 	bm.gain_skill_point()
 	bm.gain_energy_with_err(attacker, 20.0)
 	bm.log_message("🌌 %s — Базовая атака по %s: %d урона." % [attacker.display_name, target.display_name, int(dmg)])
@@ -101,8 +101,8 @@ static func execute_enhanced_basic(attacker: CombatUnit, target: CombatUnit, bm:
 		bm.deal_damage(target, dmg, attacker, CombatConstants.Element.QUANTUM, bool(res.get("crit", false)), tag)
 		if is_binary:
 			attacker.remove_meta("is_binary_attack")
-		attacker.remove_meta("current_attack_element")
 		ToughnessSystem.apply_weakness_hit(attacker, target, bm, 1.0)
+		attacker.remove_meta("current_attack_element")
 		bm.gain_skill_point()
 		bm.gain_energy_with_err(attacker, 20.0)
 		bm.log_message("🌌 %s — Усиленная базовая атака по %s: %d квантового урона (120%% СА)." % [attacker.display_name, target.display_name, int(dmg)])
@@ -287,7 +287,7 @@ static func _execute_skill_q_warrior(attacker: CombatUnit, target: CombatUnit, b
 				hit_targets.append(e)
 		bm.log_message("🌌 %s — Навык Q «Воин небытия» по %s: %d урона." % [attacker.display_name, target.display_name, int(dmg_c)])
 
-	attacker.remove_metфиеa("current_attack_element")
+	attacker.remove_meta("current_attack_element")
 	_apply_trace3_console_binary_dmg(attacker, hit_targets, bm)
 	_apply_e2_decomposition(attacker, hit_targets, bm)
 	

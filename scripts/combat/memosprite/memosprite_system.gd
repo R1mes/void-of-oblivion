@@ -62,10 +62,21 @@ static func summon(owner: CombatUnit, definition: MemospriteDefinition, bm: Batt
 			sprite.stats.spd
 		])
 		_apply_burned_page_if_equipped(owner, sprite, bm)
+		_apply_bloom_defender_if_equipped(owner, bm)
 		bm.action_order_changed.emit()
 		bm.unit_updated.emit(sprite)
 
 	return sprite
+
+static func _apply_bloom_defender_if_equipped(owner: CombatUnit, bm: BattleManager) -> void:
+	if owner == null:
+		return
+	if owner.has_meta("set_bloom_defender_2") and not bool(owner.get_meta("bloom_defender_spd_active", false)):
+		owner.add_speed_modifier(0.06, 0.0)
+		owner.set_meta("bloom_defender_spd_active", true)
+		if bm != null:
+			bm.log_message("🌸 Сет «Защитница цветущей земли»: пока дух памяти на поле боя, скорость %s повышена на +6%%!" % owner.display_name)
+			bm.unit_updated.emit(owner)
 
 static func _apply_burned_page_if_equipped(owner: CombatUnit, sprite: Memosprite, bm: BattleManager) -> void:
 	if owner == null or sprite == null or bm == null:
@@ -91,6 +102,11 @@ static func despawn(sprite: Memosprite, bm: BattleManager = null) -> void:
 	if sprite == null:
 		return
 	sprite.despawn()
+	if sprite.owner != null and sprite.owner.has_meta("set_bloom_defender_2") and bool(sprite.owner.get_meta("bloom_defender_spd_active", false)):
+		sprite.owner.remove_speed_modifier(0.06, 0.0)
+		sprite.owner.set_meta("bloom_defender_spd_active", false)
+		if bm != null:
+			bm.log_message("🌸 Сет «Защитница цветущей земли»: дух памяти покинул поле боя, бонус скорости %s снят." % sprite.owner.display_name)
 	if bm != null:
 		bm.log_message("🌫 Дух Памяти %s покинул поле боя." % sprite.display_name)
 		bm.action_order_changed.emit()
@@ -102,6 +118,11 @@ static func defeat(sprite: Memosprite, bm: BattleManager = null) -> void:
 	if sprite == null:
 		return
 	sprite.defeat()
+	if sprite.owner != null and sprite.owner.has_meta("set_bloom_defender_2") and bool(sprite.owner.get_meta("bloom_defender_spd_active", false)):
+		sprite.owner.remove_speed_modifier(0.06, 0.0)
+		sprite.owner.set_meta("bloom_defender_spd_active", false)
+		if bm != null:
+			bm.log_message("🌸 Сет «Защитница цветущей земли»: дух памяти повержен, бонус скорости %s снят." % sprite.owner.display_name)
 	if bm != null:
 		bm.log_message("💀 Дух Памяти %s повержен!" % sprite.display_name)
 		bm.action_order_changed.emit()

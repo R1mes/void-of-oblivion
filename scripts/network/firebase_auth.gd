@@ -19,6 +19,8 @@ var token_timestamp: int = 0
 const TOKEN_CACHE_PATH := "user://auth_tokens.json"
 
 func _ready() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
 	load_cached_session()
 
 func is_authenticated() -> bool:

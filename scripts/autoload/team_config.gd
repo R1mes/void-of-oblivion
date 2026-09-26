@@ -28,6 +28,17 @@ var tutorial_skipped: bool = false
 var level_stars: Dictionary = {}
 # Полученные награды за звезды ["stars_12"]
 var claimed_star_rewards: Array[String] = []
+# Активированные промокоды (очищаются при полном сбросе прогресса)
+var redeemed_promo_codes: Array[String] = []
+
+# --- ЗАЛ ВОСПОМИНАНИЙ (MEMORY HALL) ---
+var memory_hall_unlocked_floor: int = 1
+var memory_hall_stars: Dictionary = {} # {"floor_1": 3, "floor_2": 2, ...}
+var memory_hall_claimed_rewards: Array[String] = [] # ["stars_3", "stars_6", "stars_9", "stars_12", "floor_4_clear"]
+var memory_hall_team_1: Array = []
+var memory_hall_team_2: Array = []
+var memory_hall_initiator_1: String = ""
+var memory_hall_initiator_2: String = ""
 
 # --- ГАЧА И ГАРАНТЫ ---
 var gacha_5star_pity: int = 0
@@ -42,6 +53,15 @@ var saved_teams_admin: Dictionary = {}
 var last_used_team: Array[Dictionary] = []
 var relic_inventory: Array[Dictionary] = []
 var is_admin_battle: bool = false
+
+# --- ТЕСТОВАЯ СРЕДА (SANDBOX) ---
+var is_test_mode_battle: bool = false
+var test_submode: String = "boss" # "boss", "trio", "fiction"
+var test_boss_hp: float = 1500000.0
+var test_trio_boss_hp: float = 1200000.0
+var test_trio_elite_hp: float = 500000.0
+var test_fiction_hp: float = 70000.0
+var test_fiction_count: int = 30
 
 const SAVE_PATH := "user://save_game.json"
 const PRESETS_DIR := "user://team_presets/"
@@ -59,6 +79,13 @@ func reset() -> void:
 	battle_initiator_id = "vika"
 	battle_mode = "custom"
 	is_admin_battle = false
+	is_test_mode_battle = false
+	test_submode = "boss"
+	test_boss_hp = 1500000.0
+	test_trio_boss_hp = 1200000.0
+	test_trio_elite_hp = 500000.0
+	test_fiction_hp = 70000.0
+	test_fiction_count = 30
 
 func reset_all_progress() -> void:
 	coins = 300
@@ -76,6 +103,14 @@ func reset_all_progress() -> void:
 	tutorial_skipped = false
 	level_stars.clear()
 	claimed_star_rewards.clear()
+	redeemed_promo_codes.clear()
+	memory_hall_unlocked_floor = 1
+	memory_hall_stars.clear()
+	memory_hall_claimed_rewards.clear()
+	memory_hall_team_1.clear()
+	memory_hall_team_2.clear()
+	memory_hall_initiator_1 = ""
+	memory_hall_initiator_2 = ""
 	gacha_5star_pity = 0
 	gacha_4star_pity = 0
 	gacha_guaranteed_featured = false
@@ -96,6 +131,91 @@ func get_total_stars() -> int:
 	for lvl_id in level_stars:
 		total += int(level_stars[lvl_id])
 	return total
+
+# --- МЕТОДЫ ЗАЛА ВОСПОМИНАНИЙ ---
+
+func get_memory_hall_total_stars() -> int:
+	var total := 0
+	for f_key in memory_hall_stars:
+		total += int(memory_hall_stars[f_key])
+	return total
+
+func get_memory_hall_floor_stars(floor_num: int) -> int:
+	if memory_hall_stars.has("floor_%d" % floor_num):
+		return int(memory_hall_stars["floor_%d" % floor_num])
+	elif memory_hall_stars.has(str(floor_num)):
+		return int(memory_hall_stars[str(floor_num)])
+	return 0
+
+func is_memory_hall_floor_completed(floor_num: int) -> bool:
+	return memory_hall_stars.has("floor_%d" % floor_num) or memory_hall_stars.has(str(floor_num))
+
+func is_memory_hall_completed() -> bool:
+	return is_memory_hall_floor_completed(4)
+
+func can_claim_memory_hall_reward(reward_id: String) -> bool:
+	if reward_id in memory_hall_claimed_rewards:
+		return false
+	var total_stars := get_memory_hall_total_stars()
+	match reward_id:
+		"stars_3": return total_stars >= 3
+		"stars_6": return total_stars >= 6
+		"stars_9": return total_stars >= 9
+		"stars_12": return total_stars >= 12
+		"floor_4_clear": return is_memory_hall_floor_completed(4)
+	return false
+
+func claim_single_memory_hall_reward(reward_id: String) -> Dictionary:
+	if not can_claim_memory_hall_reward(reward_id):
+		return {}
+	memory_hall_claimed_rewards.append(reward_id)
+	var shine_amount := 5
+	var r_name := ""
+	match reward_id:
+		"stars_3":
+			r_name = "3★ в Зале воспоминаний"
+			shine_amount = 5
+		"stars_6":
+			r_name = "6★ в Зале воспоминаний"
+			shine_amount = 5
+		"stars_9":
+			r_name = "9★ в Зале воспоминаний"
+			shine_amount = 5
+		"stars_12":
+			r_name = "12★ в Зале воспоминаний"
+			shine_amount = 5
+		"floor_4_clear":
+			r_name = "Прохождение 4-го этажа (Платина)"
+			shine_amount = 4
+	shine += shine_amount
+	save_game()
+	return {
+		"id": reward_id,
+		"name": r_name,
+		"shine": shine_amount
+	}
+
+# Проверка и начисление всех доступных наград (например, при вызове «Собрать всё»):
+# Каждые 3 полученные звезды дают +5 Блеска Свечения (3, 6, 9, 12).
+# Прохождение 4-го этажа дает дополнительно +4 Блеска Свечения.
+func claim_memory_hall_rewards() -> Array[Dictionary]:
+	var granted: Array[Dictionary] = []
+	var total_stars := get_memory_hall_total_stars()
+	
+	var star_milestones := [3, 6, 9, 12]
+	for ms in star_milestones:
+		var reward_key := "stars_%d" % ms
+		if can_claim_memory_hall_reward(reward_key):
+			var res := claim_single_memory_hall_reward(reward_key)
+			if not res.is_empty():
+				granted.append(res)
+			
+	if can_claim_memory_hall_reward("floor_4_clear"):
+		var res_f4 := claim_single_memory_hall_reward("floor_4_clear")
+		if not res_f4.is_empty():
+			granted.append(res_f4)
+		
+	return granted
 
 func get_saved_build(char_id: String) -> Dictionary:
 	if saved_builds.has(char_id):
@@ -120,6 +240,87 @@ func get_saved_build(char_id: String) -> Dictionary:
 
 func set_saved_build(char_id: String, build_data: Dictionary) -> void:
 	saved_builds[char_id] = build_data.duplicate(true)
+
+# --- МЕТОДЫ УЧЁТА И ЭКИПИРОВКИ СВЕТОВЫХ КОНУСОВ ---
+
+## Получить общее количество имеющихся копий светового конуса
+func get_light_cone_total_count(lc_id: String) -> int:
+	if lc_id.is_empty():
+		return 0
+	var cone_data := LightConeRegistry.get_cone(lc_id)
+	if cone_data.is_empty():
+		return 0
+	if int(cone_data.get("rarity", 3)) == 3:
+		return 999 # 3★ конусы не ограничены
+	var count := 0
+	for id_str in unlocked_light_cones:
+		if id_str == lc_id:
+			count += 1
+	return count
+
+## Получить список ID персонажей, у которых экипирован данный конус
+func get_light_cone_equipped_characters(lc_id: String, active_team: Array = []) -> Array[String]:
+	var result: Array[String] = []
+	if lc_id.is_empty():
+		return result
+	var cone_data := LightConeRegistry.get_cone(lc_id)
+	if int(cone_data.get("rarity", 3)) == 3:
+		return result # 3★ конусы не отслеживают занятость
+	
+	var in_active_team: Dictionary = {}
+	for slot in active_team:
+		if slot != null and slot is Dictionary:
+			var c_id: String = slot.get("id", "")
+			if not c_id.is_empty():
+				in_active_team[c_id] = true
+				if slot.get("light_cone", "") == lc_id:
+					result.append(c_id)
+
+	for c_id in unlocked_characters:
+		if in_active_team.has(c_id):
+			continue
+		var build := get_saved_build(c_id)
+		if build.get("light_cone", "") == lc_id:
+			result.append(c_id)
+	return result
+
+## Проверить, доступен ли конус для персонажа char_id
+func can_equip_light_cone(char_id: String, lc_id: String, active_team: Array = []) -> bool:
+	if lc_id.is_empty():
+		return true
+	var cone_data := LightConeRegistry.get_cone(lc_id)
+	if cone_data.is_empty():
+		return false
+	if int(cone_data.get("rarity", 3)) == 3:
+		return true
+	var total := get_light_cone_total_count(lc_id)
+	if total <= 0:
+		return false
+	var equipped := get_light_cone_equipped_characters(lc_id, active_team)
+	if char_id in equipped:
+		return true
+	return equipped.size() < total
+
+## Снять световой конус с указанного персонажа
+func unequip_light_cone_from_character(char_id: String, active_team: Array = []) -> void:
+	for slot in active_team:
+		if slot != null and slot is Dictionary and slot.get("id", "") == char_id:
+			slot["light_cone"] = ""
+	if saved_builds.has(char_id):
+		saved_builds[char_id]["light_cone"] = ""
+		save_game()
+
+## Экипировать световой конус на персонажа (при необходимости сняв с другого персонажа)
+func equip_light_cone_to_character(to_char: String, lc_id: String, from_char: String = "", active_team: Array = []) -> void:
+	if not from_char.is_empty() and from_char != to_char:
+		unequip_light_cone_from_character(from_char, active_team)
+	for slot in active_team:
+		if slot != null and slot is Dictionary and slot.get("id", "") == to_char:
+			slot["light_cone"] = lc_id
+	var build := get_saved_build(to_char)
+	build["light_cone"] = lc_id
+	set_saved_build(to_char, build)
+	save_game()
 
 # --- МЕТОДЫ УПРАВЛЕНИЯ РЕЛИКВИЯМИ ---
 
@@ -263,6 +464,14 @@ func save_game(trigger_cloud: bool = true) -> bool:
 		"tutorial_skipped": tutorial_skipped,
 		"level_stars": level_stars,
 		"claimed_star_rewards": claimed_star_rewards,
+		"redeemed_promo_codes": redeemed_promo_codes,
+		"memory_hall_unlocked_floor": memory_hall_unlocked_floor,
+		"memory_hall_stars": memory_hall_stars,
+		"memory_hall_claimed_rewards": memory_hall_claimed_rewards,
+		"memory_hall_team_1": memory_hall_team_1,
+		"memory_hall_team_2": memory_hall_team_2,
+		"memory_hall_initiator_1": memory_hall_initiator_1,
+		"memory_hall_initiator_2": memory_hall_initiator_2,
 		"gacha_5star_pity": gacha_5star_pity,
 		"gacha_4star_pity": gacha_4star_pity,
 		"gacha_guaranteed_featured": gacha_guaranteed_featured,
@@ -320,6 +529,14 @@ func load_game() -> bool:
 				tutorial_skipped = bool(parsed.get("tutorial_skipped", false))
 				level_stars = parsed.get("level_stars", {})
 				claimed_star_rewards = Array(parsed.get("claimed_star_rewards", []), TYPE_STRING, "", null)
+				redeemed_promo_codes = Array(parsed.get("redeemed_promo_codes", []), TYPE_STRING, "", null)
+				memory_hall_unlocked_floor = int(parsed.get("memory_hall_unlocked_floor", 1))
+				memory_hall_stars = parsed.get("memory_hall_stars", {})
+				memory_hall_claimed_rewards = Array(parsed.get("memory_hall_claimed_rewards", []), TYPE_STRING, "", null)
+				memory_hall_team_1 = Array(parsed.get("memory_hall_team_1", []), TYPE_DICTIONARY, "", null)
+				memory_hall_team_2 = Array(parsed.get("memory_hall_team_2", []), TYPE_DICTIONARY, "", null)
+				memory_hall_initiator_1 = String(parsed.get("memory_hall_initiator_1", ""))
+				memory_hall_initiator_2 = String(parsed.get("memory_hall_initiator_2", ""))
 				gacha_5star_pity = int(parsed.get("gacha_5star_pity", 0))
 				gacha_4star_pity = int(parsed.get("gacha_4star_pity", 0))
 				gacha_guaranteed_featured = bool(parsed.get("gacha_guaranteed_featured", false))
