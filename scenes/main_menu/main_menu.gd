@@ -750,6 +750,9 @@ func _build_ui() -> void:
 	var btn_load := _create_custom_button("📂 Загрузить сохранение", main_vbox, Vector2(450, 65), 20)
 	btn_load.pressed.connect(_on_load_pressed)
 
+	var btn_settings_main := _create_custom_button("⚙️ Настройки", main_vbox, Vector2(450, 65), 20)
+	btn_settings_main.pressed.connect(_show_settings_dialog)
+
 	var btn_reset := _create_custom_button("🔥 Сбросить прогресс", main_vbox, Vector2(450, 65), 20)
 	btn_reset.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 	btn_reset.pressed.connect(_show_reset_confirmation_dialog)
@@ -925,6 +928,9 @@ func _build_ui() -> void:
 
 	var btn_save := _create_action_pill_button("💾 Сохранить", bottom_bar, Vector2(160, 42))
 	btn_save.pressed.connect(_on_save_pressed)
+
+	var btn_settings_hub := _create_action_pill_button("⚙️ Настройки", bottom_bar, Vector2(160, 42))
+	btn_settings_hub.pressed.connect(_show_settings_dialog)
 
 	var btn_promo := _create_action_pill_button("🎁 Промокод", bottom_bar, Vector2(150, 42))
 	btn_promo.pressed.connect(_show_promo_code_dialog)
@@ -8719,6 +8725,116 @@ func _on_patch_installed(version: String) -> void:
 
 func _on_patch_failed(err_msg: String) -> void:
 	_show_info_dialog("Ошибка обновления", "Безопасность: " + err_msg)
+
+func _show_settings_dialog() -> void:
+	if get_node_or_null("SettingsCanvasLayer") != null:
+		return
+
+	var canvas_layer := CanvasLayer.new()
+	canvas_layer.name = "SettingsCanvasLayer"
+	canvas_layer.layer = 115
+	add_child(canvas_layer)
+
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	canvas_layer.add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(520, 310)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.10, 0.12, 0.18, 0.98)
+	sb.border_color = Color(0.85, 0.70, 0.25)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(16)
+	sb.set_content_margin_all(24)
+	panel.add_theme_stylebox_override("panel", sb)
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 18)
+	panel.add_child(vbox)
+
+	var lbl_title := Label.new()
+	lbl_title.text = "⚙️ НАСТРОЙКИ"
+	lbl_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl_title.add_theme_font_size_override("font_size", 22)
+	lbl_title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	vbox.add_child(lbl_title)
+
+	var sep1 := HSeparator.new()
+	vbox.add_child(sep1)
+
+	# --- СЕКЦИЯ ГРОМКОСТИ ---
+	var vol_vbox := VBoxContainer.new()
+	vol_vbox.add_theme_constant_override("separation", 10)
+	vbox.add_child(vol_vbox)
+
+	var vol_header_hbox := HBoxContainer.new()
+	vol_vbox.add_child(vol_header_hbox)
+
+	var vol_title := Label.new()
+	vol_title.text = "🔊 Общая громкость звука и музыки:"
+	vol_title.add_theme_font_size_override("font_size", 16)
+	vol_title.add_theme_color_override("font_color", Color(0.90, 0.94, 1.0))
+	vol_header_hbox.add_child(vol_title)
+
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vol_header_hbox.add_child(sp)
+
+	var vol_value_lbl := Label.new()
+	vol_value_lbl.text = "%d / 10" % TeamConfig.master_volume
+	vol_value_lbl.add_theme_font_size_override("font_size", 18)
+	vol_value_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
+	vol_header_hbox.add_child(vol_value_lbl)
+
+	# Ползунок громкости (0 до 10, по умолчанию 7)
+	var slider := HSlider.new()
+	slider.min_value = 0
+	slider.max_value = 10
+	slider.step = 1
+	slider.value = TeamConfig.master_volume
+	slider.ticks_on_borders = true
+	slider.custom_minimum_size = Vector2(460, 36)
+	slider.value_changed.connect(func(val: float):
+		var v_int := int(val)
+		vol_value_lbl.text = "%d / 10" % v_int
+		TeamConfig.apply_audio_volume(v_int)
+		TeamConfig.save_game(false)
+	)
+	vol_vbox.add_child(slider)
+
+	# Версия
+	var version_lbl := Label.new()
+	version_lbl.text = "Версия игры: v%s" % (PatchManager.CURRENT_VERSION if has_node("/root/PatchManager") else "1.7.2")
+	version_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	version_lbl.add_theme_font_size_override("font_size", 13)
+	version_lbl.add_theme_color_override("font_color", Color(0.55, 0.65, 0.80))
+	vbox.add_child(version_lbl)
+
+	# Кнопка закрытия
+	var btn_close := Button.new()
+	btn_close.text = "✓ Закрыть"
+	btn_close.custom_minimum_size = Vector2(220, 44)
+	btn_close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var csb := StyleBoxFlat.new()
+	csb.bg_color = Color(0.20, 0.28, 0.42, 0.95)
+	csb.border_color = Color(0.85, 0.70, 0.25)
+	csb.set_border_width_all(1)
+	csb.set_corner_radius_all(10)
+	btn_close.add_theme_stylebox_override("normal", csb)
+	btn_close.pressed.connect(func():
+		canvas_layer.queue_free()
+	)
+	vbox.add_child(btn_close)
 
 func _show_promo_code_dialog() -> void:
 	if get_node_or_null("PromoCanvasLayer") != null:

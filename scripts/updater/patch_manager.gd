@@ -11,8 +11,8 @@ signal download_progress(downloaded_bytes: int, total_bytes: int, percent: float
 signal update_installed(version: String)
 signal update_failed(error_message: String)
 
-var CURRENT_VERSION: String = "1.7.1"
-var current_version: String = "1.7.1"
+var CURRENT_VERSION: String = "1.7.2"
+var current_version: String = "1.7.2"
 var patches_dir: String = "user://patches/"
 var temp_patch_path: String = "user://patch_temp.pck"
 var installed_manifest_path: String = "user://installed_patches.json"

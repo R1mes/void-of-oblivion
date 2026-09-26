@@ -69,9 +69,23 @@ var is_test_environment: bool = false
 var save_path: String = SAVE_PATH
 var presets_dir: String = PRESETS_DIR
 
+var master_volume: int = 7
+
+func apply_audio_volume(vol: int) -> void:
+	master_volume = clampi(vol, 0, 10)
+	var bus_idx := AudioServer.get_bus_index("Master")
+	if bus_idx >= 0:
+		if master_volume <= 0:
+			AudioServer.set_bus_mute(bus_idx, true)
+		else:
+			AudioServer.set_bus_mute(bus_idx, false)
+			var linear: float = float(master_volume) / 10.0
+			AudioServer.set_bus_volume_db(bus_idx, linear_to_db(linear))
+
 func _ready() -> void:
 	if not is_test_environment:
 		load_game()
+	apply_audio_volume(master_volume)
 
 func reset() -> void:
 	team_members.clear()
@@ -119,6 +133,8 @@ func reset_all_progress() -> void:
 	saved_builds.clear()
 	saved_teams.clear()
 	relic_inventory.clear()
+	master_volume = 7
+	apply_audio_volume(7)
 	
 	if FileAccess.file_exists(save_path):
 		DirAccess.remove_absolute(save_path)
@@ -481,7 +497,8 @@ func save_game(trigger_cloud: bool = true) -> bool:
 		"saved_teams": saved_teams,
 		"saved_teams_admin": saved_teams_admin,
 		"last_used_team": last_used_team if not team_members.is_empty() else last_used_team,
-		"relic_inventory": relic_inventory
+		"relic_inventory": relic_inventory,
+		"master_volume": master_volume
 	}
 	if not team_members.is_empty():
 		data["last_used_team"] = team_members.duplicate(true)
@@ -558,6 +575,8 @@ func load_game() -> bool:
 				for r in raw_relics:
 					if r is Dictionary:
 						relic_inventory.append(r)
+				master_volume = int(parsed.get("master_volume", 7))
+				apply_audio_volume(master_volume)
 				loaded_anything = true
 
 	# Дополнительно подгружаем отдельные файлы пресетов из presets_dir

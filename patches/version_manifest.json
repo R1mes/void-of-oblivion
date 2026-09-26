@@ -1,13 +1,13 @@
 {
-  "latest_version": "1.7.1",
+  "latest_version": "1.7.2",
   "mandatory": false,
-  "changelog": "Void of Oblivion 1.7.1:\\n- Интеграция сплеш-артов персонажей в инвентарь, отряд и боевые карточки\\n- Новый режим «Зал воспоминаний» (Memory Hall) с 5 этажами испытаний\\n- Кинематографичная анимация Сверхспособности со сплеш-артом и ударной волной\\n- Непрозрачные модальные окна эйдолонов и подробное описание световых конусов\\n- Динамика покачивания карточек союзников и противников в бою\\n- Оптимизация боевой системы и батч-фиксы",
+  "changelog": "Void of Oblivion 1.7.2:\\n- Меню «Настройки» на главном экране и в хабе\\n- Регулировка общей громкости звука и музыки (ползунок 0..10, по умолчанию 7/10)\\n- Сохранение параметров громкости в профиль игрока\\n- Оптимизация анимации Сверхспособности",
   "patch": {
-    "version": "1.7.1",
-    "filename": "patch_v1.7.1.pck",
-    "download_url": "https://github.com/R1mes/void-of-oblivion/releases/download/v1.7.1/patch_v1.7.1.pck",
-    "size_bytes": 39633076,
-    "sha256": "2d321cd791d7df3cd3df2ca810570ca7ba2cc4b8d8bbb8f99202929be45f608e",
-    "signature_base64": "D4NhkU2KDZv1MrYeaRbrt2PdKSYHSma2gBO3bFL7kA0IykzGm3jjyCauu4KhBA6UGqVgXkhSb16QKX1WpZzUYu4KafoGVzvL1kzpNe2PDTEyjL8dAt6tge3CVBgZy/Prar3YDQ68L2W4rjsbSd2enkXLtVHSuSTiAP0H+TgQlj7nJZYMasgOrE/3kbHVb4YByyr+ttgV7OJP5XdVnBoDBLDhuAMTo+J40x1PAu4x4XjlKGewj6ZAYpUvqhDTKGHI3Uej/KqVzQCW3cQZhRBbsC99E/dLaeXXuhoZU0qxZaP4D4eJ9oXnJG/03ED6QZXOH9IGK3HhejFprsDJbip/HQ=="
+    "version": "1.7.2",
+    "filename": "patch_v1.7.2.pck",
+    "download_url": "https://github.com/R1mes/void-of-oblivion/releases/download/v1.7.2/patch_v1.7.2.pck",
+    "size_bytes": 39637540,
+    "sha256": "362fe10edf76aef5ba742076371958ff901ad5845b56da01ad25e57e487f7eca",
+    "signature_base64": "NVWz1RXQReEUSHTqNaZlxBkgiBjVZBLkmA8YE1VWSzVskuuhmx+5bXiL4z/4id4lH2M7Vc2zG/s1fuGKdOlAXTS+RwE+vhAYppVbMJDfoY3Hs+/++1KCf/4GzvZN/YPriYSLy82mHFoUIFsZ8ajGojK0f5lfuObXcPF1XQxxLufFBExL7eTp4Ih4036Vc7C0N6rkxXs0hLCDqKzjkKqVIGfrB07eLrPGiWi7/Ez+S+Q0HVLHRwAagb74MEguQxhLKYMTnYd/Wu1isvcl9D5gJbLjNV4tzMbetly1GwN8zjrdo77VqvBEPlnKJCt7oxd4B29YO9wwz2OMnnz0KCjweg=="
   }
 }
